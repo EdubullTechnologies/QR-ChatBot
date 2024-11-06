@@ -49,7 +49,8 @@ st.set_page_config(
 # Define login screen
 def login_screen():
     st.title("🤖 EeeBee AI Buddy Login")
-    st.markdown("# Scanned Topic: Rational Numbers")
+    topic_name = st.session_state.auth_data['TopicName']
+    st.markdown("# Scanned Topic: {topic_name}")
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
     # Input fields for organization code, login ID, and password
