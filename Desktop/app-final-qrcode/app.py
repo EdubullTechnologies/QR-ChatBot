@@ -11,9 +11,13 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
 
-# Load OpenAI API key from config.json
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Load OpenAI API key from st.secrets
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except KeyError:
+    st.error("API key for OpenAI not found in secrets.")
 
+openai.api_key = OPENAI_API_KEY
 
 # API URLs
 API_AUTH_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
