@@ -1,2 +1,6 @@
 [client]
 showErrorDetails = false
+
+[ui]
+hideTopBar = true
+hideMainMenu = true
