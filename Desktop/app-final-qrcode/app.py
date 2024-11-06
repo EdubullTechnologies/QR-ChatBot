@@ -48,18 +48,19 @@ st.set_page_config(
 
 # Define login screen
 def login_screen():
-    st.title("AI Buddy Login", anchor=None)
+    st.title("🤖 AI Buddy Login")
     st.markdown("# Scanned Topic: Rational Numbers")
-    st.write("Please enter your login credentials to continue.")
+    st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
-    org_code = st.text_input("Organization Code", value="012", key="org_code")
-    login_id = st.text_input("Login ID", value="Rajesh8", key="login_id")
-    password = st.text_input("Password", value="Rajesh8", type="password", key="password")
+    # Input fields for organization code, login ID, and password
+    org_code = st.text_input("🏫 Organization Code", key="org_code")  # No default value
+    login_id = st.text_input("👤 Login ID", key="login_id")           # No default value
+    password = st.text_input("🔒 Password", type="password", key="password")  # No default value
 
     query_params = st.experimental_get_query_params()  # Replace with st.query_params after April 2024
     topic_id = query_params.get("T", [None])[0]
 
-    if st.button("Login") and not st.session_state.is_authenticated:
+    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
         if topic_id:
             auth_payload = {
                 'OrgCode': org_code,
@@ -82,11 +83,11 @@ def login_screen():
                     st.session_state.topic_id = int(topic_id)
                     st.rerun()
                 else:
-                    st.error("Authentication failed. Please check your credentials.")
+                    st.error("🚫 Authentication failed. Please check your credentials.")
             except requests.exceptions.RequestException as e:
                 st.error(f"Error connecting to the authentication API: {e}")
         else:
-            st.warning("Please enter the Topic ID.")
+            st.warning("❗Please enter a valid Topic ID.")
 
 
 # Add initial greeting message
