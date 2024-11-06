@@ -39,8 +39,8 @@ if "chat_history" not in st.session_state:
 
 # Streamlit page settings
 st.set_page_config(
-    page_title="AI Buddy",
-    page_icon="💬",
+    page_title="EeeBee AI Buddy",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="auto"
 )
@@ -48,7 +48,7 @@ st.set_page_config(
 
 # Define login screen
 def login_screen():
-    st.title("🤖 AI Buddy Login")
+    st.title("🤖 EeeBee AI Buddy Login")
     st.markdown("# Scanned Topic: Rational Numbers")
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
@@ -96,7 +96,7 @@ def add_initial_greeting():
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
         topic_name = st.session_state.auth_data['TopicName']
         greeting_message = (
-            f"Hello {user_name}! I'm your AI assistant. "
+            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
             f"How can I help you with {topic_name} today?"
         )
         st.session_state.chat_history.append(("assistant", greeting_message))
@@ -118,7 +118,7 @@ def main_screen():
     topic_name = st.session_state.auth_data['TopicName']
     
     # Custom title greeting the user
-    st.title(f"Hello {user_name}, your AI Buddy is here to help you", anchor=None)
+    st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
     
     # Display the scanned topic in a larger size
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
@@ -136,7 +136,7 @@ def main_screen():
     add_initial_greeting()
     
     # Chatbox interface
-    st.subheader("Chat with your AI Buddy", anchor=None)
+    st.subheader("Chat with your 🤖 EeeBee AI buddy", anchor=None)
     chat_container = st.container()
     with chat_container:
         chat_history_html = """
