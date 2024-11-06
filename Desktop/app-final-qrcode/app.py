@@ -10,6 +10,7 @@ import streamlit.components.v1 as components
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
+
 # Load OpenAI API key from st.secrets
 try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -34,6 +35,8 @@ if "is_authenticated" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+
+
 # Streamlit page settings
 st.set_page_config(
     page_title="EeeBee AI Buddy",
@@ -42,14 +45,6 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Define logout function to clear session state and rerun
-def logout():
-    st.session_state.auth_data = None
-    st.session_state.is_authenticated = False
-    st.session_state.selected_concept_id = None
-    st.session_state.conversation_history = []
-    st.session_state.chat_history = []
-    st.experimental_rerun()  # Refresh the app to show the login screen
 
 # Define login screen
 def login_screen():
@@ -93,6 +88,7 @@ def login_screen():
         else:
             st.warning("❗Please enter a valid Topic ID.")
 
+
 # Add initial greeting message
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0:
@@ -111,7 +107,12 @@ def handle_user_input(user_input):
         get_gpt_response(user_input)
         st.rerun()  # Force rerun to immediately display the new message
 
+
+
+
+
 def main_screen():
+
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
     
@@ -123,10 +124,6 @@ def main_screen():
     
     # Display available concepts with topic name
     st.subheader(f"Available Concepts:", anchor=None)
-
-    # Logout button at the top of main screen
-    if st.button("Logout 🔒"):
-        logout()
 
     # List of available concepts
     concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
