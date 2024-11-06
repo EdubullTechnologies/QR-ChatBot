@@ -1,6 +1,18 @@
 [client]
 showErrorDetails = false
 
+[theme]
+primaryColor = "#1f77b4"  # Adjust to your app’s theme color if needed
+
+[global]
+disableGatherUsageStats = true  # Optional, disables Streamlit usage stats collection
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false  # Prevents Streamlit from gathering usage stats
+
 [ui]
 hideTopBar = true
 hideMainMenu = true
