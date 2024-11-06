@@ -49,14 +49,6 @@ st.set_page_config(
 # Define login screen
 def login_screen():
     st.title("🤖 EeeBee AI Buddy Login")
-    
-    # Ensure 'auth_data' exists in session state before accessing 'TopicName'
-    if "auth_data" in st.session_state and "TopicName" in st.session_state.auth_data:
-        topic_name = st.session_state.auth_data['TopicName']
-        st.markdown(f"# Scanned Topic: {topic_name}")  # Use f-string to insert topic_name
-    else:
-        st.warning("Topic name not available. Please authenticate first.")
-    
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
     # Input fields for organization code, login ID, and password
