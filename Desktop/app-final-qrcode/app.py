@@ -165,7 +165,7 @@ def get_gpt_response(user_input):
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=conversation_history_formatted,
-            max_tokens=150
+            max_tokens=1000
         ).choices[0].message['content'].strip()
 
         # Append GPT-4's response to chat history
