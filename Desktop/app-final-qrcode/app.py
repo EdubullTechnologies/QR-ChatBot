@@ -256,7 +256,7 @@ def display_resources(content_data):
         if content_data.get("Video_List"):
             st.write("*Videos*")
             for video in content_data["Video_List"]:
-                video_url = video.get("LectureLink", f"https://example.com/{video.get('LectureID', '')}")
+                video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
                 st.write(f"[{video.get('LectureTitle', 'Untitled Video')}]({video_url})")
 
         # Display notes resources
