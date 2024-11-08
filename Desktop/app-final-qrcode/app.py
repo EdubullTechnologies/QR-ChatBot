@@ -16,22 +16,22 @@ config_path = 'config.json'  # Correct assignment
 working_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(working_dir, 'config.json')
 
-try:
-    with open(config_path, 'r') as config_file:
-        config_data = json.load(config_file)
-    OPENAI_API_KEY = config_data["openai_api_key"]
-    openai.api_key = OPENAI_API_KEY
-except (FileNotFoundError, KeyError) as e:
-    st.error(f"Configuration error: {e}")
-    st.stop()
-
-
 # try:
-#     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-# except KeyError:
-#     st.error("API key for OpenAI not found in secrets.")
+#     with open(config_path, 'r') as config_file:
+#         config_data = json.load(config_file)
+#     OPENAI_API_KEY = config_data["openai_api_key"]
+#     openai.api_key = OPENAI_API_KEY
+# except (FileNotFoundError, KeyError) as e:
+#     st.error(f"Configuration error: {e}")
+#     st.stop()
 
-# openai.api_key = OPENAI_API_KEY
+
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except KeyError:
+    st.error("API key for OpenAI not found in secrets.")
+
+openai.api_key = OPENAI_API_KEY
 
 # API URLs
 API_AUTH_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
