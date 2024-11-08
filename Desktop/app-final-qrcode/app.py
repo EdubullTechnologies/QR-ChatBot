@@ -178,13 +178,13 @@ def main_screen():
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
     conversation_history_formatted = [
-        {"role": "system", "content": f"You are a highly knowledgeable educational assistant. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'. Please only discuss information directly related to this topic and avoid answering any unrelated questions. Ensure that all responses are appropriate for a school setting."}
+        {"role": "system", "content": f"You are a highly knowledgeable educational assistant created by visionet. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'. Please only discuss information directly related to this topic and avoid answering any unrelated questions. Ensure that all responses are appropriate for a school setting."}
     ]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=conversation_history_formatted,
             max_tokens=1000
         ).choices[0].message['content'].strip()
