@@ -10,14 +10,29 @@ import streamlit.components.v1 as components
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
+config_path = 'config.json'  # Correct assignment
 
-# Load OpenAI API key from st.secrets
+
+working_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(working_dir, 'config.json')
+
 try:
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-except KeyError:
-    st.error("API key for OpenAI not found in secrets.")
+    with open(config_path, 'r') as config_file:
+        config_data = json.load(config_file)
+    OPENAI_API_KEY = config_data["openai_api_key"]
+    openai.api_key = OPENAI_API_KEY
+except (FileNotFoundError, KeyError) as e:
+    st.error(f"Configuration error: {e}")
+    st.stop()
 
-openai.api_key = OPENAI_API_KEY
+
+
+# try:
+#     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+# except KeyError:
+#     st.error("API key for OpenAI not found in secrets.")
+
+# openai.api_key = OPENAI_API_KEY
 
 # API URLs
 API_AUTH_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
@@ -109,15 +124,20 @@ def handle_user_input(user_input):
 
 
 
-
-
+# Define the main screen
 def main_screen():
-
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
     
     # Custom title greeting the user
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
+    
+    col1, col2 = st.columns([9, 1])  # Adjust the proportions as needed
+    with col2:
+        if st.button("Logout"):
+            # Clear session states related to authentication and conversation history
+            st.session_state.clear()  # Clears all session states
+            st.rerun()  # Refresh the app to go back to the login screen
     
     # Display the scanned topic in a larger size
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
@@ -154,6 +174,7 @@ def main_screen():
     if user_input:
         handle_user_input(user_input)
 
+
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
     conversation_history_formatted = [
@@ -165,7 +186,7 @@ def get_gpt_response(user_input):
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=conversation_history_formatted,
-            max_tokens=1000
+            max_tokens=200
         ).choices[0].message['content'].strip()
 
         # Append GPT-4's response to chat history
@@ -173,11 +194,18 @@ def get_gpt_response(user_input):
     except Exception as e:
         st.error(f"Error in GPT-4 response generation: {e}")
 
-# Function to load content based on the selected concept
+# Function to load content and generate a description for the selected concept
 def load_concept_content():
+    # Get the selected concept name and ID from ConceptList
+    selected_concept_id = st.session_state.selected_concept_id
+    selected_concept_name = next(
+        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
+        "Unknown Concept"
+    )
+
     content_payload = {
         'TopicID': st.session_state.topic_id,
-        'ConceptID': int(st.session_state.selected_concept_id)
+        'ConceptID': int(selected_concept_id)
     }
     headers = {
         "Content-Type": "application/json",
@@ -186,16 +214,42 @@ def load_concept_content():
     }
 
     try:
+        # Fetch content data from API
         content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
         content_response.raise_for_status()
         content_data = content_response.json()
+
+        # Generate a description for the selected concept using ChatGPT
+        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 100 words and simple."
+
+        gpt_response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": prompt}],
+            max_tokens=100
+        ).choices[0].message['content'].strip()
+
+        # Replace any generic references to "this concept" with the actual concept name
+        gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
+
+        # Save the description in session state to display later
+        st.session_state.generated_description = gpt_response
+
+        # Display resources
         display_resources(content_data)
+
     except requests.exceptions.RequestException as req_err:
         st.error(f"Error fetching content: {req_err}")
+    except Exception as e:
+        st.error(f"Error generating concept description: {e}")
 
-# Function to display resources (videos, notes, exercises)
+# Function to display resources (videos, notes, exercises) with generated concept description
 def display_resources(content_data):
     with st.expander("Resources", expanded=True):
+        
+        # Display the generated concept description from ChatGPT
+        concept_description = st.session_state.get("generated_description", "No description available.")
+        st.markdown(f"### Concept Description\n{concept_description}\n")
+
         # Display video resources
         if content_data.get("Video_List"):
             st.write("*Videos*")
@@ -218,6 +272,7 @@ def display_resources(content_data):
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                 exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
                 st.write(f"[{exercise_title}]({exercise_url})")
+
 
 # Display login or main screen based on authentication
 if st.session_state.is_authenticated:
