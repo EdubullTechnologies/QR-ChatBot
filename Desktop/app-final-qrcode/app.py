@@ -184,7 +184,7 @@ def get_gpt_response(user_input):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=conversation_history_formatted,
             max_tokens=1000
         ).choices[0].message['content'].strip()
@@ -220,7 +220,7 @@ def load_concept_content():
         content_data = content_response.json()
 
         # Generate a description for the selected concept using ChatGPT
-        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 100 words and simple."
+        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 150 words and simple."
 
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
