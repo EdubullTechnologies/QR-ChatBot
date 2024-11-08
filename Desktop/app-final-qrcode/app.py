@@ -223,7 +223,7 @@ def load_concept_content():
         prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 100 words and simple."
 
         gpt_response = openai.ChatCompletion.create(
-            model="GPT-4o mini",
+            model="gpt-4o-mini",
             messages=[{"role": "system", "content": prompt}],
             max_tokens=100
         ).choices[0].message['content'].strip()
