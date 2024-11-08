@@ -184,9 +184,9 @@ def get_gpt_response(user_input):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=conversation_history_formatted,
-            max_tokens=200
+            max_tokens=1000
         ).choices[0].message['content'].strip()
 
         # Append GPT-4's response to chat history
@@ -225,7 +225,7 @@ def load_concept_content():
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "system", "content": prompt}],
-            max_tokens=100
+            max_tokens=150
         ).choices[0].message['content'].strip()
 
         # Replace any generic references to "this concept" with the actual concept name
