@@ -220,7 +220,7 @@ def load_concept_content():
         content_data = content_response.json()
 
         # Generate a description for the selected concept using ChatGPT
-        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 150 words and simple."
+        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 150 words and simple"
 
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
@@ -230,6 +230,8 @@ def load_concept_content():
 
         # Replace any generic references to "this concept" with the actual concept name
         gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
+
+        gpt_response += "\n\nYou can check the resources below for more information."
 
         # Save the description in session state to display later
         st.session_state.generated_description = gpt_response
