@@ -59,17 +59,6 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-st.markdown("""
-    <style>
-    .logout-button-container {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        margin-right: 10px; /* Adjust if needed */
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 
 # Define login screen
 def login_screen():
@@ -138,17 +127,15 @@ def handle_user_input(user_input):
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
-
-    # Create a logout button aligned to the right
-    with st.container():
-        col1, col2 = st.columns([9, 1])  # Adjust column proportions to squash on smaller screens
-        with col2:
-            # Use a container with a CSS class for better alignment
-            st.markdown('<div class="logout-button-container">', unsafe_allow_html=True)
-            if st.button("Logout", key="logout"):
-                st.session_state.clear()  # Clears all session states
-                st.rerun()  # Refresh the app to go back to the login screen
-            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Custom title greeting the user
+    
+    col1, col2 = st.columns([9, 1])  # Adjust the proportions as needed
+    with col2:
+        if st.button("Logout"):
+            # Clear session states related to authentication and conversation history
+            st.session_state.clear()  # Clears all session states
+            st.rerun()  # Refresh the app to go back to the login screen
     
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
 
@@ -191,7 +178,7 @@ def main_screen():
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
     conversation_history_formatted = [
-        {"role": "system", "content": f"You are a highly knowledgeable educational assistant created by visionet. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'. Please only discuss information directly related to this topic and avoid answering any unrelated questions. Ensure that all responses are appropriate for a school setting. Do answer in not much complexity unless student wants it."}
+        {"role": "system", "content": f"You are a highly knowledgeable educational assistant created by visionet. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'. Please only discuss information directly related to this topic and avoid answering any unrelated questions. Ensure that all responses are appropriate for a school setting."}
     ]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
 
@@ -233,7 +220,7 @@ def load_concept_content():
         content_data = content_response.json()
 
         # Generate a description for the selected concept using ChatGPT
-        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it simple without examples."
+        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 150 words and simple"
 
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
@@ -269,7 +256,7 @@ def display_resources(content_data):
         if content_data.get("Video_List"):
             st.write("*Videos*")
             for video in content_data["Video_List"]:
-                video_url = video.get("LectureLink", f"https://example.com/{video.get('LectureID', '')}")
+                video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
                 st.write(f"[{video.get('LectureTitle', 'Untitled Video')}]({video_url})")
 
         # Display notes resources
