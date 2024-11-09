@@ -233,7 +233,7 @@ def load_concept_content():
         content_data = content_response.json()
 
         # Generate a description for the selected concept using ChatGPT
-        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it under 150 words and simple"
+        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better. Keep it simple without examples."
 
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
