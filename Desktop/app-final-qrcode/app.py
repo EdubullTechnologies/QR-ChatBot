@@ -178,7 +178,7 @@ def main_screen():
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
     conversation_history_formatted = [
-        {"role": "system", "content": f"You are a highly knowledgeable educational assistant created by visionet. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'. Please only discuss information directly related to this topic and avoid answering any unrelated questions. Ensure that all responses are appropriate for a school setting."}
+        {"role": "system", "content": f"You are a highly knowledgeable educational assistant created by Visionet. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'. Please provide guidance in a step-by-step manner to help the student solve the problem independently, rather than offering direct answers. Ensure that all responses are relevant to the topic and appropriate for a school setting."
     ]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
 
