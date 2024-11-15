@@ -59,7 +59,7 @@ st.markdown("""
             color: #000;
         }
         .chat-bubble.user {
-            text-align: right;
+            text-align: left;
             background-color: #2563eb;
             color: #fff;
         }
