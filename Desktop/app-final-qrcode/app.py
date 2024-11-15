@@ -66,7 +66,7 @@ def login_screen():
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
     # Input fields for organization code, login ID, and password
-    org_code = st.text_input("🏫 Organization Code", key="org_code")  # No default value
+    org_code = st.text_input("🏫 School Code", key="org_code")  # No default value
     login_id = st.text_input("👤 Login ID", key="login_id")           # No default value
     password = st.text_input("🔒 Password", type="password", key="password")  # No default value
 
@@ -165,7 +165,7 @@ def main_screen():
             if role == "assistant":
                 chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
             else:
-                chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>You:</b> {message}</div>"
+                chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{st.session_state.auth_data['UserInfo'][0]['FullName']}:</b> {message}</div>"
         chat_history_html += "</div>"
         st.markdown(chat_history_html, unsafe_allow_html=True)
 
