@@ -165,7 +165,7 @@ def main_screen():
             if role == "assistant":
                 chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
             else:
-                chat_history_html += f"<div style='text-align: right; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>You:</b> {message}</div>"
+                chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>You:</b> {message}</div>"
         chat_history_html += "</div>"
         st.markdown(chat_history_html, unsafe_allow_html=True)
 
