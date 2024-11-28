@@ -177,13 +177,13 @@ def main_screen():
 
     # Button to generate learning path
     # Button to generate learning path
-   if st.button("🎯 Generate 🧠 Learning Path 🚀"):
-    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-    if weak_concepts:
-        learning_path = generate_learning_path(weak_concepts)
-        display_learning_path(learning_path)
-    else:
-        st.error("No weak concepts found!")
+   if st.button("🧠 Generate Learning Path"):
+        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+        if weak_concepts:
+            learning_path = generate_learning_path(weak_concepts)
+            display_learning_path(learning_path)
+        else:
+            st.error("No weak concepts found!")
 
         # Display available concepts with topic name
     st.subheader(f"Available Concepts:", anchor=None)
