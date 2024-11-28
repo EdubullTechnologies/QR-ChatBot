@@ -172,6 +172,10 @@ def main_screen():
     
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
 
+    # Debugging: Display the auth data
+    st.markdown("### Debug Information")
+    st.write(st.session_state.auth_data)
+
      # Button to generate learning path
     if st.button("🧠 Generate Learning Path"):
         weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
