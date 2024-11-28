@@ -174,18 +174,44 @@ def main_screen():
 
     # Display the scanned topic in a larger size
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
+
+    # Button to generate learning path
+st.markdown("""
+    <style>
+    .custom-button {
+        background-color: #4CAF50;
+        color: white;
+        font-size: 16px;
+        padding: 10px 24px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition-duration: 0.4s;
+        text-align: center;
+    }
+    .custom-button:hover {
+        background-color: #45a049;
+    }
+    </style>
+    <div style="text-align: center; margin-top: 20px;">
+        <button class="custom-button" onclick="window.location.reload();">🧠 Generate Learning Path</button>
+    </div>
+""", unsafe_allow_html=True)
+
+# Logic for Generate Learning Path
+if st.button("🧠 Generate Learning Path"):
+    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+    if weak_concepts:
+        learning_path = generate_learning_path(weak_concepts)
+        display_learning_path(learning_path)
+    else:
+        st.error("No weak concepts found!")
+
     
     # Display available concepts with topic name
     st.subheader(f"Available Concepts:", anchor=None)
 
-      # Button to generate learning path
-    if st.button("🧠 Generate Learning Path"):
-        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-        if weak_concepts:
-            learning_path = generate_learning_path(weak_concepts)
-            display_learning_path(learning_path)
-        else:
-            st.error("No weak concepts found!")
+    
 
     # List of available concepts
     concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
