@@ -70,8 +70,11 @@ def generate_learning_path(weak_concepts):
         concept_text = concept.get("ConceptText", "Unknown Concept")
         prompt = (
             f"The student is struggling with the concept: '{concept_text}'. "
-            f"Suggest a detailed learning path using NCERT books or grade-specific materials."
+            f"Create a detailed and actionable learning path that includes step-by-step guidance, key resources, "
+            f"practice strategies, and real-world applications to help the student master this concept. "
+            f"Focus on clarity, progression, and measurable learning outcomes."
         )
+
         try:
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4",
