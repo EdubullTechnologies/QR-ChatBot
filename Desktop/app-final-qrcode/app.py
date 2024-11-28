@@ -177,59 +177,18 @@ def main_screen():
 
     # Button to generate learning path
     # Button to generate learning path
-    st.markdown("""
-        <style>
-        .custom-button {
-            background-color: #4CAF50;
-            color: white;
-            font-size: 16px;
-            padding: 10px 24px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition-duration: 0.4s;
-            text-align: center;
-            display: inline-block;
-        }
-        .custom-button:hover {
-            background-color: #45a049;
-        }
-        </style>
-        <div style="text-align: center; margin-top: 20px;">
-            <button class="custom-button" id="generate-learning-path">🧠 Generate Learning Path</button>
-        </div>
-        <script>
-        document.getElementById('generate-learning-path').addEventListener('click', function() {
-            fetch("/_st_toggle_generate_learning_path");
-        });
-        </script>
-    """, unsafe_allow_html=True)
-    
-    # Backend handling for button click
-    if "generate_learning_path_clicked" not in st.session_state:
-        st.session_state["generate_learning_path_clicked"] = False
-    
-    # Logic triggered by custom button
-    if st.session_state.get("generate_learning_path_clicked"):
-        st.session_state["generate_learning_path_clicked"] = False  # Reset button click state
-        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-        if weak_concepts:
-            learning_path = generate_learning_path(weak_concepts)
-            display_learning_path(learning_path)
-        else:
-            st.error("No weak concepts found!")
-    
-    # Native fallback button for debugging (optional)
-    if st.button("Debug: Trigger Generate Learning Path"):
-        st.session_state["generate_learning_path_clicked"] = True
+   if st.button("🎯 Generate 🧠 Learning Path 🚀"):
+    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+    if weak_concepts:
+        learning_path = generate_learning_path(weak_concepts)
+        display_learning_path(learning_path)
+    else:
+        st.error("No weak concepts found!")
 
-    
-        
         # Display available concepts with topic name
     st.subheader(f"Available Concepts:", anchor=None)
 
     
-
     # List of available concepts
     concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
     for concept_text, concept_id in concept_options.items():
