@@ -172,10 +172,6 @@ def main_screen():
     
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
 
-    # Debugging: Display the auth data
-    st.markdown("### Debug Information")
-    st.write(st.session_state.auth_data)
-
     # Display the scanned topic in a larger size
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
     
