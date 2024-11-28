@@ -91,16 +91,16 @@ def generate_learning_path(weak_concepts):
     return learning_path
 
 # Utility Function to Display Learning Path
-#def display_learning_path(learning_path):
+def display_learning_path(learning_path):
     """
     Display the generated learning path.
     """
-   # st.subheader("📚 Generated Learning Path")
-    #for concept, path in learning_path.items():
+    st.subheader("📚 Generated Learning Path")
+    for concept, path in learning_path.items():
         st.markdown(f"#### Concept: {concept}")
         st.write(path)
 
-# #Define login screen
+# Define login screen
 def login_screen():
     st.title("🤖 EeeBee AI Buddy Login")
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
@@ -183,13 +183,13 @@ def main_screen():
 
 
      # Button to generate learning path
-    #if st.button("🧠 Generate Learning Path"):
-        #weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-       # if weak_concepts:
-          #  learning_path = generate_learning_path(weak_concepts)
-         #   display_learning_path(learning_path)
-       # else:
-         #   st.error("No weak concepts found!")
+    if st.button("🧠 Generate Learning Path"):
+        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+        if weak_concepts:
+            learning_path = generate_learning_path(weak_concepts)
+            display_learning_path(learning_path)
+        else:
+            st.error("No weak concepts found!")
 
     # Display the scanned topic in a larger size
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
