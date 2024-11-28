@@ -83,7 +83,7 @@ def generate_learning_path(weak_concepts):
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "system", "content": prompt}],
-                max_tokens=500
+                max_tokens=1000
             ).choices[0].message['content'].strip()
             learning_path[concept_text] = gpt_response
         except Exception as e:
