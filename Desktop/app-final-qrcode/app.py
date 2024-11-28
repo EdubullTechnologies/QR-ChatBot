@@ -172,12 +172,11 @@ def main_screen():
     
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
 
-    # Display the scanned topic in a larger size
-    st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
+    # Debugging: Display the auth data
 
-    # Button to generate learning path
-    # Button to generate learning path
-   if st.button("🧠 Generate Learning Path"):
+
+     # Button to generate learning path
+    if st.button("🧠 Generate Learning Path"):
         weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
         if weak_concepts:
             learning_path = generate_learning_path(weak_concepts)
@@ -185,10 +184,12 @@ def main_screen():
         else:
             st.error("No weak concepts found!")
 
-        # Display available concepts with topic name
+    # Display the scanned topic in a larger size
+    st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
+    
+    # Display available concepts with topic name
     st.subheader(f"Available Concepts:", anchor=None)
 
-    
     # List of available concepts
     concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
     for concept_text, concept_id in concept_options.items():
