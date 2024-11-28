@@ -69,17 +69,21 @@ def generate_learning_path(weak_concepts):
     for concept in weak_concepts:
         concept_text = concept.get("ConceptText", "Unknown Concept")
         prompt = (
-            f"The student is struggling with the concept: '{concept_text}'. "
-            f"Create a detailed and actionable learning path that includes step-by-step guidance, key resources, "
-            f"practice strategies, and real-world applications to help the student master this concept. "
-            f"Focus on clarity, progression, and measurable learning outcomes."
+            f"The student is struggling with the weak concept: '{concept_text}'. "
+            f"Create a detailed and structured learning path with the following sections:\n\n"
+            f"1. **Introduction to the Concept**: Explain the importance and applications of the concept.\n"
+            f"2. **Step-by-Step Learning**: Provide a clear sequence of steps to master the concept.\n"
+            f"3. **Engagement**: Suggest interactive activities or problem-solving exercises to reinforce learning.\n"
+            f"4. **Real-World Applications**: Explain how this concept can be applied in practical situations.\n"
+            f"5. **Practice Problems**: Recommend types of problems and exercises to practice.\n"
+            f"Ensure the response is well-organized and includes actionable steps."
         )
 
         try:
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[{"role": "system", "content": prompt}],
-                max_tokens=300
+                max_tokens=500
             ).choices[0].message['content'].strip()
             learning_path[concept_text] = gpt_response
         except Exception as e:
