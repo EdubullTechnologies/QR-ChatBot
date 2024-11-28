@@ -176,6 +176,7 @@ def main_screen():
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
 
     # Button to generate learning path
+    # Button to generate learning path
     st.markdown("""
         <style>
         .custom-button {
@@ -188,24 +189,40 @@ def main_screen():
             cursor: pointer;
             transition-duration: 0.4s;
             text-align: center;
+            display: inline-block;
         }
         .custom-button:hover {
             background-color: #45a049;
         }
         </style>
         <div style="text-align: center; margin-top: 20px;">
-            <button class="custom-button" onclick="window.location.reload();">🧠 Generate Learning Path</button>
+            <button class="custom-button" id="generate-learning-path">🧠 Generate Learning Path</button>
         </div>
+        <script>
+        document.getElementById('generate-learning-path').addEventListener('click', function() {
+            fetch("/_st_toggle_generate_learning_path");
+        });
+        </script>
     """, unsafe_allow_html=True)
-
-# Logic for Generate Learning Path
-    if st.button("🧠 Generate Learning Path"):
+    
+    # Backend handling for button click
+    if "generate_learning_path_clicked" not in st.session_state:
+        st.session_state["generate_learning_path_clicked"] = False
+    
+    # Logic triggered by custom button
+    if st.session_state.get("generate_learning_path_clicked"):
+        st.session_state["generate_learning_path_clicked"] = False  # Reset button click state
         weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
         if weak_concepts:
             learning_path = generate_learning_path(weak_concepts)
             display_learning_path(learning_path)
         else:
             st.error("No weak concepts found!")
+    
+    # Native fallback button for debugging (optional)
+    if st.button("Debug: Trigger Generate Learning Path"):
+        st.session_state["generate_learning_path_clicked"] = True
+
     
         
         # Display available concepts with topic name
