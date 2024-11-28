@@ -60,6 +60,39 @@ st.set_page_config(
 )
 
 
+# Utility Function to Generate Learning Path
+def generate_learning_path(weak_concepts):
+    """
+    Generate a learning path using WeakConceptList.
+    """
+    learning_path = {}
+    for concept in weak_concepts:
+        concept_text = concept.get("ConceptText", "Unknown Concept")
+        prompt = (
+            f"The student is struggling with the concept: '{concept_text}'. "
+            f"Suggest a detailed learning path using NCERT books or grade-specific materials."
+        )
+        try:
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[{"role": "system", "content": prompt}],
+                max_tokens=300
+            ).choices[0].message['content'].strip()
+            learning_path[concept_text] = gpt_response
+        except Exception as e:
+            learning_path[concept_text] = f"Error generating learning path: {e}"
+    return learning_path
+
+# Utility Function to Display Learning Path
+def display_learning_path(learning_path):
+    """
+    Display the generated learning path.
+    """
+    st.subheader("📚 Generated Learning Path")
+    for concept, path in learning_path.items():
+        st.markdown(f"#### Concept: {concept}")
+        st.write(path)
+
 # Define login screen
 def login_screen():
     st.title("🤖 EeeBee AI Buddy Login")
@@ -138,6 +171,15 @@ def main_screen():
             st.rerun()  # Refresh the app to go back to the login screen
     
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
+
+     # Button to generate learning path
+    if st.button("🧠 Generate Learning Path"):
+        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+        if weak_concepts:
+            learning_path = generate_learning_path(weak_concepts)
+            display_learning_path(learning_path)
+        else:
+            st.error("No weak concepts found!")
 
     # Display the scanned topic in a larger size
     st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
