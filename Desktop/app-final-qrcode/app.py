@@ -176,7 +176,13 @@ def main_screen():
     st.markdown("### Debug Information")
     st.write(st.session_state.auth_data)
 
-     # Button to generate learning path
+    # Display the scanned topic in a larger size
+    st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
+    
+    # Display available concepts with topic name
+    st.subheader(f"Available Concepts:", anchor=None)
+
+      # Button to generate learning path
     if st.button("🧠 Generate Learning Path"):
         weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
         if weak_concepts:
@@ -184,12 +190,6 @@ def main_screen():
             display_learning_path(learning_path)
         else:
             st.error("No weak concepts found!")
-
-    # Display the scanned topic in a larger size
-    st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
-    
-    # Display available concepts with topic name
-    st.subheader(f"Available Concepts:", anchor=None)
 
     # List of available concepts
     concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
