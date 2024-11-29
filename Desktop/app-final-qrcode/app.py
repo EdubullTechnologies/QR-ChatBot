@@ -96,12 +96,18 @@ def generate_learning_path(weak_concepts):
 # Utility Function to Display Learning Path
 def display_learning_path(learning_path):
     """
-    Display the generated learning path with collapsible functionality and correct formatting.
+    Display the generated learning path with collapsible functionality.
     """
     with st.expander("📚 Generated Learning Path", expanded=True):
         for concept, path in learning_path.items():
             # Display the concept as a subheader
-            st.markdown(f"### Weak Concept: {concept}")
+            st.markdown(f"### Concept: {concept}")
+            
+            # Split the learning path into lines and display each line
+            lines = path.split("\n")
+            for line in lines:
+                st.markdown(line.strip())
+
             
             # Split the learning path into lines and process LaTeX separately
             #lines = path.split("\n")
