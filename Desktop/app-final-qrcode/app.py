@@ -121,7 +121,6 @@ def login_screen():
         .title {
             font-size: 4em;  /* Adjust font size to make it bigger */
             font-weight: bold;
-            color: white;  /* Ensure the title is white */
             margin-top: 90px;  /* Move the text closer to the image */
             margin-left: -125px;
             text-align: left;  /* Align the text to the left */
