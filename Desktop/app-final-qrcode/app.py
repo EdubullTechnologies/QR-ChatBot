@@ -5,6 +5,9 @@ import openai
 import requests
 import warnings
 import streamlit.components.v1 as components
+from PIL import Image
+import requests
+from io import BytesIO
 
 # Ignore all deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -102,40 +105,47 @@ def display_learning_path(learning_path):
 
 # Define login screen
 def login_screen():
-    try:
-        # Open and resize the image
-        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
+try:
+    # URL of the image from GitHub
+    image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
+    
+    # Fetch the image content from the URL
+    response = requests.get(image_url)
+    response.raise_for_status()  # Ensure we got a valid response (status 200)
 
-        image = Image.open(image_url)  # Replace with the actual path to your image
-        image = image.resize((160, 325))  # Resize to your preferred dimensions (width x height)
+    # Open the image from the response content (in memory)
+    image = Image.open(BytesIO(response.content))
+    
+    # Resize the image to your desired dimensions (width x height)
+    image = image.resize((160, 325))  # Adjust this as necessary
 
-        # Create two columns with adjusted ratio to bring text closer
-        col1, col2 = st.columns([1, 2])  # Adjusted to make the image column smaller
+    # Create two columns for layout
+    col1, col2 = st.columns([1, 2])  # Adjust ratio for layout
 
-        # Display the image in the first column
-        with col1:
-            st.image(image)
+    # Display the image in the first column
+    with col1:
+        st.image(image)
 
-        # Apply custom CSS to increase font size and adjust positioning
-        st.markdown("""
-        <style>
-        .title {
-            font-size: 4em;  /* Adjust font size to make it bigger */
-            font-weight: bold;
-            color: white;  /* Ensure the title is white */
-            margin-top: 90px;  /* Move the text closer to the image */
-            margin-left: -125px;
-            text-align: left;  /* Align the text to the left to keep it near the image */
-        }
-        </style>
-        """, unsafe_allow_html=True)
+    # Add title in the second column
+    st.markdown("""
+    <style>
+    .title {
+        font-size: 4em;  /* Adjust font size to make it bigger */
+        font-weight: bold;
+        color: white;  /* Ensure the title is white */
+        margin-top: 90px;  /* Adjust the margin to align with image */
+        margin-left: -125px;  /* Adjust left margin to make it closer */
+        text-align: left;  /* Align the text to the left */
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-        # Display the title in the second column
-        with col2:
-            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
+    # Display the title in the second column
+    with col2:
+        st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
 
-    except Exception as e:
-        st.error(f"Error loading image: {e}")
+except Exception as e:
+    st.error(f"Error loading image: {e}")
 
     # st.title("🤖 EeeBee AI Buddy Login")
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
