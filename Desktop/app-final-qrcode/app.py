@@ -96,12 +96,19 @@ def generate_learning_path(weak_concepts):
 # Utility Function to Display Learning Path
 def display_learning_path(learning_path):
     """
-    Display the generated learning path.
+    Display the generated learning path with collapsible functionality and LaTeX support.
     """
-    st.subheader("📚 Generated Learning Path")
-    for concept, path in learning_path.items():
-        st.markdown(f"#### Concept: {concept}")
-        st.write(path)
+    with st.expander("📚 Generated Learning Path", expanded=True):
+        for concept, path in learning_path.items():
+            # Display the concept as a subheader
+            st.markdown(f"### Concept: {concept}")
+            
+            # Check for LaTeX content in the path
+            if r"\frac" in path or "$" in path:
+                st.latex(path)  # Render as LaTeX
+            else:
+                st.write(path)  # Render as plain text
+
 
 # Define login screen
 def login_screen():
