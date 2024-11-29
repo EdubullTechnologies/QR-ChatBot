@@ -113,7 +113,7 @@ def login_screen():
         col1, col2 = st.columns([1, 2])  # Adjusted to make the image column smaller
 
         with col1:
-            st.image(image_url, caption='logo', width=160)
+            st.image(image_url, width=160)
 
         # Apply custom CSS to increase font size and adjust positioning
         st.markdown("""
