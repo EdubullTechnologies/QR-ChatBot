@@ -101,17 +101,17 @@ def display_learning_path(learning_path):
     with st.expander("📚 Generated Learning Path", expanded=True):
         for concept, path in learning_path.items():
             # Display the concept as a subheader
-            st.markdown(f"### Concept: {concept}")
+            st.markdown(f"### Weak Concept: {concept}")
             
             # Split the learning path into lines and process LaTeX separately
-            lines = path.split("\n")
-            for line in lines:
-                if r"\(" in line or r"\)" in line or r"$" in line:
+            #lines = path.split("\n")
+            #for line in lines:
+             #   if r"\(" in line or r"\)" in line or r"$" in line:
                     # Render LaTeX if it is found
-                    st.latex(line.strip())
-                else:
+              #      st.latex(line.strip())
+               # else:
                     # Otherwise, render as plain markdown text
-                    st.markdown(line.strip())
+                #    st.markdown(line.strip())
 
 
 
