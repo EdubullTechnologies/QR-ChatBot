@@ -136,7 +136,7 @@ def login_screen():
         st.error(f"Error loading image: {e}")
 
     # st.title("🤖 EeeBee AI Buddy Login")
-    st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
+    st.title("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
     # Input fields for organization code, login ID, and password
     org_code = st.text_input("🏫 School Code", key="org_code")  # No default value
