@@ -106,16 +106,14 @@ def display_learning_path(learning_path):
 # Define login screen
 def login_screen():
     try:
-        # Open and resize the image
-        image = Image.open("assets/login_page_img.png")  # Replace with the actual path to your image
-        image = image.resize((160, 325))  # Resize to your preferred dimensions (width x height)
+        # External image URL
+        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
 
-        # Create two columns with adjusted ratio to bring text closer
+        # Display the image from the URL with a caption and width
         col1, col2 = st.columns([1, 2])  # Adjusted to make the image column smaller
 
-        # Display the image in the first column
         with col1:
-            st.image(image)
+            st.image(image_url, caption='logo', width=160, height=325)
 
         # Apply custom CSS to increase font size and adjust positioning
         st.markdown("""
@@ -126,7 +124,7 @@ def login_screen():
             color: white;  /* Ensure the title is white */
             margin-top: 90px;  /* Move the text closer to the image */
             margin-left: -125px;
-            text-align: left;  /* Align the text to the left to keep it near the image */
+            text-align: left;  /* Align the text to the left */
         }
         </style>
         """, unsafe_allow_html=True)
