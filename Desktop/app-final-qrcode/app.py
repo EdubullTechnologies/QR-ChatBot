@@ -247,7 +247,6 @@ def main_screen():
     add_initial_greeting()
     
     # Chatbox interface
-    # Chatbox interface
     st.subheader("Chat with your 🤖 EeeBee AI buddy", anchor=None)
     chat_container = st.container()
     with chat_container:
@@ -255,27 +254,18 @@ def main_screen():
         <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
         """
         for role, message in st.session_state.chat_history:
-            if r"\frac" in message or "$" in message or "^" in message or "_" in message:
-                # Render LaTeX for mathematical content
-                if role == "assistant":
-                    st.markdown(f"**EeeBee:**")
-                    st.latex(message)
-                else:
-                    st.markdown(f"**{st.session_state.auth_data['UserInfo'][0]['FullName']}:**")
-                    st.latex(message)
+            if role == "assistant":
+                chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
             else:
-                # Render plain text
-                if role == "assistant":
-                    chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                else:
-                    chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{st.session_state.auth_data['UserInfo'][0]['FullName']}:</b> {message}</div>"
+                chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{st.session_state.auth_data['UserInfo'][0]['FullName']}:</b> {message}</div>"
         chat_history_html += "</div>"
         st.markdown(chat_history_html, unsafe_allow_html=True)
-    
+
     # User input with st.chat_input
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
         handle_user_input(user_input)
+
 
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
