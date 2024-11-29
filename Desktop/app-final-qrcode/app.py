@@ -102,40 +102,42 @@ def display_learning_path(learning_path):
 
 # Define login screen
 def login_screen():
-    # try:
-    #     # Open and resize the image
-    #     image = Image.open("Desktop/app-final-qrcode/assets/login_page_img.png")  # Replace with the actual path to your image
-    #     image = image.resize((160, 325))  # Resize to your preferred dimensions (width x height)
+    try:
+        # Open and resize the image
+        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
 
-    #     # Create two columns with adjusted ratio to bring text closer
-    #     col1, col2 = st.columns([1, 2])  # Adjusted to make the image column smaller
+        image = Image.open(image_url)  # Replace with the actual path to your image
+        image = image.resize((160, 325))  # Resize to your preferred dimensions (width x height)
 
-    #     # Display the image in the first column
-    #     with col1:
-    #         st.image(image)
+        # Create two columns with adjusted ratio to bring text closer
+        col1, col2 = st.columns([1, 2])  # Adjusted to make the image column smaller
 
-    #     # Apply custom CSS to increase font size and adjust positioning
-    #     st.markdown("""
-    #     <style>
-    #     .title {
-    #         font-size: 4em;  /* Adjust font size to make it bigger */
-    #         font-weight: bold;
-    #         color: white;  /* Ensure the title is white */
-    #         margin-top: 90px;  /* Move the text closer to the image */
-    #         margin-left: -125px;
-    #         text-align: left;  /* Align the text to the left to keep it near the image */
-    #     }
-    #     </style>
-    #     """, unsafe_allow_html=True)
+        # Display the image in the first column
+        with col1:
+            st.image(image)
 
-    #     # Display the title in the second column
-    #     with col2:
-    #         st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
+        # Apply custom CSS to increase font size and adjust positioning
+        st.markdown("""
+        <style>
+        .title {
+            font-size: 4em;  /* Adjust font size to make it bigger */
+            font-weight: bold;
+            color: white;  /* Ensure the title is white */
+            margin-top: 90px;  /* Move the text closer to the image */
+            margin-left: -125px;
+            text-align: left;  /* Align the text to the left to keep it near the image */
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-    # except Exception as e:
-    #     st.error(f"Error loading image: {e}")
+        # Display the title in the second column
+        with col2:
+            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
 
-    st.title("🤖 EeeBee AI Buddy Login")
+    except Exception as e:
+        st.error(f"Error loading image: {e}")
+
+    # st.title("🤖 EeeBee AI Buddy Login")
     st.write("🦾 Welcome! Please enter your credentials to chat with your AI Buddy!")
     
     # Input fields for organization code, login ID, and password
