@@ -352,62 +352,91 @@ def load_concept_content():
 # Function to display resources (videos, notes, exercises) with generated concept description
 def display_resources(content_data):
     """
-    Display videos, exercises, and notes with enhanced styling (as clickable buttons).
-    """
-    st.subheader("Resources")
-
-    # HTML/CSS Styling
-    button_style = """
-        <style>
-            .resource-button {
-                display: inline-block;
-                padding: 10px 20px;
-                margin: 5px;
-                font-size: 16px;
-                font-weight: bold;
-                color: white;
-                background-color: #007BFF;
-                border: none;
-                border-radius: 5px;
-                text-align: center;
-                text-decoration: none;
-                cursor: pointer;
-                transition: background-color 0.3s ease;
-            }
-            .resource-button:hover {
-                background-color: #0056b3;
-            }
-        </style>
+    Display resources (videos, notes, exercises) with an enhanced interface inside an expander.
     """
 
-    st.markdown(button_style, unsafe_allow_html=True)
+    with st.expander("📂 Resources", expanded=True):
+        # Style for the concept description
+        description_style = """
+            <style>
+                .concept-description {
+                    font-size: 18px;
+                    line-height: 1.6;
+                    background-color: #f9f9f9;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-left: 5px solid #007BFF;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                }
+                .section-heading {
+                    font-size: 20px;
+                    color: #333;
+                    margin-top: 20px;
+                }
+            </style>
+        """
+        st.markdown(description_style, unsafe_allow_html=True)
 
-    # Videos
-    if content_data.get("Video_List"):
-        st.markdown("### 📹 Videos")
-        for video in content_data["Video_List"]:
-            video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-            video_title = video.get("LectureTitle", "Untitled Video")
-            video_button = f'<a href="{video_url}" target="_blank" class="resource-button">{video_title}</a>'
-            st.markdown(video_button, unsafe_allow_html=True)
+        # Display the generated concept description
+        concept_description = st.session_state.get("generated_description", "No description available.")
+        st.markdown(f"<div class='concept-description'><strong>Concept Description:</strong><br>{concept_description}</div>", unsafe_allow_html=True)
 
-    # Notes
-    if content_data.get("Notes_List"):
-        st.markdown("### 📄 Notes")
-        for note in content_data["Notes_List"]:
-            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-            note_title = note.get("NotesTitle", "Untitled Note")
-            note_button = f'<a href="{note_url}" target="_blank" class="resource-button">{note_title}</a>'
-            st.markdown(note_button, unsafe_allow_html=True)
+        # Styling for the buttons
+        button_style = """
+            <style>
+                .resource-button {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    margin: 5px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: white;
+                    background-color: #007BFF;
+                    border: none;
+                    border-radius: 5px;
+                    text-align: center;
+                    text-decoration: none;
+                    cursor: pointer;
+                    transition: background-color 0.3s ease;
+                }
+                .resource-button:hover {
+                    background-color: #0056b3;
+                }
+                .resource-section {
+                    margin-bottom: 20px;
+                }
+            </style>
+        """
+        st.markdown(button_style, unsafe_allow_html=True)
 
-    # Exercises
-    if content_data.get("Exercise_List"):
-        st.markdown("### 📝 Exercises")
-        for exercise in content_data["Exercise_List"]:
-            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-            exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
-            exercise_button = f'<a href="{exercise_url}" target="_blank" class="resource-button">{exercise_title}</a>'
-            st.markdown(exercise_button, unsafe_allow_html=True)
+        # Videos Section
+        if content_data.get("Video_List"):
+            st.markdown("<div class='section-heading'>📹 Videos</div>", unsafe_allow_html=True)
+            for video in content_data["Video_List"]:
+                video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
+                video_title = video.get("LectureTitle", "Untitled Video")
+                video_button = f'<a href="{video_url}" target="_blank" class="resource-button">{video_title}</a>'
+                st.markdown(video_button, unsafe_allow_html=True)
+
+        # Notes Section
+        if content_data.get("Notes_List"):
+            st.markdown("<div class='section-heading'>📄 Notes</div>", unsafe_allow_html=True)
+            for note in content_data["Notes_List"]:
+                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                note_title = note.get("NotesTitle", "Untitled Note")
+                note_button = f'<a href="{note_url}" target="_blank" class="resource-button">{note_title}</a>'
+                st.markdown(note_button, unsafe_allow_html=True)
+
+        # Exercises Section
+        if content_data.get("Exercise_List"):
+            st.markdown("<div class='section-heading'>📝 Exercises</div>", unsafe_allow_html=True)
+            for exercise in content_data["Exercise_List"]:
+                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
+                exercise_button = f'<a href="{exercise_url}" target="_blank" class="resource-button">{exercise_title}</a>'
+                st.markdown(exercise_button, unsafe_allow_html=True)
+
 
 
 # Display login or main screen based on authentication
