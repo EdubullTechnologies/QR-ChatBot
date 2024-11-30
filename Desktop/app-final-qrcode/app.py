@@ -351,91 +351,93 @@ def load_concept_content():
 
 # Function to display resources (videos, notes, exercises) with generated concept description
 def display_resources(content_data):
-    """
-    Display resources (videos, notes, exercises) with an enhanced interface inside an expander.
-    """
+    with st.expander("Resources", expanded=True):
+        # Concept Description
+        concept_description = st.session_state.get(
+            "generated_description", 
+            "No description available."
+        )
 
-    with st.expander("📂 Resources", expanded=True):
-        # Style for the concept description
+        # Add dynamic styling for the description
         description_style = """
-            <style>
-                .concept-description {
-                    font-size: 18px;
-                    line-height: 1.6;
-                    background-color: #f9f9f9;
-                    padding: 15px;
-                    margin-bottom: 20px;
-                    border-left: 5px solid #007BFF;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                }
-                .section-heading {
-                    font-size: 20px;
-                    color: #333;
-                    margin-top: 20px;
-                }
-            </style>
+        <style>
+            .description-box {
+                background-color: var(--secondary-background-color); /* Matches Streamlit's theme */
+                color: var(--text-color); /* Matches Streamlit's theme */
+                padding: 15px;
+                border-radius: 8px;
+                line-height: 1.5;
+                font-size: 16px;
+            }
+            .resource-buttons {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                margin-top: 10px;
+            }
+            .resource-button {
+                background-color: var(--primary-color);
+                color: var(--text-color);
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                text-decoration: none;
+                text-align: center;
+            }
+            .resource-button:hover {
+                background-color: var(--primary-color-light);
+            }
+        </style>
         """
+
         st.markdown(description_style, unsafe_allow_html=True)
 
-        # Display the generated concept description
-        concept_description = st.session_state.get("generated_description", "No description available.")
-        st.markdown(f"<div class='concept-description'><strong>Concept Description:</strong><br>{concept_description}</div>", unsafe_allow_html=True)
+        # Display Concept Description
+        st.markdown(
+            f"""
+            <div class="description-box">
+                <h4>Concept Description</h4>
+                <p>{concept_description}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-        # Styling for the buttons
-        button_style = """
-            <style>
-                .resource-button {
-                    display: inline-block;
-                    padding: 10px 20px;
-                    margin: 5px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #007BFF;
-                    border: none;
-                    border-radius: 5px;
-                    text-align: center;
-                    text-decoration: none;
-                    cursor: pointer;
-                    transition: background-color 0.3s ease;
-                }
-                .resource-button:hover {
-                    background-color: #0056b3;
-                }
-                .resource-section {
-                    margin-bottom: 20px;
-                }
-            </style>
-        """
-        st.markdown(button_style, unsafe_allow_html=True)
+        # Display Resource Buttons
+        st.markdown('<div class="resource-buttons">', unsafe_allow_html=True)
 
-        # Videos Section
+        # Videos
         if content_data.get("Video_List"):
-            st.markdown("<div class='section-heading'>📹 Videos</div>", unsafe_allow_html=True)
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                video_title = video.get("LectureTitle", "Untitled Video")
-                video_button = f'<a href="{video_url}" target="_blank" class="resource-button">{video_title}</a>'
-                st.markdown(video_button, unsafe_allow_html=True)
+                st.markdown(
+                    f'<a href="{video_url}" class="resource-button" target="_blank">📹 Video</a>',
+                    unsafe_allow_html=True
+                )
 
-        # Notes Section
+        # Notes
         if content_data.get("Notes_List"):
-            st.markdown("<div class='section-heading'>📄 Notes</div>", unsafe_allow_html=True)
             for note in content_data["Notes_List"]:
                 note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
                 note_title = note.get("NotesTitle", "Untitled Note")
-                note_button = f'<a href="{note_url}" target="_blank" class="resource-button">{note_title}</a>'
-                st.markdown(note_button, unsafe_allow_html=True)
+                st.markdown(
+                    f'<a href="{note_url}" class="resource-button" target="_blank">📝 Notes</a>',
+                    unsafe_allow_html=True
+                )
 
-        # Exercises Section
+        # Exercises
         if content_data.get("Exercise_List"):
-            st.markdown("<div class='section-heading'>📝 Exercises</div>", unsafe_allow_html=True)
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
-                exercise_button = f'<a href="{exercise_url}" target="_blank" class="resource-button">{exercise_title}</a>'
-                st.markdown(exercise_button, unsafe_allow_html=True)
+                st.markdown(
+                    f'<a href="{exercise_url}" class="resource-button" target="_blank">🧩 Exercise</a>',
+                    unsafe_allow_html=True
+                )
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 
