@@ -32,7 +32,7 @@ config_path = os.path.join(working_dir, 'config.json')
 
 try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-except KeyError:his
+except KeyError:
     st.error("API key for OpenAI not found in secrets.")
 
 openai.api_key = OPENAI_API_KEY
