@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import streamlit as st
 import openai
@@ -31,7 +32,7 @@ config_path = os.path.join(working_dir, 'config.json')
 
 try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-except KeyError:
+except KeyError:his
     st.error("API key for OpenAI not found in secrets.")
 
 openai.api_key = OPENAI_API_KEY
@@ -62,7 +63,6 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-
 # Utility Function to Generate Learning Path
 def generate_learning_path(weak_concepts):
     """
@@ -86,7 +86,7 @@ def generate_learning_path(weak_concepts):
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "system", "content": prompt}],
-                max_tokens=1000
+                max_tokens=500
             ).choices[0].message['content'].strip()
             learning_path[concept_text] = gpt_response
         except Exception as e:
@@ -98,27 +98,28 @@ def display_learning_path(learning_path):
     """
     Display the generated learning path with collapsible functionality.
     """
+    # Regex for detecting LaTeX math expressions
+    MATH_REGEX = r"(\$\$.*?\$\$|\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\])"  
+    
     with st.expander("📚 Generated Learning Path", expanded=True):
         for concept, path in learning_path.items():
             # Display the concept as a subheader
             st.markdown(f"### Concept: {concept}")
             
-            # Split the learning path into lines and display each line
-            lines = path.split("\n")
-            for line in lines:
-                st.markdown(line.strip())
-
+            # Split the learning path into parts (math and non-math)
+            parts = re.split(MATH_REGEX, path)
             
-            # Split the learning path into lines and process LaTeX separately
-            #lines = path.split("\n")
-            #for line in lines:
-             #   if r"\(" in line or r"\)" in line or r"$" in line:
-                    # Render LaTeX if it is found
-              #      st.latex(line.strip())
-               # else:
-                    # Otherwise, render as plain markdown text
-                #    st.markdown(line.strip())
-
+            for part in parts:
+                part = part.strip()
+                if re.match(MATH_REGEX, part):  # Check if the part is LaTeX math
+                    try:
+                        # Remove extra \(, \), $, etc., as Streamlit doesn't need them explicitly
+                        clean_part = part.replace("\\(", "").replace("\\)", "").replace("\\[", "").replace("\\]", "").strip("$")
+                        st.latex(clean_part)
+                    except Exception as e:
+                        st.markdown(f"**Math Error:** Unable to render `{part}`. Error: {e}")
+                elif part:  # Handle non-empty non-math text
+                    st.markdown(part)
 
 
 
