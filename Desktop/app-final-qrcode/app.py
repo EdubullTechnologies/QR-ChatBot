@@ -129,21 +129,31 @@ def login_screen():
         # External image URL
         image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
 
-        # Display the image from the URL with a caption and width
-        col1, col2 = st.columns([1, 2])  # Adjusted to make the image column smaller
+        # Responsive column layout
+        col1, col2 = st.columns([1, 2])  # Adjusted proportions for image and title
 
+        # Display the image in the first column
         with col1:
             st.image(image_url, width=160)
 
-        # Apply custom CSS to increase font size and adjust positioning
+        # Apply custom CSS for responsive title styling
         st.markdown("""
         <style>
-        .title {
-            font-size: 4em;  /* Adjust font size to make it bigger */
-            font-weight: bold;
-            margin-top: 90px;  /* Move the text closer to the image */
-            margin-left: -125px;
-            text-align: left;  /* Align the text to the left */
+        @media only screen and (max-width: 600px) {
+            .title {
+                font-size: 2.5em;  /* Smaller font size for small screens */
+                margin-top: 20px;
+                text-align: center;  /* Center the title on mobile */
+            }
+        }
+        @media only screen and (min-width: 601px) {
+            .title {
+                font-size: 4em;  /* Larger font size for larger screens */
+                font-weight: bold;
+                margin-top: 90px;  /* Add space above the title */
+                margin-left: -125px;  /* Align left */
+                text-align: left;  /* Default alignment */
+            }
         }
         </style>
         """, unsafe_allow_html=True)
@@ -155,17 +165,19 @@ def login_screen():
     except Exception as e:
         st.error(f"Error loading image: {e}")
 
-    # st.title("🤖 EeeBee AI Buddy Login")
+    # Welcome message
     st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
-    
+
     # Input fields for organization code, login ID, and password
     org_code = st.text_input("🏫 School Code", key="org_code")  # No default value
     login_id = st.text_input("👤 Login ID", key="login_id")           # No default value
     password = st.text_input("🔒 Password", type="password", key="password")  # No default value
 
+    # Extract query parameters for the topic ID
     query_params = st.experimental_get_query_params()  # Replace with st.query_params after April 2024
     topic_id = query_params.get("T", [None])[0]
 
+    # Login button with authentication logic
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
         if topic_id:
             auth_payload = {
@@ -194,7 +206,6 @@ def login_screen():
                 st.error(f"Error connecting to the authentication API: {e}")
         else:
             st.warning("❗Please enter a valid Topic ID.")
-
 
 # Add initial greeting message
 def add_initial_greeting():
