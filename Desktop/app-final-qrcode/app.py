@@ -358,41 +358,54 @@ def display_resources(content_data):
             "No description available."
         )
 
-        # Add dynamic styling for the description
-        description_style = """
+        # Add dynamic styling for the description and buttons
+        description_and_button_style = """
         <style>
+            /* Description Box Styling */
             .description-box {
                 background-color: var(--secondary-background-color); /* Matches Streamlit's theme */
                 color: var(--text-color); /* Matches Streamlit's theme */
                 padding: 15px;
                 border-radius: 8px;
+                box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
                 line-height: 1.5;
                 font-size: 16px;
+                margin-bottom: 20px;
             }
+
+            /* Button Container */
             .resource-buttons {
                 display: flex;
-                gap: 10px;
+                gap: 15px;
                 flex-wrap: wrap;
-                margin-top: 10px;
+                justify-content: flex-start;
             }
+
+            /* Resource Button Styling */
             .resource-button {
-                background-color: var(--primary-color);
-                color: var(--text-color);
+                display: inline-block;
+                background-color: var(--primary-color); /* Streamlit's primary theme color */
+                color: var(--text-color); /* Streamlit's text color */
                 padding: 10px 20px;
-                border: none;
-                border-radius: 5px;
+                border: 2px solid var(--primary-color-light); /* Slightly lighter border */
+                border-radius: 8px;
                 cursor: pointer;
-                font-size: 14px;
                 text-decoration: none;
+                font-size: 14px;
+                font-weight: bold;
                 text-align: center;
+                transition: all 0.3s ease;
             }
+
             .resource-button:hover {
-                background-color: var(--primary-color-light);
+                background-color: var(--primary-color-light); /* Slightly lighter on hover */
+                color: var(--secondary-background-color); /* Invert colors for better contrast */
+                transform: scale(1.05); /* Slight zoom effect */
             }
         </style>
         """
 
-        st.markdown(description_style, unsafe_allow_html=True)
+        st.markdown(description_and_button_style, unsafe_allow_html=True)
 
         # Display Concept Description
         st.markdown(
@@ -413,7 +426,7 @@ def display_resources(content_data):
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
                 st.markdown(
-                    f'<a href="{video_url}" class="resource-button" target="_blank">📹 Video</a>',
+                    f'<a href="{video_url}" class="resource-button" target="_blank">📹 Videos</a>',
                     unsafe_allow_html=True
                 )
 
@@ -421,7 +434,6 @@ def display_resources(content_data):
         if content_data.get("Notes_List"):
             for note in content_data["Notes_List"]:
                 note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                note_title = note.get("NotesTitle", "Untitled Note")
                 st.markdown(
                     f'<a href="{note_url}" class="resource-button" target="_blank">📝 Notes</a>',
                     unsafe_allow_html=True
@@ -432,7 +444,7 @@ def display_resources(content_data):
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                 st.markdown(
-                    f'<a href="{exercise_url}" class="resource-button" target="_blank">🧩 Exercise</a>',
+                    f'<a href="{exercise_url}" class="resource-button" target="_blank">🧩 Exercises</a>',
                     unsafe_allow_html=True
                 )
 
