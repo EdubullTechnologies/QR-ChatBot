@@ -104,7 +104,7 @@ def display_learning_path(learning_path):
     with st.expander("📚 Generated Learning Path", expanded=True):
         for concept, path in learning_path.items():
             # Display the concept as a subheader
-            st.markdown(f"### Concept: {concept}")
+            st.markdown(f"### Weak Concept: {concept}")
             
             # Split the learning path into parts (math and non-math)
             parts = re.split(MATH_REGEX, path)
