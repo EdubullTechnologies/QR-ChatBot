@@ -352,105 +352,33 @@ def load_concept_content():
 # Function to display resources (videos, notes, exercises) with generated concept description
 def display_resources(content_data):
     with st.expander("Resources", expanded=True):
-        # Concept Description
-        concept_description = st.session_state.get(
-            "generated_description", 
-            "No description available."
-        )
+        
+        # Display the generated concept description from ChatGPT
+        concept_description = st.session_state.get("generated_description", "No description available.")
+        st.markdown(f"### Concept Description\n{concept_description}\n")
 
-        # Add dynamic styling for the description and buttons
-        description_and_button_style = """
-        <style>
-            /* Description Box Styling */
-            .description-box {
-                background-color: var(--secondary-background-color); /* Matches Streamlit's theme */
-                color: var(--text-color); /* Matches Streamlit's theme */
-                padding: 15px;
-                border-radius: 8px;
-                box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-                line-height: 1.5;
-                font-size: 16px;
-                margin-bottom: 20px;
-            }
-
-            /* Button Container */
-            .resource-buttons {
-                display: flex;
-                gap: 15px;
-                flex-wrap: wrap;
-                justify-content: flex-start;
-            }
-
-            /* Resource Button Styling */
-            .resource-button {
-                display: inline-block;
-                background-color: var(--primary-color); /* Streamlit's primary theme color */
-                color: var(--text-color); /* Streamlit's text color */
-                padding: 10px 20px;
-                border: 2px solid var(--primary-color-light); /* Slightly lighter border */
-                border-radius: 8px;
-                cursor: pointer;
-                text-decoration: none;
-                font-size: 14px;
-                font-weight: bold;
-                text-align: center;
-                transition: all 0.3s ease;
-            }
-
-            .resource-button:hover {
-                background-color: var(--primary-color-light); /* Slightly lighter on hover */
-                color: var(--secondary-background-color); /* Invert colors for better contrast */
-                transform: scale(1.05); /* Slight zoom effect */
-            }
-        </style>
-        """
-
-        st.markdown(description_and_button_style, unsafe_allow_html=True)
-
-        # Display Concept Description
-        st.markdown(
-            f"""
-            <div class="description-box">
-                <h4>Concept Description</h4>
-                <p>{concept_description}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # Display Resource Buttons
-        st.markdown('<div class="resource-buttons">', unsafe_allow_html=True)
-
-        # Videos
+        # Display video resources
         if content_data.get("Video_List"):
+            st.write("*Videos*")
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                st.markdown(
-                    f'<a href="{video_url}" class="resource-button" target="_blank">📹 Videos</a>',
-                    unsafe_allow_html=True
-                )
+                st.write(f"[{video.get('LectureTitle', 'Untitled Video')}]({video_url})")
 
-        # Notes
+        # Display notes resources
         if content_data.get("Notes_List"):
+            st.write("*Notes*")
             for note in content_data["Notes_List"]:
                 note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                st.markdown(
-                    f'<a href="{note_url}" class="resource-button" target="_blank">📝 Notes</a>',
-                    unsafe_allow_html=True
-                )
+                note_title = note.get("NotesTitle", "Untitled Note")
+                st.write(f"[{note_title}]({note_url})")
 
-        # Exercises
+        # Display exercises resources
         if content_data.get("Exercise_List"):
+            st.write("*Exercises*")
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                st.markdown(
-                    f'<a href="{exercise_url}" class="resource-button" target="_blank">🧩 Exercises</a>',
-                    unsafe_allow_html=True
-                )
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
+                exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
+                st.write(f"[{exercise_title}]({exercise_url})")
 
 
 # Display login or main screen based on authentication
