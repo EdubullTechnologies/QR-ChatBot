@@ -295,17 +295,29 @@ def main_screen():
                 st.session_state.learning_path = None
 
     # Resources Tab
+
+    
+
+    # Resources Tab
     with tab3:
         st.markdown(f"### Scanned Topic: {topic_name}")
+        
+        # Create a radio button for selecting a concept
         concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
-        for concept_text, concept_id in concept_options.items():
-            if st.button(concept_text, key=f"concept_{concept_id}"):
-                st.session_state.selected_concept_id = concept_id
-                load_concept_content()
-
+        selected_concept_text = st.radio("Select a concept to view resources:", list(concept_options.keys()), key="concept_radio")
+        
+        # Get the ConceptID based on the selected concept
+        selected_concept_id = concept_options[selected_concept_text]
+        
+        # Store the selected ConceptID in the session state and load content
+        if "selected_concept_id" not in st.session_state or st.session_state.selected_concept_id != selected_concept_id:
+            st.session_state.selected_concept_id = selected_concept_id
+            load_concept_content()
+    
         # Display concept description and resources if a concept is selected
         if st.session_state.selected_concept_id:
             load_concept_content()
+
 
 
 # Function to get GPT-4 response
