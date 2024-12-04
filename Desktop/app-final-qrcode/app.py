@@ -387,26 +387,21 @@ def display_resources(content_data):
 
         # Display video resources
         if content_data.get("Video_List"):
-            st.write("*Videos*")
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                st.write(f"[{video.get('LectureTitle', 'Untitled Video')}]({video_url})")
+                st.write(f"- [Video]({video_url})")
 
         # Display notes resources
         if content_data.get("Notes_List"):
-            st.write("*Notes*")
             for note in content_data["Notes_List"]:
                 note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                note_title = note.get("NotesTitle", "Untitled Note")
-                st.write(f"[{note_title}]({note_url})")
+                st.write(f"- [Notes]({note_url})")
 
         # Display exercises resources
         if content_data.get("Exercise_List"):
-            st.write("*Exercises*")
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
-                st.write(f"[{exercise_title}]({exercise_url})")
+                st.write(f"- [Exercise]({exercise_url})")
 
 
 # Display login or main screen based on authentication
