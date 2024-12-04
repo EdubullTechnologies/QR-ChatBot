@@ -295,14 +295,13 @@ def main_screen():
                 st.session_state.learning_path = None
 
     # Resources Tab
+    # Resources Tab
     with tab3:
-        
         concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
         for concept_text, concept_id in concept_options.items():
             if st.button(concept_text, key=f"concept_{concept_id}"):
                 st.session_state.selected_concept_id = concept_id
-                load_concept_content()
-
+    
         # Display concept description and resources if a concept is selected
         if st.session_state.selected_concept_id:
             load_concept_content()
