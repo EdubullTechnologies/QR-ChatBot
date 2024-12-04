@@ -422,9 +422,18 @@ def display_resources(content_data):
                 exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
                 st.write(f"[{exercise_title}]({exercise_url})")
 
+# Function definitions for login_screen() and main_screen()
 
-# Display login or main screen based on authentication
-if st.session_state.is_authenticated:
-    main_screen()
+# Place this block after all function definitions:
+if "is_authenticated" in st.session_state and st.session_state.is_authenticated:
+    # Add a loading state to prevent the login screen from showing briefly
+    if "loading_main_screen" not in st.session_state:
+        st.session_state.loading_main_screen = True
+        st.experimental_rerun()
+    else:
+        main_screen()
 else:
+    # Reset loading state to ensure proper navigation on logout
+    st.session_state.loading_main_screen = False
     login_screen()
+
