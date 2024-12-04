@@ -228,7 +228,6 @@ def handle_user_input(user_input):
 
 
 # Define the main screen
-# Define the main screen
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
@@ -298,28 +297,15 @@ def main_screen():
     # Resources Tab
     with tab3:
         st.markdown(f"### Scanned Topic: {topic_name}")
-
-        # Extract concept options into a dictionary
         concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
-
-        # Create a dropdown menu for selecting concepts
-        selected_concept_text = st.selectbox(
-            "Select a concept to view resources:",
-            options=list(concept_options.keys()),
-            index=0  # Default to the first concept in the list
-        )
-
-        # Get the corresponding ConceptID for the selected concept
-        selected_concept_id = concept_options.get(selected_concept_text, None)
-
-        # Store the selected concept ID in session state
-        if selected_concept_id:
-            st.session_state.selected_concept_id = selected_concept_id
+        for concept_text, concept_id in concept_options.items():
+            if st.button(concept_text, key=f"concept_{concept_id}"):
+                st.session_state.selected_concept_id = concept_id
+                load_concept_content()
 
         # Display concept description and resources if a concept is selected
         if st.session_state.selected_concept_id:
             load_concept_content()
-
 
 
 # Function to get GPT-4 response
@@ -401,39 +387,25 @@ def display_resources(content_data):
 
         # Display video resources
         if content_data.get("Video_List"):
-            st.write("*Videos*")
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                st.write(f"[{video.get('LectureTitle', 'Untitled Video')}]({video_url})")
+                st.write(f"- [Video]({video_url})")
 
         # Display notes resources
         if content_data.get("Notes_List"):
-            st.write("*Notes*")
             for note in content_data["Notes_List"]:
                 note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                note_title = note.get("NotesTitle", "Untitled Note")
-                st.write(f"[{note_title}]({note_url})")
+                st.write(f"- [Notes]({note_url})")
 
         # Display exercises resources
         if content_data.get("Exercise_List"):
-            st.write("*Exercises*")
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                exercise_title = exercise.get("ExerciseTitle", "Untitled Exercise")
-                st.write(f"[{exercise_title}]({exercise_url})")
+                st.write(f"- [Exercise]({exercise_url})")
 
-# Function definitions for login_screen() and main_screen()
 
-# Place this block after all function definitions:
-if "is_authenticated" in st.session_state and st.session_state.is_authenticated:
-    # Add a loading state to prevent the login screen from showing briefly
-    if "loading_main_screen" not in st.session_state:
-        st.session_state.loading_main_screen = True
-        st.rerun()
-    else:
-        main_screen()
+# Display login or main screen based on authentication
+if st.session_state.is_authenticated:
+    main_screen()
 else:
-    # Reset loading state to ensure proper navigation on logout
-    st.session_state.loading_main_screen = False
     login_screen()
-
