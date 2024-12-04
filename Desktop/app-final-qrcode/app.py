@@ -295,29 +295,30 @@ def main_screen():
                 st.session_state.learning_path = None
 
     # Resources Tab
-
     
-
-    # Resources Tab
     with tab3:
-        st.markdown(f"### Scanned Topic: {topic_name}")
-        
-        # Create a radio button for selecting a concept
-        concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
-        selected_concept_text = st.radio("Select a concept to view resources:", list(concept_options.keys()), key="concept_radio")
-        
-        # Get the ConceptID based on the selected concept
-        selected_concept_id = concept_options[selected_concept_text]
-        
-        # Store the selected ConceptID in the session state and load content
-        if "selected_concept_id" not in st.session_state or st.session_state.selected_concept_id != selected_concept_id:
-            st.session_state.selected_concept_id = selected_concept_id
-            load_concept_content()
+    st.markdown(f"### Scanned Topic: {topic_name}")
     
-        # Display concept description and resources if a concept is selected
-        if st.session_state.selected_concept_id:
-            load_concept_content()
-
+    # Extract concept options into a dictionary
+    concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
+    
+    # Create a dropdown menu for selecting concepts
+    selected_concept_text = st.selectbox(
+        "Select a concept to view resources:",
+        options=list(concept_options.keys()),
+        index=0  # Default to the first concept in the list
+    )
+    
+    # Get the corresponding ConceptID for the selected concept
+    selected_concept_id = concept_options.get(selected_concept_text, None)
+    
+    # Store the selected concept ID in session state
+    if selected_concept_id:
+        st.session_state.selected_concept_id = selected_concept_id
+    
+    # Display concept description and resources if a concept is selected
+    if st.session_state.selected_concept_id:
+        load_concept_content()
 
 
 # Function to get GPT-4 response
