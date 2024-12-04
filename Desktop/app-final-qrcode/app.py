@@ -240,7 +240,7 @@ def main_screen():
             st.session_state.clear()  # Clears all session states
             st.rerun()  # Refresh the app to go back to the login screen
 
-    st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
+    st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you with {topic_name}", anchor=None)
 
     # Tabs for different functionalities
     tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Resources"])
@@ -269,7 +269,7 @@ def main_screen():
 
     # Learning Path Tab
     with tab2:
-        st.markdown(f"### Scanned Topic: {topic_name}")
+        
         if "learning_path_generated" not in st.session_state:
             st.session_state.learning_path_generated = False
             st.session_state.learning_path = None
@@ -296,7 +296,7 @@ def main_screen():
 
     # Resources Tab
     with tab3:
-        st.markdown(f"### Scanned Topic: {topic_name}")
+        
         concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
         for concept_text, concept_id in concept_options.items():
             if st.button(concept_text, key=f"concept_{concept_id}"):
