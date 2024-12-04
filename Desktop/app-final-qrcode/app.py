@@ -231,64 +231,81 @@ def handle_user_input(user_input):
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
-    
+
     # Custom title greeting the user
-    
     col1, col2 = st.columns([9, 1])  # Adjust the proportions as needed
     with col2:
         if st.button("Logout"):
             # Clear session states related to authentication and conversation history
             st.session_state.clear()  # Clears all session states
             st.rerun()  # Refresh the app to go back to the login screen
-    
+
     st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you", anchor=None)
 
-    # Debugging: Display the auth data
+    # Tabs for different functionalities
+    tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Resources"])
 
+    # Chat Tab
+    with tab1:
+        st.subheader("Chat with your 🤖 EeeBee AI buddy", anchor=None)
+        add_initial_greeting()
+        chat_container = st.container()
+        with chat_container:
+            chat_history_html = """
+            <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+            """
+            for role, message in st.session_state.chat_history:
+                if role == "assistant":
+                    chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                else:
+                    chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{st.session_state.auth_data['UserInfo'][0]['FullName']}:</b> {message}</div>"
+            chat_history_html += "</div>"
+            st.markdown(chat_history_html, unsafe_allow_html=True)
 
-     # Button to generate learning path
-    if st.button("🧠 Generate Learning Path"):
-        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-        if weak_concepts:
-            learning_path = generate_learning_path(weak_concepts)
-            display_learning_path(learning_path)
-        else:
-            st.error("No weak concepts found!")
+        # User input with st.chat_input
+        user_input = st.chat_input("Enter your question about the topic")
+        if user_input:
+            handle_user_input(user_input)
 
-    # Display the scanned topic in a larger size
-    st.subheader(f"Scanned Topic: {topic_name}", anchor=None)
-    
-    # Display available concepts with topic name
-    st.subheader(f"Available Concepts:", anchor=None)
+    # Learning Path Tab
+    with tab2:
+        st.markdown(f"### Scanned Topic: {topic_name}")
+        if "learning_path_generated" not in st.session_state:
+            st.session_state.learning_path_generated = False
+            st.session_state.learning_path = None
 
-    # List of available concepts
-    concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
-    for concept_text, concept_id in concept_options.items():
-        if st.button(concept_text, key=f"concept_{concept_id}"):
-            st.session_state.selected_concept_id = concept_id
+        if not st.session_state.learning_path_generated:
+            if st.button("🧠 Generate Learning Path"):
+                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                if weak_concepts:
+                    with st.spinner("Generating learning path..."):
+                        st.session_state.learning_path = generate_learning_path(weak_concepts)
+                        st.session_state.learning_path_generated = True
+                else:
+                    st.error("No weak concepts found!")
+
+        # Display learning path if generated
+        if st.session_state.learning_path_generated and st.session_state.learning_path:
+            display_learning_path(st.session_state.learning_path)
+
+        # Optional reset button
+        if st.session_state.learning_path_generated:
+            if st.button("🔄 Reset Learning Path"):
+                st.session_state.learning_path_generated = False
+                st.session_state.learning_path = None
+
+    # Resources Tab
+    with tab3:
+        st.markdown(f"### Scanned Topic: {topic_name}")
+        concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
+        for concept_text, concept_id in concept_options.items():
+            if st.button(concept_text, key=f"concept_{concept_id}"):
+                st.session_state.selected_concept_id = concept_id
+                load_concept_content()
+
+        # Display concept description and resources if a concept is selected
+        if st.session_state.selected_concept_id:
             load_concept_content()
-
-    add_initial_greeting()
-    
-    # Chatbox interface
-    st.subheader("Chat with your 🤖 EeeBee AI buddy", anchor=None)
-    chat_container = st.container()
-    with chat_container:
-        chat_history_html = """
-        <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-        """
-        for role, message in st.session_state.chat_history:
-            if role == "assistant":
-                chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-            else:
-                chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{st.session_state.auth_data['UserInfo'][0]['FullName']}:</b> {message}</div>"
-        chat_history_html += "</div>"
-        st.markdown(chat_history_html, unsafe_allow_html=True)
-
-    # User input with st.chat_input
-    user_input = st.chat_input("Enter your question about the topic")
-    if user_input:
-        handle_user_input(user_input)
 
 
 # Function to get GPT-4 response
