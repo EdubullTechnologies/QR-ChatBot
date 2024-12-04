@@ -332,7 +332,7 @@ def main_screen():
             st.session_state.clear()  # Clears all session states
             st.rerun()  # Refresh the app to go back to the login screen
 
-    st.title(st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you with **{topic_name}**")
+    st.title(st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you with **{topic_name}**"))
              
     # Tabs for different functionalities
     tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Resources"])
