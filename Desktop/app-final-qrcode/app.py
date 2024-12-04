@@ -68,17 +68,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto"
 )
+
 def generate_learning_path_pdf(learning_path, user_name, topic_name):
     """
     Generate a PDF of the learning path with custom styling.
-    
-    Args:
-        learning_path (dict): Dictionary of concept learning paths
-        user_name (str): Name of the user
-        topic_name (str): Name of the topic
-    
-    Returns:
-        bytes: PDF file content as bytes
     """
     # Create a buffer to store PDF
     buffer = io.BytesIO()
@@ -96,18 +89,18 @@ def generate_learning_path_pdf(learning_path, user_name, topic_name):
     
     # Custom title style
     title_style = ParagraphStyle(
-        'Title',
-        parent=styles['Title'],
+        'CustomTitle',
+        parent=styles['Heading1'],
         fontName='Helvetica-Bold',
         fontSize=16,
         alignment=TA_CENTER,
         spaceAfter=12
     )
     
-    # Custom subtitle style
+    # Custom subtitle style (using Heading2 as base)
     subtitle_style = ParagraphStyle(
-        'Subtitle',
-        parent=styles['Subtitle'],
+        'CustomSubtitle',
+        parent=styles['Heading2'],
         fontName='Helvetica',
         fontSize=12,
         alignment=TA_CENTER,
@@ -116,7 +109,7 @@ def generate_learning_path_pdf(learning_path, user_name, topic_name):
     
     # Content style with justification
     content_style = ParagraphStyle(
-        'Normal',
+        'CustomNormal',
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=10,
