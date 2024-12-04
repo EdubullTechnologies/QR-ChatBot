@@ -337,7 +337,7 @@ def main_screen():
 
     # Chat Tab
     with tab1:
-        st.subheader("Chat with your 🤖 EeeBee AI buddy", anchor=None)
+        st.subheader("Chat with your EeeBee AI buddy", anchor=None)
         add_initial_greeting()
         chat_container = st.container()
         with chat_container:
