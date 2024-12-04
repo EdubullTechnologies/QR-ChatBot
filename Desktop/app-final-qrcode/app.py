@@ -9,6 +9,12 @@ import streamlit.components.v1 as components
 from PIL import Image
 import requests
 from io import BytesIO
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
+from reportlab.lib.units import inch
 
 # Ignore all deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -62,7 +68,98 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto"
 )
-
+def generate_learning_path_pdf(learning_path, user_name, topic_name):
+    """
+    Generate a PDF of the learning path with custom styling.
+    
+    Args:
+        learning_path (dict): Dictionary of concept learning paths
+        user_name (str): Name of the user
+        topic_name (str): Name of the topic
+    
+    Returns:
+        bytes: PDF file content as bytes
+    """
+    # Create a buffer to store PDF
+    buffer = io.BytesIO()
+    
+    # Create the PDF document
+    doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                            rightMargin=72, leftMargin=72, 
+                            topMargin=72, bottomMargin=18)
+    
+    # Create a list to hold the flow of the PDF
+    story = []
+    
+    # Get sample stylesheet and create custom styles
+    styles = getSampleStyleSheet()
+    
+    # Custom title style
+    title_style = ParagraphStyle(
+        'Title',
+        parent=styles['Title'],
+        fontName='Helvetica-Bold',
+        fontSize=16,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    
+    # Custom subtitle style
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Subtitle'],
+        fontName='Helvetica',
+        fontSize=12,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    
+    # Content style with justification
+    content_style = ParagraphStyle(
+        'Normal',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        alignment=TA_JUSTIFY,
+        spaceAfter=6
+    )
+    
+    # Add title
+    story.append(Paragraph("Personalized Learning Path", title_style))
+    story.append(Paragraph(f"For {user_name} - {topic_name}", subtitle_style))
+    story.append(Spacer(1, 12))
+    
+    # Process each concept in the learning path
+    for concept, path in learning_path.items():
+        # Add concept header
+        story.append(Paragraph(f"Weak Concept: {concept}", styles['Heading3']))
+        story.append(Spacer(1, 6))
+        
+        # Split the path into paragraphs, handling LaTeX math
+        MATH_REGEX = r"(\$\$.*?\$\$|\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\])"
+        parts = re.split(MATH_REGEX, path)
+        
+        for part in parts:
+            part = part.strip()
+            if part:
+                if re.match(MATH_REGEX, part):
+                    # For math, just add it as text (PDF rendering of LaTeX is complex)
+                    story.append(Paragraph(f"Math Expression: {part}", content_style))
+                else:
+                    story.append(Paragraph(part, content_style))
+                story.append(Spacer(1, 6))
+        
+        # Add a spacer between concepts
+        story.append(Spacer(1, 12))
+    
+    # Build PDF
+    doc.build(story)
+    
+    # Get the value of the BytesIO buffer and write it to the output
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    
+    return pdf_bytes
 # Utility Function to Generate Learning Path
 def generate_learning_path(weak_concepts):
     """
@@ -269,7 +366,6 @@ def main_screen():
 
     # Learning Path Tab
     with tab2:
-        
         if "learning_path_generated" not in st.session_state:
             st.session_state.learning_path_generated = False
             st.session_state.learning_path = None
@@ -287,12 +383,25 @@ def main_screen():
         # Display learning path if generated
         if st.session_state.learning_path_generated and st.session_state.learning_path:
             display_learning_path(st.session_state.learning_path)
-
-        # Optional reset button
-        if st.session_state.learning_path_generated:
-            if st.button("🔄 Reset Learning Path"):
-                st.session_state.learning_path_generated = False
-                st.session_state.learning_path = None
+            
+            # PDF Download Button
+            if st.button("📄 Download Learning Path as PDF"):
+                try:
+                    pdf_bytes = generate_learning_path_pdf(
+                        st.session_state.learning_path, 
+                        user_name, 
+                        topic_name
+                    )
+                    
+                    # Create download button
+                    st.download_button(
+                        label="Click here to download PDF",
+                        data=pdf_bytes,
+                        file_name=f"{user_name}_Learning_Path_{topic_name}.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Error creating PDF: {e}")
 
     # Resources Tab
     # Resources Tab
