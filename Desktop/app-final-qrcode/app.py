@@ -43,6 +43,8 @@ except KeyError:
 
 openai.api_key = OPENAI_API_KEY
 
+
+
 # API URLs
 API_AUTH_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
@@ -330,8 +332,8 @@ def main_screen():
             st.session_state.clear()  # Clears all session states
             st.rerun()  # Refresh the app to go back to the login screen
 
-    st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you with {topic_name}", anchor=None)
-
+    st.title(st.title(f"Hello {user_name}, 🤖 EeeBee AI buddy is here to help you with **{topic_name}**")
+             
     # Tabs for different functionalities
     tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Resources"])
 
@@ -396,7 +398,6 @@ def main_screen():
                 except Exception as e:
                     st.error(f"Error creating PDF: {e}")
 
-    # Resources Tab
     # Resources Tab
     with tab3:
         concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
