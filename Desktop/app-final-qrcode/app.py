@@ -228,6 +228,7 @@ def handle_user_input(user_input):
 
 
 # Define the main screen
+# Define the main screen
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
@@ -295,30 +296,30 @@ def main_screen():
                 st.session_state.learning_path = None
 
     # Resources Tab
-    
     with tab3:
-    st.markdown(f"### Scanned Topic: {topic_name}")
-    
-    # Extract concept options into a dictionary
-    concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
-    
-    # Create a dropdown menu for selecting concepts
-    selected_concept_text = st.selectbox(
-        "Select a concept to view resources:",
-        options=list(concept_options.keys()),
-        index=0  # Default to the first concept in the list
-    )
-    
-    # Get the corresponding ConceptID for the selected concept
-    selected_concept_id = concept_options.get(selected_concept_text, None)
-    
-    # Store the selected concept ID in session state
-    if selected_concept_id:
-        st.session_state.selected_concept_id = selected_concept_id
-    
-    # Display concept description and resources if a concept is selected
-    if st.session_state.selected_concept_id:
-        load_concept_content()
+        st.markdown(f"### Scanned Topic: {topic_name}")
+
+        # Extract concept options into a dictionary
+        concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in st.session_state.auth_data['ConceptList']}
+
+        # Create a dropdown menu for selecting concepts
+        selected_concept_text = st.selectbox(
+            "Select a concept to view resources:",
+            options=list(concept_options.keys()),
+            index=0  # Default to the first concept in the list
+        )
+
+        # Get the corresponding ConceptID for the selected concept
+        selected_concept_id = concept_options.get(selected_concept_text, None)
+
+        # Store the selected concept ID in session state
+        if selected_concept_id:
+            st.session_state.selected_concept_id = selected_concept_id
+
+        # Display concept description and resources if a concept is selected
+        if st.session_state.selected_concept_id:
+            load_concept_content()
+
 
 
 # Function to get GPT-4 response
