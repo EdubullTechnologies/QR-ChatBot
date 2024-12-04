@@ -429,7 +429,7 @@ if "is_authenticated" in st.session_state and st.session_state.is_authenticated:
     # Add a loading state to prevent the login screen from showing briefly
     if "loading_main_screen" not in st.session_state:
         st.session_state.loading_main_screen = True
-        st.experimental_rerun()
+        st.rerun()
     else:
         main_screen()
 else:
