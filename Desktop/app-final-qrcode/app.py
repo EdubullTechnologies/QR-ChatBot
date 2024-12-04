@@ -1,15 +1,15 @@
+import warnings
 import os
 import re
+import io
 import json
 import streamlit as st
 import openai
 import requests
-import warnings
 import streamlit.components.v1 as components
 from PIL import Image
 import requests
 from io import BytesIO
-import io
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
