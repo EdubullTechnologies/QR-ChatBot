@@ -69,7 +69,6 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-st.set_option('global.components_hide_streamlit_marker', True)
 # Hide "Made with Streamlit" footer
 hide_st_style = """
             <style>
@@ -79,6 +78,18 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# Hide the profile on the bottom right
+st.markdown("""
+<style>
+div[data-testid="stToolbar"] {
+    visibility: hidden;
+    height: 0;
+    width: 0;
+    overflow: hidden;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Hide the profile on the bottom right
 st.markdown("""
