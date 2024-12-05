@@ -69,6 +69,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
+st.set_option('global.components_hide_streamlit_marker', True)
 # Hide "Made with Streamlit" footer
 hide_st_style = """
             <style>
