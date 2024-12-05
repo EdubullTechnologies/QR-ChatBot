@@ -70,16 +70,14 @@ st.set_page_config(
 )
 
 # Hide "Made with Streamlit" footer
-hide_footer_style = """
-    <style>
-    footer:after {
-        content: "";  /* Removes the "Made with Streamlit" text */
-        visibility: hidden;
-        display: none;
-    }
-    </style>
-"""
-st.markdown(hide_footer_style, unsafe_allow_html=True)
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
 
 def generate_learning_path_pdf(learning_path, user_name, topic_name):
