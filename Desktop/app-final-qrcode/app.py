@@ -80,16 +80,21 @@ hide_st_style = """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # Hide the profile on the bottom right
-st.markdown("""
-<style>
-div[data-testid="stToolbar"] {
-    visibility: hidden;
-    height: 0;
-    width: 0;
-    overflow: hidden;
-}
-</style>
-""", unsafe_allow_html=True)
+if 'profile_hidden' not in st.session_state:
+    st.session_state.profile_hidden = True
+    st.experimental_set_query_params(profile_hidden=st.session_state.profile_hidden)
+
+if st.session_state.get('profile_hidden', True):
+    st.markdown("""
+    <style>
+    div[data-testid="stToolbar"] {
+        visibility: hidden;
+        height: 0;
+        width: 0;
+        overflow: hidden;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Hide the profile on the bottom right
 st.markdown("""
