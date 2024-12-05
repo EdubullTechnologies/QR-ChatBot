@@ -79,6 +79,17 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
+# Hide the profile on the bottom right
+st.markdown("""
+<style>
+div[data-testid="stToolbar"] {
+    visibility: hidden;
+    height: 0;
+    width: 0;
+    overflow: hidden;
+}
+</style>
+""", unsafe_allow_html=True)
 
 def generate_learning_path_pdf(learning_path, user_name, topic_name):
     """
