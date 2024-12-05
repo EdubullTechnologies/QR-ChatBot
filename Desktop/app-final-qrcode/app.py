@@ -69,15 +69,17 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Add custom CSS to hide Streamlit branding and GitHub corner
-# Hide Streamlit branding and Main Menu
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}  /* Hide Streamlit's Main Menu */
-            footer {visibility: hidden;}    /* Hide Streamlit's footer */
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# Hide "Made with Streamlit" footer
+hide_footer_style = """
+    <style>
+    footer:after {
+        content: "";  /* Removes the "Made with Streamlit" text */
+        visibility: hidden;
+        display: none;
+    }
+    </style>
+"""
+st.markdown(hide_footer_style, unsafe_allow_html=True)
 
 
 def generate_learning_path_pdf(learning_path, user_name, topic_name):
