@@ -69,6 +69,22 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
+# Add custom CSS to hide Streamlit branding and GitHub corner
+st.markdown("""
+    <style>
+    /* Hide Streamlit branding at the bottom */
+    footer {
+        visibility: hidden;
+    }
+
+    /* Hide GitHub corner repo link (optional, if applicable) */
+    .css-1lsmgbg.e1fqkh3o4 { 
+        display: none; 
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 def generate_learning_path_pdf(learning_path, user_name, topic_name):
     """
     Generate a PDF of the learning path with custom styling.
