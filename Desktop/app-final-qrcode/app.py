@@ -96,18 +96,6 @@ if st.session_state.get('profile_hidden', True):
     </style>
     """, unsafe_allow_html=True)
 
-# Hide the profile on the bottom right
-st.markdown("""
-<style>
-div[data-testid="stToolbar"] {
-    visibility: hidden;
-    height: 0;
-    width: 0;
-    overflow: hidden;
-}
-</style>
-""", unsafe_allow_html=True)
-
 def generate_learning_path_pdf(learning_path, user_name, topic_name):
     """
     Generate a PDF of the learning path with custom styling.
