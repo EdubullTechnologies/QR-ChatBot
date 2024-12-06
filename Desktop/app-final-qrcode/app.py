@@ -310,7 +310,6 @@ def login_screen():
                     if auth_data.get("statusCode") == 1:
                         st.session_state.auth_data = auth_data
                         st.session_state.is_authenticated = True
-                        st.session_state.user_role = role  # Save the role in session state
                         st.session_state.topic_id = int(topic_id)
                         st.rerun()
                     else:
@@ -336,7 +335,6 @@ def login_screen():
                     if auth_response.status_code == 200:
                         st.session_state.auth_data = auth_data
                         st.session_state.is_authenticated = True
-                        st.session_state.user_role = role  # Save the role in session state
                         st.session_state.topic_id = int(topic_id)
                         st.session_state.batch_id = batch_id
                         st.rerun()
@@ -346,6 +344,7 @@ def login_screen():
                     st.error(f"Error connecting to the teacher API: {e}")
             else:
                 st.warning("❗Please enter a valid Topic ID and Batch ID.")
+
 
 
 # Add initial greeting message
