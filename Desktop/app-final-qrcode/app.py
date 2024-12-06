@@ -269,44 +269,84 @@ def login_screen():
     # Welcome message
     st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
+    # Role selection: Student or Teacher
+    role = st.radio("Select Your Role", ["Student", "Teacher"], horizontal=True, key="user_role")
+
     # Input fields for organization code, login ID, and password
-    org_code = st.text_input("🏫 School Code", key="org_code")  # No default value
-    login_id = st.text_input("👤 Login ID", key="login_id")           # No default value
-    password = st.text_input("🔒 Password", type="password", key="password")  # No default value
+    org_code = st.text_input("🏫 School Code", key="org_code")  # Organization Code
+    login_id = st.text_input("👤 Login ID", key="login_id")  # Login ID
+    password = st.text_input("🔒 Password", type="password", key="password")  # Password
+
+    # Teacher-specific field
+    batch_id = None
+    if role == "Teacher":
+        batch_id = st.text_input("📘 Batch ID", key="batch_id")
 
     # Extract query parameters for the topic ID
-    query_params = st.experimental_get_query_params()  # Replace with st.query_params after April 2024
+    query_params = st.experimental_get_query_params()
     topic_id = query_params.get("T", [None])[0]
 
     # Login button with authentication logic
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
-        if topic_id:
-            auth_payload = {
-                'OrgCode': org_code,
-                'TopicID': int(topic_id),
-                'LoginID': login_id,
-                'Password': password
-            }
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
-            }
-            try:
-                auth_response = requests.post(API_AUTH_URL, json=auth_payload, headers=headers)
-                auth_response.raise_for_status()
-                auth_data = auth_response.json()
-                if auth_data.get("statusCode") == 1:
-                    st.session_state.auth_data = auth_data
-                    st.session_state.is_authenticated = True
-                    st.session_state.topic_id = int(topic_id)
-                    st.rerun()
-                else:
-                    st.error("🚫 Authentication failed. Please check your credentials.")
-            except requests.exceptions.RequestException as e:
-                st.error(f"Error connecting to the authentication API: {e}")
-        else:
-            st.warning("❗Please enter a valid Topic ID.")
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        # Student Login Logic
+        if role == "Student":
+            if topic_id:
+                auth_payload = {
+                    'OrgCode': org_code,
+                    'TopicID': int(topic_id),
+                    'LoginID': login_id,
+                    'Password': password
+                }
+                try:
+                    auth_response = requests.post(API_AUTH_URL, json=auth_payload, headers=headers)
+                    auth_response.raise_for_status()
+                    auth_data = auth_response.json()
+                    if auth_data.get("statusCode") == 1:
+                        st.session_state.auth_data = auth_data
+                        st.session_state.is_authenticated = True
+                        st.session_state.user_role = role  # Save the role in session state
+                        st.session_state.topic_id = int(topic_id)
+                        st.rerun()
+                    else:
+                        st.error("🚫 Authentication failed. Please check your credentials.")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Error connecting to the authentication API: {e}")
+            else:
+                st.warning("❗Please enter a valid Topic ID.")
+
+        # Teacher Login Logic
+        elif role == "Teacher":
+            if topic_id and batch_id:
+                auth_payload = {
+                    'OrgCode': org_code,
+                    'TopicID': int(topic_id),
+                    'BatchID': batch_id
+                }
+                try:
+                    teacher_api_url = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
+                    auth_response = requests.post(teacher_api_url, json=auth_payload, headers=headers)
+                    auth_response.raise_for_status()
+                    auth_data = auth_response.json()
+                    if auth_response.status_code == 200:
+                        st.session_state.auth_data = auth_data
+                        st.session_state.is_authenticated = True
+                        st.session_state.user_role = role  # Save the role in session state
+                        st.session_state.topic_id = int(topic_id)
+                        st.session_state.batch_id = batch_id
+                        st.rerun()
+                    else:
+                        st.error("🚫 Authentication failed. Please check your credentials.")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Error connecting to the teacher API: {e}")
+            else:
+                st.warning("❗Please enter a valid Topic ID and Batch ID.")
+
 
 # Add initial greeting message
 def add_initial_greeting():
