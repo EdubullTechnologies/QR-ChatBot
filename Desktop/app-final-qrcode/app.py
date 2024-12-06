@@ -280,7 +280,7 @@ def login_screen():
     # Teacher-specific field
     batch_id = None
     if role == "Teacher":
-        batch_id = st.text_input("📘 Batch ID", key="batch_id")
+        batch_id = st.text_input("📘 Batch ID")  # Use batch_id directly from the widget
 
     # Extract query parameters for the topic ID
     query_params = st.experimental_get_query_params()
@@ -336,7 +336,7 @@ def login_screen():
                         st.session_state.auth_data = auth_data
                         st.session_state.is_authenticated = True
                         st.session_state.topic_id = int(topic_id)
-                        st.session_state.batch_id = batch_id
+                        st.session_state.batch_id = batch_id  # No programmatic modification
                         st.rerun()
                     else:
                         st.error("🚫 Authentication failed. Please check your credentials.")
@@ -344,6 +344,7 @@ def login_screen():
                     st.error(f"Error connecting to the teacher API: {e}")
             else:
                 st.warning("❗Please enter a valid Topic ID and Batch ID.")
+
 
 
 
