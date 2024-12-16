@@ -320,30 +320,11 @@ def add_initial_greeting():
         st.session_state.chat_history.append(("assistant", greeting_message))
 
 # Callback function for handling user input
-# Callback function for handling user input
-def handle_user_input(user_input, teacher_mode):
-    # Add user input to chat history
-    st.session_state.chat_history.append(("user", user_input))
-    
-    # Generate response based on mode
-    if teacher_mode:
-        # Teacher Mode: Generate questions or resources
-        if user_input.lower().startswith("generate questions for me"):
-            topic_name = user_input.split("generate questions for me")[1].strip()
-            pre_saved_prompt = f"""
-            You are assisting a teacher. Generate a list of at least 5 thought-provoking questions for the topic '{topic_name}'.
-            Ensure the questions are varied in complexity, covering factual, conceptual, application-based, and analytical levels.
-            Start with basic questions and progress to more advanced ones. Align the questions with CBSE standards.
-            """
-            get_gpt_response(pre_saved_prompt, teacher_mode=True)
-        else:
-            st.warning("In Teacher Mode, use commands like 'generate questions for me <topic>' to get resources.")
-    else:
-        # Student Mode: Regular interaction
-        get_gpt_response(user_input, teacher_mode=False)
-    
-    st.rerun()  # Force rerun to display the new message
-  # Force rerun to immediately display the new message
+def handle_user_input(user_input):
+    if user_input:
+        st.session_state.chat_history.append(("user", user_input))
+        get_gpt_response(user_input)
+        st.rerun()  # Force rerun to immediately display the new message
 
 
 
@@ -374,22 +355,11 @@ def main_screen():
     tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
 
     # Chat Tab
-    # Chat Tab
     with tab1:
         st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-        
-        # Add Teacher Mode Toggle
-        teacher_mode = st.checkbox("Switch to Teacher Mode", key="teacher_mode", value=False)
-        
-        if teacher_mode:
-            st.info("You are now in **Teacher Mode**. EeeBee will help you generate teaching resources.")
-        else:
-            st.info("You are now in **Student Mode**. EeeBee will guide students step-by-step.")
-    
         add_initial_greeting()
         chat_container = st.container()
         with chat_container:
-            # Chat history display
             chat_history_html = """
             <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
             """
@@ -400,11 +370,11 @@ def main_screen():
                     chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{st.session_state.auth_data['UserInfo'][0]['FullName']}:</b> {message}</div>"
             chat_history_html += "</div>"
             st.markdown(chat_history_html, unsafe_allow_html=True)
-    
-        # User input and teacher-specific options
-        user_input = st.chat_input("Enter your question about the topic or use Teacher Mode")
+
+        # User input with st.chat_input
+        user_input = st.chat_input("Enter your question about the topic")
         if user_input:
-            handle_user_input(user_input, teacher_mode)
+            handle_user_input(user_input)
 
     # Learning Path Tab
     with tab2:
@@ -459,42 +429,37 @@ def main_screen():
 
 
 # Function to get GPT-4 response
-# Function to get GPT-4 response
-# Function to get GPT-4 response
-def get_gpt_response(prompt, teacher_mode=False):
-    # Define system prompt based on mode
-    if teacher_mode:
-        system_prompt = "You are a highly knowledgeable educational assistant created by EduBull. Assist teachers by generating teaching resources, such as thought-provoking questions, lesson plans, and other classroom aids."
-    else:
-        topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
-        system_prompt = f"""
-        You are a highly knowledgeable educational assistant created by EduBull. The student is asking questions related to the topic '{topic_name}'.
-        Engage with the student by asking guiding questions that encourage them to understand the problem step-by-step.
-        Avoid providing direct answers; instead, prompt them to think critically and break down the problem.
-        Offer hints or pose questions like 'What do you think the first step might be?' or 'How would you approach this part of the problem?'
-        Ensure your tone is supportive and relevant to the topic in a school-friendly setting.
-        """
-    
-    # Generate GPT response
+def get_gpt_response(user_input):
     conversation_history_formatted = [
-        {"role": "system",  "content": system_prompt}
+        {"role": "system",  "content": f"You are a highly knowledgeable educational assistant created by EduBull, and your name is EeeBee. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'.
+
+- Engage with the student by asking guiding questions that encourage them to understand the problem step-by-step.
+- Avoid providing direct answers; instead, prompt them to think critically and break down the problem.
+- Offer hints or pose questions like 'What do you think the first step might be?' or 'How would you approach this part of the problem?' Continue prompting them through each part until they arrive at the answer on their own.
+- Ensure that your tone is supportive and encouraging, aiming to build the student's confidence and understanding.
+
+If the student or teacher asks you to create questions for exams, assignments, or the topic itself, generate a list of thought-provoking, topic-related questions. These should include:
+1. Factual questions
+2. Conceptual questions
+3. Application-based questions
+4. Analytical questions
+
+Start with simpler questions and progress to more advanced ones, ensuring the questions are relevant and suitable for a CBSE school setting which follows NCERT books."
+}
     ]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
-    conversation_history_formatted.append({"role": "user", "content": prompt})
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=conversation_history_formatted,
             max_tokens=1000
         ).choices[0].message['content'].strip()
 
-        # Append GPT response to chat history
+        # Append GPT-4's response to chat history
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
-        st.error(f"Error in GPT response generation: {e}")
-
-
+        st.error(f"Error in GPT-4 response generation: {e}")
 
 # Function to load content and generate a description for the selected concept
 def load_concept_content():
