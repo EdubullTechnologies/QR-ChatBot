@@ -431,7 +431,7 @@ def main_screen():
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
     conversation_history_formatted = [
-        {"role": "system",  "content": f"You are a highly knowledgeable educational assistant created by EduBull, and your name is EeeBee. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'.
+        {"role": "system",  "content": f"""You are a highly knowledgeable educational assistant created by EduBull, and your name is EeeBee. The student is asking questions related to the topic '{st.session_state.auth_data.get('TopicName', 'Unknown Topic')}'.
 
 - Engage with the student by asking guiding questions that encourage them to understand the problem step-by-step.
 - Avoid providing direct answers; instead, prompt them to think critically and break down the problem.
@@ -444,7 +444,7 @@ If the student or teacher asks you to create questions for exams, assignments, o
 3. Application-based questions
 4. Analytical questions
 
-Start with simpler questions and progress to more advanced ones, ensuring the questions are relevant and suitable for a CBSE school setting which follows NCERT books."
+Start with simpler questions and progress to more advanced ones, ensuring the questions are relevant and suitable for a CBSE school setting which follows NCERT books."""
 }
     ]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
