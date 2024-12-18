@@ -181,13 +181,15 @@ def generate_learning_path(weak_concepts):
             f"4. **Real-World Applications**: Explain how this concept can be applied in practical situations.\n"
             f"5. **Practice Problems**: Recommend types of problems and exercises to practice.\n"
             f"Ensure the response is well-organized and includes actionable steps."
+            f"Simple language should be used for these students."
+            f"The response should be concise and informative."
         )
 
         try:
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "system", "content": prompt}],
-                max_tokens=1500
+                max_tokens=1000
             ).choices[0].message['content'].strip()
             learning_path[concept_text] = gpt_response
         except Exception as e:
