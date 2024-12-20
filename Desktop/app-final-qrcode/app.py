@@ -87,6 +87,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     story = []
     styles = getSampleStyleSheet()
 
+    # Define custom styles
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -103,6 +104,14 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         alignment=TA_CENTER,
         spaceAfter=12
     )
+    section_title_style = ParagraphStyle(
+        'SectionTitle',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=14,
+        alignment=TA_LEFT,
+        spaceAfter=8
+    )
     question_style = ParagraphStyle(
         'QuestionStyle',
         parent=styles['Normal'],
@@ -112,18 +121,32 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         spaceAfter=6
     )
 
+    # Add title and subtitle
     story.append(Paragraph("Exam Questions", title_style))
     user_name_display = user_name if user_name else "Teacher"
     concept_text_display = concept_text if concept_text else "Selected Concept"
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    question_lines = [q.strip() for q in questions.split('\n') if q.strip()]
-    for i, q in enumerate(question_lines, start=1):
-        question_paragraph = f"<b>{i}.</b> {q}"
-        story.append(Paragraph(question_paragraph, question_style))
-        story.append(Spacer(1, 6))
+    # Parse questions into sections
+    sections = re.split(r'\n\n', questions.strip())
+    for section in sections:
+        lines = [line.strip() for line in section.split('\n') if line.strip()]
+        if not lines:
+            continue
 
+        # Add section title
+        story.append(Paragraph(lines[0], section_title_style))
+        story.append(Spacer(1, 8))
+
+        # Add questions as a numbered list
+        question_items = []
+        for line in lines[1:]:
+            question_items.append(ListItem(Paragraph(line, question_style)))
+        story.append(ListFlowable(question_items, bulletType='1'))
+        story.append(Spacer(1, 12))
+
+    # Build PDF
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
