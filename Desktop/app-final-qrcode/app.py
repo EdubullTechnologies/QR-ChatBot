@@ -340,19 +340,19 @@ def teacher_dashboard():
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
                     f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
-                    f"Generate a set of 20 challenging and thought-provoking exam questions related to this concept.\n"
-                    f"Generated questions should be according to NEP 2020 and NCF guidelines.\n"
+                    f"Generate a set of 5 challenging and thought-provoking exam questions related to this concept.\n"
                     f"- Vary in difficulty.\n"
                     f"- Encourage critical thinking.\n"
                     f"- Be clearly formatted and numbered.\n\n"
                     f"Do not provide the answers, only the questions."
                 )
+
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
                             model="gpt-4o-mini",
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=2000
+                            max_tokens=1000
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
@@ -360,6 +360,7 @@ def teacher_dashboard():
                         st.error(f"Error generating exam questions: {e}")
 
             if st.session_state.exam_questions:
+                branch_name = st.session_state.auth_data.get("BranchName", "their class")  # Initialize branch_name if needed
                 st.markdown(f"### Generated Exam Questions for {branch_name}")
                 st.markdown(st.session_state.exam_questions)
 
@@ -374,6 +375,7 @@ def teacher_dashboard():
                     file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
                     mime="application/pdf"
                 )
+
 
 def login_screen():
     try:
