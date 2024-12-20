@@ -6,14 +6,12 @@ import json
 import streamlit as st
 import openai
 import requests
-import streamlit.components.v1 as components
 from PIL import Image
-import requests
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
@@ -35,7 +33,7 @@ API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
 
-# Session states
+# Initialize session states if not present
 if "auth_data" not in st.session_state:
     st.session_state.auth_data = None
 if "selected_concept_id" not in st.session_state:
@@ -62,8 +60,7 @@ if "learning_path_generated" not in st.session_state:
 if "generated_description" not in st.session_state:
     st.session_state.generated_description = ""
 if "is_english_mode" not in st.session_state:
-    st.session_state.is_english_mode = False
-
+    st.session_state.is_english_mode = False  # default initialization
 
 # Page config
 st.set_page_config(
@@ -73,7 +70,6 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Hide "Made with Streamlit"
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -82,7 +78,6 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-
 
 def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer = io.BytesIO()
@@ -123,7 +118,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    # Split questions by newlines and format as a list
     question_lines = [q.strip() for q in questions.split('\n') if q.strip()]
     for i, q in enumerate(question_lines, start=1):
         question_paragraph = f"<b>{i}.</b> {q}"
@@ -198,11 +192,7 @@ def generate_learning_path(weak_concepts):
         prompt = (
             f"The student is struggling with the weak concept: '{concept_text}'. "
             f"Create a detailed and structured learning path with the following sections:\n\n"
-            f"1. **Introduction to the Concept**\n"
-            f"2. **Step-by-Step Learning**\n"
-            f"3. **Engagement**\n"
-            f"4. **Real-World Applications**\n"
-            f"5. **Practice Problems**\n"
+            f"1. Introduction\n2. Step-by-Step Learning\n3. Engagement\n4. Real-World Applications\n5. Practice Problems\n"
             f"Ensure the response is well-organized and includes actionable steps."
         )
 
@@ -271,7 +261,6 @@ def display_additional_graphs(weak_concepts):
     st.altair_chart(horizontal_bar, use_container_width=True)
 
 def teacher_dashboard():
-    # Show batch selection
     batches = st.session_state.auth_data.get("BatchList", [])
     if not batches:
         st.warning("No batches found for the teacher.")
@@ -326,7 +315,6 @@ def teacher_dashboard():
         rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(color='red', strokeDash=[4,4]).encode(
             y='y:Q'
         )
-
         text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
             align='left', dx=5, dy=-5, color='red'
         ).encode(
@@ -337,9 +325,6 @@ def teacher_dashboard():
         final_chart = (chart + rule + text).interactive()
         st.altair_chart(final_chart, use_container_width=True)
 
-        # Display additional graphs
-        # Need original weak concepts with AttendedStudentCount & ClearedStudentCount
-        # st.session_state.teacher_weak_concepts is a list of dicts returned by API
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
@@ -355,7 +340,7 @@ def teacher_dashboard():
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
                     f"The teacher is teaching students in {branch_name}, following the NCERT curriculum for Class - 8.\n"
-                    f"Generate a set of 5 challenging and thought-provoking exam questions related to this concept. The questions should:\n"
+                    f"Generate a set of 5 challenging and thought-provoking exam questions related to this concept.\n"
                     f"- Vary in difficulty.\n"
                     f"- Encourage critical thinking.\n"
                     f"- Be clearly formatted and numbered.\n\n"
@@ -381,7 +366,6 @@ def teacher_dashboard():
                     st.session_state.selected_teacher_concept_text,
                     st.session_state.auth_data['UserInfo'][0]['FullName']
                 )
-
                 st.download_button(
                     label="Download Exam Questions as PDF",
                     data=pdf_bytes,
@@ -389,14 +373,12 @@ def teacher_dashboard():
                     mime="application/pdf"
                 )
 
-
 def login_screen():
     try:
         image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
         col1, col2 = st.columns([1, 2])
         with col1:
             st.image(image_url, width=160)
-
         st.markdown("""<style>
         @media only screen and (max-width: 600px) {
             .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
@@ -431,12 +413,12 @@ def login_screen():
         return
     elif english_flag is not None:
         api_url = API_AUTH_URL_ENGLISH
-        is_english = True
+        st.session_state.is_english_mode = True
         if topic_id is None:
             topic_id = 1
     else:
         api_url = API_AUTH_URL_MATH_SCIENCE
-        is_english = False
+        st.session_state.is_english_mode = False
 
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
         if topic_id is None:
@@ -462,7 +444,6 @@ def login_screen():
             if auth_data.get("statusCode") == 1:
                 st.session_state.auth_data = auth_data
                 st.session_state.is_authenticated = True
-                st.session_state.is_english_mode = is_english
                 st.session_state.topic_id = int(topic_id)
                 st.session_state.is_teacher = (user_type_value == 2)
                 st.rerun()
@@ -470,7 +451,6 @@ def login_screen():
                 st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
-
 
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0:
@@ -490,28 +470,22 @@ def handle_user_input(user_input):
 
 def get_gpt_response(user_input):
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
-    # System prompt logic with teacher/student
     if st.session_state.is_teacher:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Teacher Mode Instructions:
 - The user is a teacher needing guidance on how to teach, evaluate, and understand student weaknesses in {topic_name}.
 - Provide suggestions on how to explain concepts, create assessments, and improve student understanding.
 - Offer insights into student difficulties and how to address them.
-- Maintain a professional, informative tone and provide curriculum-aligned advice (NCERT if applicable).
-"""
+- Maintain a professional, informative tone and provide curriculum-aligned advice."""
     else:
-        system_prompt = f"""You are a highly knowledgeable educational assistant created by EduBull, named EeeBee. The student is asking questions related to {topic_name}.
+        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee. The student is asking questions about {topic_name}.
 
 Student Mode Instructions:
-- Engage with the student by asking guiding questions that encourage them to understand the problem step-by-step.
-- Avoid providing direct answers; prompt them to think critically.
-- Offer hints or questions like "What do you think the first step might be?"
-- Ensure the tone is supportive and encouraging, building confidence and understanding.
-
-If asked for exam or assignment questions:
-- Provide a set of thought-provoking, topic-related questions (factual, conceptual, application-based, analytical).
-- Start simple and progress to advanced, aligned with NCERT standards.
-"""
+- Encourage the student to think critically and solve problems step-by-step.
+- Avoid giving direct answers; ask guiding questions.
+- Offer a hint or say: "What do you think the first step might be?"
+- Be supportive and build understanding and confidence.
+- If asked for exam questions, provide progressive questions aligned with NCERT."""
 
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
@@ -567,17 +541,14 @@ def display_resources(content_data):
     with st.expander("Resources", expanded=True):
         concept_description = st.session_state.get("generated_description", "No description available.")
         st.markdown(f"### Concept Description\n{concept_description}\n")
-
         if content_data.get("Video_List"):
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
                 st.write(f"- [Video]({video_url})")
-
         if content_data.get("Notes_List"):
             for note in content_data["Notes_List"]:
                 note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
                 st.write(f"- [Notes]({note_url})")
-
         if content_data.get("Exercise_List"):
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
@@ -601,13 +572,11 @@ def main_screen():
         unsafe_allow_html=True,
     )
 
-    # If teacher and English mode: Chat + Teacher Dashboard
-    # If teacher and Non-English: Chat + Teacher Dashboard + Learning Path + Concepts
-    # If student English: just Chat
-    # If student Non-English: Chat + Learning Path + Concepts
-
+    # Conditional tab rendering based on is_teacher and is_english_mode:
     if st.session_state.is_teacher:
+        # Teacher Mode
         if st.session_state.is_english_mode:
+            # Teacher in English mode: Chat + Teacher Dashboard
             tabs = st.tabs(["Chat", "Teacher Dashboard"])
             with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -633,8 +602,8 @@ def main_screen():
                 teacher_dashboard()
 
         else:
-            # Non-English Teacher
-            tabs = st.tabs(["Chat", "Teacher Dashboard", "Learning Path", "Concepts"])
+            # Teacher in Non-English mode: Chat + Teacher Dashboard
+            tabs = st.tabs(["Chat", "Teacher Dashboard"])
             with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
@@ -658,47 +627,10 @@ def main_screen():
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
 
-            with tabs[2]:
-                if not st.session_state.learning_path_generated:
-                    if st.button("🧠 Generate Learning Path"):
-                        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-                        if weak_concepts:
-                            with st.spinner("Generating learning path..."):
-                                st.session_state.learning_path = generate_learning_path(weak_concepts)
-                                st.session_state.learning_path_generated = True
-                        else:
-                            st.error("No weak concepts found!")
-                if st.session_state.learning_path_generated and st.session_state.learning_path:
-                    display_learning_path(st.session_state.learning_path)
-                    if st.button("📄 Download Learning Path as PDF"):
-                        try:
-                            pdf_bytes = generate_learning_path_pdf(
-                                st.session_state.learning_path,
-                                user_name,
-                                topic_name
-                            )
-                            st.download_button(
-                                label="Click here to download PDF",
-                                data=pdf_bytes,
-                                file_name=f"{user_name}_Learning_Path_{topic_name}.pdf",
-                                mime="application/pdf"
-                            )
-                        except Exception as e:
-                            st.error(f"Error creating PDF: {e}")
-
-            with tabs[3]:
-                concept_list = st.session_state.auth_data.get('ConceptList', [])
-                concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
-                for c_text, c_id in concept_options.items():
-                    if st.button(c_text, key=f"concept_{c_id}"):
-                        st.session_state.selected_concept_id = c_id
-                if st.session_state.selected_concept_id:
-                    load_concept_content()
-
     else:
         # Student Mode
         if st.session_state.is_english_mode:
-            # English Student: only chat
+            # English Student: only Chat
             tab1 = st.tabs(["Chat"])[0]
             with tab1:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -718,8 +650,9 @@ def main_screen():
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
+
         else:
-            # Non-English Student: Chat, Learning Path, Concepts
+            # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
             with tab1:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -736,7 +669,6 @@ def main_screen():
                             chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
                     chat_history_html += "</div>"
                     st.markdown(chat_history_html, unsafe_allow_html=True)
-
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
@@ -779,7 +711,6 @@ def main_screen():
 
                 if st.session_state.selected_concept_id:
                     load_concept_content()
-
 
 if st.session_state.is_authenticated:
     main_screen()
