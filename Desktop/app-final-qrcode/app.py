@@ -426,31 +426,34 @@ def login_screen():
     password = st.text_input("🔒 Password", type="password", key="password")
 
     query_params = st.experimental_get_query_params()
-    english_flag = query_params.get("E", None)
-    topic_params = query_params.get("T", [None])
-    topic_id = topic_params[0]
+english_flag = query_params.get("E", None)
+topic_params = query_params.get("T", [None])
+topic_id = topic_params[0]
 
-    # Symmetrical logic for English and Non-English modes
-    if english_flag is not None and topic_id is not None:
-        st.warning("Please provide either E for English OR T for Non-English, not both.")
-        st.stop()
-    elif english_flag is None and topic_id is None:
-        st.warning("Please provide E for English mode or T for Non-English mode (with a valid T).")
-        st.stop()
-    elif english_flag is not None:
-        # English mode
-        st.session_state.is_english_mode = True
-        api_url = API_AUTH_URL_ENGLISH
-        if topic_id is None:
-            st.warning("For English mode, please provide the T parameter for the topic ID.")
-            st.stop()
-    else:
-        # Non-English mode
-        st.session_state.is_english_mode = False
-        api_url = API_AUTH_URL_MATH_SCIENCE
-        if topic_id is None:
-            st.warning("For Non-English mode, please provide the T parameter for the topic ID.")
-            st.stop()
+if english_flag is not None and topic_id is not None:
+    st.warning("Please provide either E for English OR T for Non-English, not both.")
+    # Don't call st.stop() here, just show warning
+elif english_flag is None and topic_id is None:
+    st.warning("Please provide E for English mode or T for Non-English mode.")
+    # Again, don't call st.stop(), just show warning
+elif english_flag is not None:
+    # English mode
+    st.session_state.is_english_mode = True
+    api_url = API_AUTH_URL_ENGLISH
+    if topic_id is None:
+        # If you want to allow English mode without T, just give a default:
+        topic_id = 1
+        # Or just show a warning but don't stop:
+        # st.warning("For English mode, a T parameter is recommended for a specific topic.")
+else:
+    # Non-English mode
+    st.session_state.is_english_mode = False
+    api_url = API_AUTH_URL_MATH_SCIENCE
+    if topic_id is None:
+        # Show a warning but continue:
+        st.warning("For Non-English mode, please provide the T parameter for the topic ID.")
+        # If you must have T, you can stop or just let the user enter credentials anyway
+
 
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
         auth_payload = {
