@@ -134,8 +134,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         lines = [line.strip() for line in section.split('\n') if line.strip()]
         if not lines:
             continue
-
-        # Add section title
+        # First line as a section title
         story.append(Paragraph(lines[0], section_title_style))
         story.append(Spacer(1, 8))
 
@@ -146,7 +145,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         story.append(ListFlowable(question_items, bulletType='1'))
         story.append(Spacer(1, 12))
 
-    # Build PDF
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
@@ -384,7 +382,7 @@ def teacher_dashboard():
                         st.error(f"Error generating exam questions: {e}")
 
             if st.session_state.exam_questions:
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")  # Initialize branch_name if needed
+                branch_name = st.session_state.auth_data.get("BranchName", "their class")
                 st.markdown(f"### Generated Exam Questions for {branch_name}")
                 st.markdown(st.session_state.exam_questions)
 
@@ -399,7 +397,6 @@ def teacher_dashboard():
                     file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
                     mime="application/pdf"
                 )
-
 
 def login_screen():
     try:
@@ -430,19 +427,18 @@ def login_screen():
     password = st.text_input("🔒 Password", type="password", key="password")
 
     query_params = st.experimental_get_query_params()
-    e_params = query_params.get("E", [None])
-    t_params = query_params.get("T", [None])
-    
-    E_value = e_params[0]
-    T_value = t_params[0]
-    
+    E_params = query_params.get("E", [None])
+    T_params = query_params.get("T", [None])
+
+    E_value = E_params[0]
+    T_value = T_params[0]
+
     api_url = None
     topic_id = None
-    
+
+    # Determine mode based on E and T
     if E_value is not None and T_value is not None:
-        # Both E and T provided: ambiguous
         st.warning("Please provide either E for English OR T for Non-English, not both.")
-        # Don't stop, show login form anyway
     elif E_value is not None and T_value is None:
         # English mode
         st.session_state.is_english_mode = True
@@ -456,12 +452,10 @@ def login_screen():
     else:
         # Neither E nor T provided
         st.warning("Please provide E for English mode or T for Non-English mode.")
-    # Don't stop, show login form anyway
-
 
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
-        if topic_id is None:
-            st.warning("Please provide a T parameter for Non-English mode.")
+        if topic_id is None or api_url is None:
+            st.warning("Please ensure correct E or T parameter is provided.")
             return
 
         auth_payload = {
@@ -492,7 +486,7 @@ def login_screen():
             st.error(f"Error connecting to the authentication API: {e}")
 
 def add_initial_greeting():
-    if len(st.session_state.chat_history) == 0:
+    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
         topic_name = st.session_state.auth_data['TopicName']
         greeting_message = (
@@ -540,7 +534,6 @@ Student Mode Instructions:
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
-
 
 def load_concept_content():
     selected_concept_id = st.session_state.selected_concept_id
@@ -614,7 +607,6 @@ def main_screen():
         unsafe_allow_html=True,
     )
 
-    # Conditional tab rendering based on is_teacher and is_english_mode:
     if st.session_state.is_teacher:
         # Teacher Mode
         if st.session_state.is_english_mode:
@@ -642,7 +634,6 @@ def main_screen():
             with tabs[1]:
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
-
         else:
             # Teacher in Non-English mode: Chat + Teacher Dashboard
             tabs = st.tabs(["Chat", "Teacher Dashboard"])
@@ -668,7 +659,6 @@ def main_screen():
             with tabs[1]:
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
-
     else:
         # Student Mode
         if st.session_state.is_english_mode:
@@ -692,7 +682,6 @@ def main_screen():
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
-
         else:
             # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
@@ -716,16 +705,24 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
+                # Debug print to see what auth_data contains before generating learning path
+                st.write("Debug: auth_data keys -> ", list(st.session_state.auth_data.keys()))
+                st.write("Debug: auth_data -> ", st.session_state.auth_data)
+
+                # Attempt to fetch weak concepts
+                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                st.write("Debug: weak_concepts -> ", weak_concepts)
+
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
-                        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                        # Check if we have weak concepts
                         if weak_concepts:
                             with st.spinner("Generating learning path..."):
                                 st.session_state.learning_path = generate_learning_path(weak_concepts)
                                 st.session_state.learning_path_generated = True
                         else:
-                            st.error("No weak concepts found!")
-
+                            st.error("No weak concepts found! Please check auth_data or verify the API response.")
+                
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
                     if st.button("📄 Download Learning Path as PDF"):
