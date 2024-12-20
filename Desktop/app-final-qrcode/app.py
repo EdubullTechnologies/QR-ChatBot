@@ -337,15 +337,17 @@ def teacher_dashboard():
 
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "Class - 8")
+                branch_name = st.session_state.auth_data.get("BranchName", "their class")
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
-                    f"The teacher is teaching students in {branch_name}, following the NCERT curriculum for Class - 8.\n"
+                    f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
                     f"Generate a set of 5 challenging and thought-provoking exam questions related to this concept.\n"
                     f"- Vary in difficulty.\n"
                     f"- Encourage critical thinking.\n"
                     f"- Be clearly formatted and numbered.\n\n"
                     f"Do not provide the answers, only the questions."
                 )
+
                 try:
                     response = openai.ChatCompletion.create(
                         model="gpt-4o-mini",
@@ -470,23 +472,24 @@ def handle_user_input(user_input):
 
 def get_gpt_response(user_input):
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+
     if st.session_state.is_teacher:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Teacher Mode Instructions:
-- The user is a teacher needing guidance on how to teach, evaluate, and understand student weaknesses in {topic_name}.
-- Provide suggestions on how to explain concepts, create assessments, and improve student understanding.
+- The user is a teacher teaching students in {branch_name}, following the NCERT curriculum.
+- Provide suggestions on how to explain concepts, create assessments, and improve student understanding at the {branch_name} level.
 - Offer insights into student difficulties and how to address them.
 - Maintain a professional, informative tone and provide curriculum-aligned advice."""
     else:
-        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee. The student is asking questions about {topic_name}.
-
+        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Student Mode Instructions:
-- Only talk about {topic_name} and nothing else.
+- The student is in {branch_name}, following the NCERT curriculum.
+- only talk about {topic_name} and nothing else.
 - Encourage the student to think critically and solve problems step-by-step.
 - Avoid giving direct answers; ask guiding questions.
-- Offer a hint or say: "What do you think the first step might be?"
 - Be supportive and build understanding and confidence.
-- If asked for exam questions, provide progressive questions aligned with NCERT."""
+- If asked for exam questions, provide progressive questions aligned with NCERT and suitable for {branch_name} students."""
 
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
@@ -500,6 +503,7 @@ Student Mode Instructions:
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
+
 
 def load_concept_content():
     selected_concept_id = st.session_state.selected_concept_id
