@@ -336,7 +336,6 @@ def teacher_dashboard():
             st.session_state.selected_teacher_concept_text = chosen_concept_text
 
             if st.button("Generate Exam Questions"):
-                branch_name = st.session_state.auth_data.get("BranchName", "Class - 8")
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
