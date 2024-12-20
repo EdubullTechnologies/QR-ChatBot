@@ -61,6 +61,9 @@ if "learning_path_generated" not in st.session_state:
     st.session_state.learning_path = None
 if "generated_description" not in st.session_state:
     st.session_state.generated_description = ""
+if "is_english_mode" not in st.session_state:
+    st.session_state.is_english_mode = False
+
 
 # Page config
 st.set_page_config(
