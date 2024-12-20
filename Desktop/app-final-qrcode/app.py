@@ -351,7 +351,7 @@ def teacher_dashboard():
                     response = openai.ChatCompletion.create(
                         model="gpt-4o-mini",
                         messages=[{"role": "system", "content": prompt}],
-                        max_tokens=500
+                        max_tokens=1000
                     )
                     questions = response.choices[0].message['content'].strip()
                     st.session_state.exam_questions = questions
@@ -359,7 +359,7 @@ def teacher_dashboard():
                     st.error(f"Error generating exam questions: {e}")
 
             if st.session_state.exam_questions:
-                st.markdown("### Generated Exam Questions")
+                st.markdown(f"### Generated Exam Questions for {branch_name}")
                 st.markdown(st.session_state.exam_questions)
 
                 pdf_bytes = generate_exam_questions_pdf(
