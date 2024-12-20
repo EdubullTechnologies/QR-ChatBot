@@ -346,17 +346,17 @@ def teacher_dashboard():
                     f"- Be clearly formatted and numbered.\n\n"
                     f"Do not provide the answers, only the questions."
                 )
-
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "system", "content": prompt}],
-                        max_tokens=1000
-                    )
-                    questions = response.choices[0].message['content'].strip()
-                    st.session_state.exam_questions = questions
-                except Exception as e:
-                    st.error(f"Error generating exam questions: {e}")
+                with st.spinner("Generating exam questions... Please wait."):
+                    try:
+                        response = openai.ChatCompletion.create(
+                            model="gpt-4o-mini",
+                            messages=[{"role": "system", "content": prompt}],
+                            max_tokens=1000
+                        )
+                        questions = response.choices[0].message['content'].strip()
+                        st.session_state.exam_questions = questions
+                    except Exception as e:
+                        st.error(f"Error generating exam questions: {e}")
 
             if st.session_state.exam_questions:
                 st.markdown(f"### Generated Exam Questions for {branch_name}")
