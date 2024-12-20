@@ -128,25 +128,22 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    # Parse questions into sections
+    # Parse questions into sections (if any). If just a list, treat as one section.
     sections = re.split(r'\n\n', questions.strip())
     for section in sections:
         lines = [line.strip() for line in section.split('\n') if line.strip()]
         if not lines:
             continue
-
-        # Add section title
+        # First line as a section title, rest as questions
         story.append(Paragraph(lines[0], section_title_style))
         story.append(Spacer(1, 8))
 
-        # Add questions as a numbered list
         question_items = []
         for line in lines[1:]:
             question_items.append(ListItem(Paragraph(line, question_style)))
         story.append(ListFlowable(question_items, bulletType='1'))
         story.append(Spacer(1, 12))
 
-    # Build PDF
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
@@ -384,7 +381,7 @@ def teacher_dashboard():
                         st.error(f"Error generating exam questions: {e}")
 
             if st.session_state.exam_questions:
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")  # Initialize branch_name if needed
+                branch_name = st.session_state.auth_data.get("BranchName", "their class")
                 st.markdown(f"### Generated Exam Questions for {branch_name}")
                 st.markdown(st.session_state.exam_questions)
 
@@ -399,7 +396,6 @@ def teacher_dashboard():
                     file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
                     mime="application/pdf"
                 )
-
 
 def login_screen():
     try:
@@ -431,28 +427,32 @@ def login_screen():
 
     query_params = st.experimental_get_query_params()
     english_flag = query_params.get("E", None)
-    topic_id = query_params.get("T", [None])[0]
+    topic_params = query_params.get("T", [None])
+    topic_id = topic_params[0]
 
+    # Symmetrical logic for English and Non-English modes
     if english_flag is not None and topic_id is not None:
         st.warning("Please provide either E for English OR T for Non-English, not both.")
-        return
+        st.stop()
     elif english_flag is None and topic_id is None:
-        st.warning("Please provide E for English mode or T for Non-English mode.")
-        return
+        st.warning("Please provide E for English mode or T for Non-English mode (with a valid T).")
+        st.stop()
     elif english_flag is not None:
-        api_url = API_AUTH_URL_ENGLISH
+        # English mode
         st.session_state.is_english_mode = True
+        api_url = API_AUTH_URL_ENGLISH
         if topic_id is None:
-            topic_id = 1
+            st.warning("For English mode, please provide the T parameter for the topic ID.")
+            st.stop()
     else:
-        api_url = API_AUTH_URL_MATH_SCIENCE
+        # Non-English mode
         st.session_state.is_english_mode = False
+        api_url = API_AUTH_URL_MATH_SCIENCE
+        if topic_id is None:
+            st.warning("For Non-English mode, please provide the T parameter for the topic ID.")
+            st.stop()
 
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
-        if topic_id is None:
-            st.warning("Please provide a T parameter for Non-English mode.")
-            return
-
         auth_payload = {
             'OrgCode': org_code,
             'TopicID': int(topic_id),
@@ -474,7 +474,7 @@ def login_screen():
                 st.session_state.is_authenticated = True
                 st.session_state.topic_id = int(topic_id)
                 st.session_state.is_teacher = (user_type_value == 2)
-                st.rerun()
+                st.experimental_rerun()
             else:
                 st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
@@ -494,7 +494,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.rerun()
+        st.experimental_rerun()
 
 def get_gpt_response(user_input):
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
@@ -529,7 +529,6 @@ Student Mode Instructions:
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
-
 
 def load_concept_content():
     selected_concept_id = st.session_state.selected_concept_id
@@ -603,7 +602,6 @@ def main_screen():
         unsafe_allow_html=True,
     )
 
-    # Conditional tab rendering based on is_teacher and is_english_mode:
     if st.session_state.is_teacher:
         # Teacher Mode
         if st.session_state.is_english_mode:
@@ -631,7 +629,6 @@ def main_screen():
             with tabs[1]:
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
-
         else:
             # Teacher in Non-English mode: Chat + Teacher Dashboard
             tabs = st.tabs(["Chat", "Teacher Dashboard"])
@@ -657,7 +654,6 @@ def main_screen():
             with tabs[1]:
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
-
     else:
         # Student Mode
         if st.session_state.is_english_mode:
@@ -681,7 +677,6 @@ def main_screen():
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
-
         else:
             # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
