@@ -340,7 +340,8 @@ def teacher_dashboard():
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
                     f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
-                    f"Generate a set of 5 challenging and thought-provoking exam questions related to this concept.\n"
+                    f"Generate a set of 20 challenging and thought-provoking exam questions related to this concept.\n"
+                    f"Generated questions should be according to NEP 2020 and NCF guidelines.\n"
                     f"- Vary in difficulty.\n"
                     f"- Encourage critical thinking.\n"
                     f"- Be clearly formatted and numbered.\n\n"
@@ -351,7 +352,7 @@ def teacher_dashboard():
                         response = openai.ChatCompletion.create(
                             model="gpt-4o-mini",
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=1000
+                            max_tokens=2000
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
