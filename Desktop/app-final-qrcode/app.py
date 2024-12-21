@@ -705,9 +705,7 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
-                # Debug print to see what auth_data contains before generating learning path
-                st.write("Debug: auth_data keys -> ", list(st.session_state.auth_data.keys()))
-                st.write("Debug: auth_data -> ", st.session_state.auth_data)
+               
 
                 # Attempt to fetch weak concepts
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
