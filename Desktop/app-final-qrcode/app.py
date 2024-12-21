@@ -719,7 +719,7 @@ def main_screen():
                                 st.session_state.learning_path = generate_learning_path(weak_concepts)
                                 st.session_state.learning_path_generated = True
                         else:
-                            st.error("No weak concepts found! Please check auth_data or verify the API response.")
+                            st.error("No weak concepts found!")
                 
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
