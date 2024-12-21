@@ -705,31 +705,41 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
-               
-
-                # Attempt to fetch weak concepts
+            # 1. Check if auth_data is actually populated
+            if st.session_state.auth_data:
+                # 2. Fetch weak concepts safely
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                st.write("DEBUG: weak_concepts =>", weak_concepts)
                 
-
+                # 3. If not generated, provide button to generate learning path
+                if "learning_path_generated" not in st.session_state:
+                    st.session_state.learning_path_generated = False
+                    st.session_state.learning_path = None
+        
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
-                        # Check if we have weak concepts
                         if weak_concepts:
                             with st.spinner("Generating learning path..."):
                                 st.session_state.learning_path = generate_learning_path(weak_concepts)
                                 st.session_state.learning_path_generated = True
                         else:
-                            st.error("No weak concepts found!")
+                            st.error("No weak concepts found in auth_data. Please verify the API response.")
                 
+                # 4. Display learning path if generated
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
+                    
+                    # PDF Download Button
                     if st.button("📄 Download Learning Path as PDF"):
                         try:
+                            user_name = st.session_state.auth_data["UserInfo"][0]["FullName"]
+                            topic_name = st.session_state.auth_data["TopicName"]
                             pdf_bytes = generate_learning_path_pdf(
-                                st.session_state.learning_path,
-                                user_name,
+                                st.session_state.learning_path, 
+                                user_name, 
                                 topic_name
                             )
+                            
                             st.download_button(
                                 label="Click here to download PDF",
                                 data=pdf_bytes,
@@ -738,6 +748,10 @@ def main_screen():
                             )
                         except Exception as e:
                             st.error(f"Error creating PDF: {e}")
+            else:
+                # If st.session_state.auth_data is None or empty
+                st.error("No authentication data found. Please log in first.")
+
 
             with tab3:
                 concept_list = st.session_state.auth_data.get('ConceptList', [])
