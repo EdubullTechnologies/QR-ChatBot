@@ -24,7 +24,6 @@ try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
-    st.stop()
 
 openai.api_key = OPENAI_API_KEY
 
@@ -61,8 +60,9 @@ if "learning_path_generated" not in st.session_state:
 if "generated_description" not in st.session_state:
     st.session_state.generated_description = ""
 if "is_english_mode" not in st.session_state:
-    st.session_state.is_english_mode = False
+    st.session_state.is_english_mode = False  # default initialization
 
+# Page config
 st.set_page_config(
     page_title="EeeBee AI Buddy",
     page_icon="🤖",
@@ -87,6 +87,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     story = []
     styles = getSampleStyleSheet()
 
+    # Define custom styles
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -120,20 +121,24 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         spaceAfter=6
     )
 
+    # Add title and subtitle
     story.append(Paragraph("Exam Questions", title_style))
     user_name_display = user_name if user_name else "Teacher"
     concept_text_display = concept_text if concept_text else "Selected Concept"
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
+    # Parse questions into sections
     sections = re.split(r'\n\n', questions.strip())
     for section in sections:
         lines = [line.strip() for line in section.split('\n') if line.strip()]
         if not lines:
             continue
+        # First line as a section title
         story.append(Paragraph(lines[0], section_title_style))
         story.append(Spacer(1, 8))
 
+        # Add questions as a numbered list
         question_items = []
         for line in lines[1:]:
             question_items.append(ListItem(Paragraph(line, question_style)))
@@ -240,6 +245,7 @@ def display_additional_graphs(weak_concepts):
     total_cleared = df["ClearedStudentCount"].sum()
     total_not_cleared = total_attended - total_cleared
 
+    # Donut chart
     data_overall = pd.DataFrame({
         'Category': ['Cleared', 'Not Cleared'],
         'Count': [total_cleared, total_not_cleared]
@@ -253,6 +259,7 @@ def display_additional_graphs(weak_concepts):
     )
     st.altair_chart(donut_chart, use_container_width=True)
 
+    # Horizontal bar chart
     df_long = df.melt(
         id_vars='ConceptText',
         value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
@@ -429,6 +436,7 @@ def login_screen():
     api_url = None
     topic_id = None
 
+    # Determine mode based on E and T
     if E_value is not None and T_value is not None:
         st.warning("Please provide either E for English OR T for Non-English, not both.")
     elif E_value is not None and T_value is None:
@@ -442,6 +450,7 @@ def login_screen():
         api_url = API_AUTH_URL_MATH_SCIENCE
         topic_id = T_value
     else:
+        # Neither E nor T provided
         st.warning("Please provide E for English mode or T for Non-English mode.")
 
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
@@ -600,69 +609,147 @@ def main_screen():
 
     if st.session_state.is_teacher:
         # Teacher Mode
-        # ... teacher logic ...
-        pass
+        if st.session_state.is_english_mode:
+            # Teacher in English mode: Chat + Teacher Dashboard
+            tabs = st.tabs(["Chat", "Teacher Dashboard"])
+            with tabs[0]:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                chat_container = st.container()
+                with chat_container:
+                    chat_history_html = """
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                    """
+                    for role, message in st.session_state.chat_history:
+                        if role == "assistant":
+                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                        else:
+                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                    chat_history_html += "</div>"
+                    st.markdown(chat_history_html, unsafe_allow_html=True)
+                user_input = st.chat_input("Enter your question about the topic")
+                if user_input:
+                    handle_user_input(user_input)
+
+            with tabs[1]:
+                st.subheader("Teacher Dashboard")
+                teacher_dashboard()
+        else:
+            # Teacher in Non-English mode: Chat + Teacher Dashboard
+            tabs = st.tabs(["Chat", "Teacher Dashboard"])
+            with tabs[0]:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                chat_container = st.container()
+                with chat_container:
+                    chat_history_html = """
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                    """
+                    for role, message in st.session_state.chat_history:
+                        if role == "assistant":
+                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                        else:
+                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                    chat_history_html += "</div>"
+                    st.markdown(chat_history_html, unsafe_allow_html=True)
+                user_input = st.chat_input("Enter your question about the topic")
+                if user_input:
+                    handle_user_input(user_input)
+
+            with tabs[1]:
+                st.subheader("Teacher Dashboard")
+                teacher_dashboard()
     else:
         # Student Mode
-        # Non-English Student: Chat + Learning Path + Concepts
-        tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
-        with tab1:
-            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-            add_initial_greeting()
-            chat_container = st.container()
-            with chat_container:
-                chat_history_html = """
-                <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                """
-                for role, message in st.session_state.chat_history:
-                    if role == "assistant":
-                        chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                    else:
-                        chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                chat_history_html += "</div>"
-                st.markdown(chat_history_html, unsafe_allow_html=True)
-            user_input = st.chat_input("Enter your question about the topic")
-            if user_input:
-                handle_user_input(user_input)
+        if st.session_state.is_english_mode:
+            # English Student: only Chat
+            tab1 = st.tabs(["Chat"])[0]
+            with tab1:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                chat_container = st.container()
+                with chat_container:
+                    chat_history_html = """
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                    """
+                    for role, message in st.session_state.chat_history:
+                        if role == "assistant":
+                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                        else:
+                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                    chat_history_html += "</div>"
+                    st.markdown(chat_history_html, unsafe_allow_html=True)
+                user_input = st.chat_input("Enter your question about the topic")
+                if user_input:
+                    handle_user_input(user_input)
+        else:
+            # Non-English Student: Chat + Learning Path + Concepts
+            tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
+            with tab1:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                chat_container = st.container()
+                with chat_container:
+                    chat_history_html = """
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                    """
+                    for role, message in st.session_state.chat_history:
+                        if role == "assistant":
+                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                        else:
+                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                    chat_history_html += "</div>"
+                    st.markdown(chat_history_html, unsafe_allow_html=True)
+                user_input = st.chat_input("Enter your question about the topic")
+                if user_input:
+                    handle_user_input(user_input)
 
-        with tab2:
-            weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-            if not st.session_state.learning_path_generated:
-                if st.button("🧠 Generate Learning Path"):
-                    if weak_concepts:
-                        with st.spinner("Generating learning path..."):
-                            st.session_state.learning_path = generate_learning_path(weak_concepts)
-                            st.session_state.learning_path_generated = True
-                    else:
-                        st.error("No weak concepts found! Please check auth_data or verify the API response.")
+            with tab2:
+                # Debug print to see what auth_data contains before generating learning path
+                st.write("Debug: auth_data keys -> ", list(st.session_state.auth_data.keys()))
+                st.write("Debug: auth_data -> ", st.session_state.auth_data)
 
-            if st.session_state.learning_path_generated and st.session_state.learning_path:
-                display_learning_path(st.session_state.learning_path)
-                if st.button("📄 Download Learning Path as PDF"):
-                    try:
-                        pdf_bytes = generate_learning_path_pdf(
-                            st.session_state.learning_path,
-                            user_name,
-                            topic_name
-                        )
-                        st.download_button(
-                            label="Click here to download PDF",
-                            data=pdf_bytes,
-                            file_name=f"{user_name}_Learning_Path_{topic_name}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error creating PDF: {e}")
+                # Attempt to fetch weak concepts
+                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                st.write("Debug: weak_concepts -> ", weak_concepts)
 
-        with tab3:
-            concept_list = st.session_state.auth_data.get('ConceptList', [])
-            concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
-            for c_text, c_id in concept_options.items():
-                if st.button(c_text, key=f"concept_{c_id}"):
-                    st.session_state.selected_concept_id = c_id
+                if not st.session_state.learning_path_generated:
+                    if st.button("🧠 Generate Learning Path"):
+                        # Check if we have weak concepts
+                        if weak_concepts:
+                            with st.spinner("Generating learning path..."):
+                                st.session_state.learning_path = generate_learning_path(weak_concepts)
+                                st.session_state.learning_path_generated = True
+                        else:
+                            st.error("No weak concepts found! Please check auth_data or verify the API response.")
+                
+                if st.session_state.learning_path_generated and st.session_state.learning_path:
+                    display_learning_path(st.session_state.learning_path)
+                    if st.button("📄 Download Learning Path as PDF"):
+                        try:
+                            pdf_bytes = generate_learning_path_pdf(
+                                st.session_state.learning_path,
+                                user_name,
+                                topic_name
+                            )
+                            st.download_button(
+                                label="Click here to download PDF",
+                                data=pdf_bytes,
+                                file_name=f"{user_name}_Learning_Path_{topic_name}.pdf",
+                                mime="application/pdf"
+                            )
+                        except Exception as e:
+                            st.error(f"Error creating PDF: {e}")
 
-            if st.session_state.selected_concept_id:
-                load_concept_content()
+            with tab3:
+                concept_list = st.session_state.auth_data.get('ConceptList', [])
+                concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
+                for c_text, c_id in concept_options.items():
+                    if st.button(c_text, key=f"concept_{c_id}"):
+                        st.session_state.selected_concept_id = c_id
+
+                if st.session_state.selected_concept_id:
+                    load_concept_content()
 
 if st.session_state.is_authenticated:
     main_screen()
