@@ -529,7 +529,7 @@ Student Mode Instructions:
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=conversation_history_formatted,
-            max_tokens=1000
+            max_tokens=2000
         ).choices[0].message['content'].strip()
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
