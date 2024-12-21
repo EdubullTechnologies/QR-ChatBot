@@ -709,7 +709,7 @@ def main_screen():
 
                 # Attempt to fetch weak concepts
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-                st.write("Debug: weak_concepts -> ", weak_concepts)
+                
 
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
