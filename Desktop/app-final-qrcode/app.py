@@ -554,7 +554,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.experimental_rerun()
+        st.rerun()
 
 def get_gpt_response(user_input):
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
@@ -652,7 +652,7 @@ def main_screen():
     with col2:
         if st.button("Logout"):
             st.session_state.clear()
-            st.experimental_rerun()
+            st.rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
