@@ -513,11 +513,6 @@ def login_screen():
                 st.session_state.is_authenticated = True
                 st.session_state.topic_id = int(topic_id)
                 st.session_state.is_teacher = (user_type_value == 2)
-                
-                # Debugging: Display auth_data
-                st.write("🔍 **Auth Data:**")
-                st.json(auth_data)
-                
                 st.rerun()
             else:
                 st.error("🚫 Authentication failed. Please check your credentials.")
