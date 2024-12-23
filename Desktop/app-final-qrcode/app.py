@@ -706,25 +706,52 @@ def main_screen():
 
             with tab2:
                 st.subheader("🧠 Learning Path")
-
+            
                 # Attempt to fetch weak concepts from auth_data
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
                 
                 # Debugging: Log weak concepts
                 st.markdown("### Debugging: Weak Concepts List")
                 st.json(weak_concepts)
-
+            
                 # Retry logic for fetching weak concepts (if needed)
                 if not weak_concepts:
                     try:
-                        headers = {"Content-Type": "application/json"}
-                        retry_response = requests.post(API_CONTENT_URL, json={"TopicID": st.session_state.topic_id}, headers=headers)
+                        # Headers for the API request
+                        headers = {
+                            "Content-Type": "application/json",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                            "Accept": "application/json",
+                        }
+            
+                        # Include authorization token if available
+                        auth_token = st.session_state.auth_data.get("Token", None)
+                        if auth_token:
+                            headers["Authorization"] = f"Bearer {auth_token}"
+            
+                        # Log headers for debugging
+                        st.markdown("### Debugging: Request Headers")
+                        st.json(headers)
+            
+                        # Make the retry request
+                        retry_response = requests.post(
+                            API_CONTENT_URL,
+                            json={"TopicID": st.session_state.topic_id},
+                            headers=headers
+                        )
                         retry_response.raise_for_status()
+            
+                        # Parse the response
                         weak_concepts = retry_response.json().get("WeakConceptList", [])
                         st.session_state.auth_data["WeakConceptList"] = weak_concepts
-                    except Exception as e:
+            
+                    except requests.exceptions.RequestException as e:
                         st.error(f"Error fetching weak concepts: {e}")
-
+            
+                # Debugging: Log weak concepts after retry
+                st.markdown("### Debugging: Weak Concepts List After Retry")
+                st.json(weak_concepts)
+            
                 # Generate Learning Path
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
@@ -734,10 +761,12 @@ def main_screen():
                                 st.session_state.learning_path_generated = True
                         else:
                             st.error("No weak concepts found!")
-
+            
                 # Display Learning Path if generated
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
+            
+                    # Button to download the learning path as PDF
                     if st.button("📄 Download Learning Path as PDF"):
                         try:
                             pdf_bytes = generate_learning_path_pdf(
@@ -753,6 +782,7 @@ def main_screen():
                             )
                         except Exception as e:
                             st.error(f"Error creating PDF: {e}")
+
 
 
 
