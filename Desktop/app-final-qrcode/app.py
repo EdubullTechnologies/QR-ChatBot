@@ -15,7 +15,6 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
 from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
-from pathlib import Path
 
 # Ignore all deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -79,21 +78,6 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-
-def load_css(file_name: str):
-    """
-    Load and inject CSS styles from an external file.
-    """
-    css_path = Path.cwd() / file_name
-    if css_path.exists():
-        with open(css_path) as f:
-            css = f.read()
-            st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
-    else:
-        st.error(f"CSS file '{file_name}' not found. Please ensure it is in the same directory as the main app script.")
-
-# Call the function to load styles.css
-load_css("styles.css")
 
 def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer = io.BytesIO()
@@ -286,7 +270,6 @@ def display_learning_path(learning_path):
             st.markdown("<br>", unsafe_allow_html=True)  # Extra space after each concept
 
 
-
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
     total_attended = df["AttendedStudentCount"].sum()
@@ -452,14 +435,22 @@ def login_screen():
         col1, col2 = st.columns([1, 2])
         with col1:
             st.image(image_url, width=160)
+        st.markdown("""<style>
+        @media only screen and (max-width: 600px) {
+            .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
+        }
+        @media only screen and (min-width: 601px) {
+            .title { font-size: 4em; font-weight: bold; margin-top: 90px; margin-left: -125px; text-align: left; }
+        }
+        </style>""", unsafe_allow_html=True)
         with col2:
-            st.markdown('<div class="app-header">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
+            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error loading image: {e}")
 
-    st.markdown('<div class="app-subtitle">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</div>', unsafe_allow_html=True)
+    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
-    user_type = st.radio("Select User Type", ["Student", "Teacher"], key="user_type")
+    user_type = st.radio("Select User Type", ["Student", "Teacher"])
     user_type_value = 2 if user_type == "Teacher" else None  # Set to None for students
 
     org_code = st.text_input("🏫 School Code", key="org_code")
@@ -493,7 +484,7 @@ def login_screen():
         # Neither E nor T provided
         st.warning("Please provide E for English mode or T for Non-English mode.")
 
-    if st.button("🚀 Login and Start Chatting!", key="login_button") and not st.session_state.is_authenticated:
+    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
         if topic_id is None or api_url is None:
             st.warning("Please ensure correct E or T parameter is provided.")
             return
@@ -514,23 +505,22 @@ def login_screen():
             "Accept": "application/json"
         }
         try:
-            with st.spinner("🔄 Authenticating..."):
-                auth_response = requests.post(api_url, json=auth_payload, headers=headers)
-                auth_response.raise_for_status()
-                auth_data = auth_response.json()
-                if auth_data.get("statusCode") == 1:
-                    st.session_state.auth_data = auth_data
-                    st.session_state.is_authenticated = True
-                    st.session_state.topic_id = int(topic_id)
-                    st.session_state.is_teacher = (user_type_value == 2)
-
-                    # Debugging: Display auth_data
-                    st.markdown("🔍 **Auth Data:**")
-                    st.json(auth_data)
-
-                    st.rerun()
-                else:
-                    st.error("🚫 Authentication failed. Please check your credentials.")
+            auth_response = requests.post(api_url, json=auth_payload, headers=headers)
+            auth_response.raise_for_status()
+            auth_data = auth_response.json()
+            if auth_data.get("statusCode") == 1:
+                st.session_state.auth_data = auth_data
+                st.session_state.is_authenticated = True
+                st.session_state.topic_id = int(topic_id)
+                st.session_state.is_teacher = (user_type_value == 2)
+                
+                # Debugging: Display auth_data
+                st.write("🔍 **Auth Data:**")
+                st.json(auth_data)
+                
+                st.rerun()
+            else:
+                st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
