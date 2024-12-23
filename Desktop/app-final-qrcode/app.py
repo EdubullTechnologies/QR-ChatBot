@@ -61,6 +61,9 @@ if "generated_description" not in st.session_state:
     st.session_state.generated_description = ""
 if "is_english_mode" not in st.session_state:
     st.session_state.is_english_mode = False  # default initialization
+if "weak_concepts" not in st.session_state:
+    st.session_state.weak_concepts = []
+
 
 # Page config
 st.set_page_config(
