@@ -332,7 +332,7 @@ def login_screen():
                             except requests.exceptions.RequestException as e:
                                 st.error(f"Error fetching student weak concepts: {e}")
                                 st.session_state.student_weak_concepts = []
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Please check your credentials.")
             except requests.exceptions.RequestException as e:
