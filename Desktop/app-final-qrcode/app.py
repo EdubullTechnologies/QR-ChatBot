@@ -20,6 +20,7 @@ import altair as alt
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
+# Initialize OpenAI API key
 try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except KeyError:
@@ -50,6 +51,8 @@ if "topic_id" not in st.session_state:
     st.session_state.topic_id = None
 if "teacher_weak_concepts" not in st.session_state:
     st.session_state.teacher_weak_concepts = []
+if "student_weak_concepts" not in st.session_state:
+    st.session_state.student_weak_concepts = []
 if "selected_batch_id" not in st.session_state:
     st.session_state.selected_batch_id = None
 if "exam_questions" not in st.session_state:
@@ -70,6 +73,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
+# Hide Streamlit style elements
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -307,10 +311,14 @@ def teacher_dashboard():
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json"
         }
-        response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
-        response.raise_for_status()
-        weak_concepts = response.json()
-        st.session_state.teacher_weak_concepts = weak_concepts
+        try:
+            response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
+            response.raise_for_status()
+            weak_concepts = response.json()
+            st.session_state.teacher_weak_concepts = weak_concepts
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching teacher weak concepts: {e}")
+            st.session_state.teacher_weak_concepts = []
 
     if st.session_state.teacher_weak_concepts:
         df = []
@@ -474,11 +482,58 @@ def login_screen():
             auth_response = requests.post(api_url, json=auth_payload, headers=headers)
             auth_response.raise_for_status()
             auth_data = auth_response.json()
+
+            # Debugging: Display auth_data structure
+            st.write("### Debugging: Authentication Data")
+            st.json(auth_data)
+
             if auth_data.get("statusCode") == 1:
                 st.session_state.auth_data = auth_data
                 st.session_state.is_authenticated = True
                 st.session_state.topic_id = int(topic_id)
                 st.session_state.is_teacher = (user_type_value == 2)
+
+                # Fetch weak concepts for students if user is a student
+                if not st.session_state.is_teacher:
+                    # Attempt to retrieve WeakConceptList from auth_data
+                    weak_concepts = (
+                        auth_data.get("WeakConceptList", []) or
+                        auth_data.get("weakConceptList", []) or
+                        auth_data.get("WeakconceptList", [])
+                    )
+
+                    # Debugging: Display retrieved weak concepts
+                    st.write("### Debugging: Retrieved Weak Concepts")
+                    st.json(weak_concepts)
+
+                    if weak_concepts:
+                        st.session_state.student_weak_concepts = weak_concepts
+                    else:
+                        # If WeakConceptList is not in auth_data, attempt to fetch it
+                        # Replace the following with the correct API endpoint and parameters if available
+                        API_STUDENT_WEAK_CONCEPTS = "https://webapi.edubull.com/api/Student/WeakConcepts"  # Placeholder
+                        student_params = {
+                            "OrgCode": org_code,
+                            "TopicID": int(topic_id),
+                            "LoginID": login_id
+                        }
+                        try:
+                            student_response = requests.post(API_STUDENT_WEAK_CONCEPTS, json=student_params, headers=headers)
+                            student_response.raise_for_status()
+                            student_weak_concepts = student_response.json()
+
+                            # Debugging: Display fetched student weak concepts
+                            st.write("### Debugging: Fetched Student Weak Concepts")
+                            st.json(student_weak_concepts)
+
+                            if student_weak_concepts:
+                                st.session_state.student_weak_concepts = student_weak_concepts
+                            else:
+                                st.warning("No weak concepts found for the student.")
+                        except requests.exceptions.RequestException as e:
+                            st.error(f"Error fetching student weak concepts: {e}")
+                            st.session_state.student_weak_concepts = []
+
                 st.rerun()
             else:
                 st.error("🚫 Authentication failed. Please check your credentials.")
@@ -499,7 +554,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.rerun()
+        st.experimental_rerun()
 
 def get_gpt_response(user_input):
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
@@ -516,7 +571,7 @@ Teacher Mode Instructions:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Student Mode Instructions:
 - The student is in {branch_name}, following the NCERT curriculum.
-- only talk about {topic_name} and nothing else.
+- Only talk about {topic_name} and nothing else.
 - Encourage the student to think critically and solve problems step-by-step.
 - Avoid giving direct answers; ask guiding questions.
 - Be supportive and build understanding and confidence.
@@ -597,7 +652,7 @@ def main_screen():
     with col2:
         if st.button("Logout"):
             st.session_state.clear()
-            st.rerun()
+            st.experimental_rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
@@ -685,7 +740,6 @@ def main_screen():
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
-
         else:
             # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
@@ -710,17 +764,22 @@ def main_screen():
 
             with tab2:
                 # Learning Path is only for students
-                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                weak_concepts = st.session_state.student_weak_concepts
+
+                # Debugging: Display weak_concepts
+                st.write("### Debugging: Student Weak Concepts")
+                st.json(weak_concepts)
 
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
+                        # Check if we have weak concepts
                         if weak_concepts:
                             with st.spinner("Generating learning path..."):
                                 st.session_state.learning_path = generate_learning_path(weak_concepts)
                                 st.session_state.learning_path_generated = True
                         else:
                             st.error("No weak concepts found!")
-                
+
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
                     if st.button("📄 Download Learning Path as PDF"):
