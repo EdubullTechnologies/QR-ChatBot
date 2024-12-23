@@ -476,6 +476,7 @@ def login_screen():
             auth_data = auth_response.json()
             if auth_data.get("statusCode") == 1:
                 st.session_state.auth_data = auth_data
+                st.session_state.weak_concepts = auth_data.get("WeakConceptList", [])
                 st.session_state.is_authenticated = True
                 st.session_state.topic_id = int(topic_id)
                 st.session_state.is_teacher = (user_type_value == 2)
@@ -707,55 +708,12 @@ def main_screen():
             with tab2:
                 st.subheader("🧠 Learning Path")
             
-                # Debugging: Check Topic ID and Headers
-                st.markdown("### Debugging: Topic ID")
-                st.write(st.session_state.topic_id)
-                
-                headers = {
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                    "Accept": "application/json"
-                }
-                st.markdown("### Debugging: Request Headers")
-                st.json(headers)
+                # Attempt to fetch weak concepts from session state
+                weak_concepts = st.session_state.weak_concepts
             
-                # Attempt to fetch weak concepts
-                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-            
-                if not weak_concepts:
-                    # Retry fetching weak concepts if the initial list is empty
-                    st.markdown("### Debugging: Weak Concepts List")
-                    st.json(weak_concepts)  # Log initial attempt
-            
-                    try:
-                        # Formulate payload
-                        retry_payload = {"TopicID": st.session_state.topic_id}
-                        st.markdown("### Debugging: Request Payload")
-                        st.json(retry_payload)  # Log payload
-            
-                        # Make the API request
-                        retry_response = requests.post(
-                            API_CONTENT_URL,
-                            json=retry_payload,
-                            headers=headers
-                        )
-                        retry_response.raise_for_status()
-                        response_data = retry_response.json()
-            
-                        # Log the full API response
-                        st.markdown("### Debugging: Full API Response")
-                        st.json(response_data)
-            
-                        # Extract weak concepts from response
-                        weak_concepts = response_data.get("WeakConceptList", [])
-                        st.session_state.auth_data["WeakConceptList"] = weak_concepts
-                        st.markdown("### Debugging: Weak Concepts List After Retry")
-                        st.json(weak_concepts)
-            
-                    except requests.exceptions.RequestException as req_err:
-                        st.error(f"Request Error: {req_err}")
-                    except Exception as e:
-                        st.error(f"Unexpected Error: {e}")
+                # Debugging: Log weak concepts
+                st.markdown("### Debugging: Weak Concepts List")
+                st.json(weak_concepts)
             
                 # Generate Learning Path
                 if not st.session_state.learning_path_generated:
@@ -785,6 +743,7 @@ def main_screen():
                             )
                         except Exception as e:
                             st.error(f"Error creating PDF: {e}")
+
 
 
 
