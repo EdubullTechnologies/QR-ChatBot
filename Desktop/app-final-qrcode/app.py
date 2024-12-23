@@ -607,10 +607,11 @@ def main_screen():
         unsafe_allow_html=True,
     )
 
+    # --------- TEACHER FLOW ----------
     if st.session_state.is_teacher:
-        # Teacher Mode
+        # Teacher sees only two tabs: Chat + Teacher Dashboard
         if st.session_state.is_english_mode:
-            # Teacher in English mode: Chat + Teacher Dashboard
+            # Teacher in English mode
             tabs = st.tabs(["Chat", "Teacher Dashboard"])
             with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -635,7 +636,7 @@ def main_screen():
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
         else:
-            # Teacher in Non-English mode: Chat + Teacher Dashboard
+            # Teacher in Non-English mode
             tabs = st.tabs(["Chat", "Teacher Dashboard"])
             with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -659,10 +660,12 @@ def main_screen():
             with tabs[1]:
                 st.subheader("Teacher Dashboard")
                 teacher_dashboard()
+
+    # --------- STUDENT FLOW ----------
     else:
-        # Student Mode
+        # Student
         if st.session_state.is_english_mode:
-            # English Student: only Chat
+            # English Student: Only Chat
             tab1 = st.tabs(["Chat"])[0]
             with tab1:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -682,6 +685,7 @@ def main_screen():
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
+
         else:
             # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["Chat", "Learning Path", "Concepts"])
@@ -705,34 +709,27 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
-                if "learning_path_generated" not in st.session_state:
-                    st.session_state.learning_path_generated = False
-                    st.session_state.learning_path = None
-        
+                # Learning Path is only for students
+                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
-                        weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
                         if weak_concepts:
                             with st.spinner("Generating learning path..."):
                                 st.session_state.learning_path = generate_learning_path(weak_concepts)
                                 st.session_state.learning_path_generated = True
                         else:
                             st.error("No weak concepts found!")
-        
-                # Display learning path if generated
+                
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
-                    
-                    # PDF Download Button
                     if st.button("📄 Download Learning Path as PDF"):
                         try:
                             pdf_bytes = generate_learning_path_pdf(
-                                st.session_state.learning_path, 
-                                user_name, 
+                                st.session_state.learning_path,
+                                user_name,
                                 topic_name
                             )
-                            
-                            # Create download button
                             st.download_button(
                                 label="Click here to download PDF",
                                 data=pdf_bytes,
@@ -742,6 +739,15 @@ def main_screen():
                         except Exception as e:
                             st.error(f"Error creating PDF: {e}")
 
+            with tab3:
+                concept_list = st.session_state.auth_data.get('ConceptList', [])
+                concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
+                for c_text, c_id in concept_options.items():
+                    if st.button(c_text, key=f"concept_{c_id}"):
+                        st.session_state.selected_concept_id = c_id
+
+                if st.session_state.selected_concept_id:
+                    load_concept_content()
 
 if st.session_state.is_authenticated:
     main_screen()
