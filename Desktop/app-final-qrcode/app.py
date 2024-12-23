@@ -15,7 +15,7 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
 from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
-
+from pathlib import Path
 # Ignore all deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
@@ -82,16 +82,17 @@ hide_st_style = """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # Load custom CSS
-def load_css(file_name):
+def load_css(file_name: str):
     """
     Load and inject CSS styles from an external file.
     """
-    try:
-        with open(file_name) as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-    except FileNotFoundError:
-        st.error(f"CSS file '{file_name}' not found.")
-
+    css_path = Path(__file__).parent / file_name
+    if css_path.exists():
+        with open(css_path) as f:
+            css = f.read()
+            st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
+    else:
+        st.error(f"CSS file '{file_name}' not found. Please ensure it is in the same directory as the main app script.")
 # Call the function to load styles.css
 load_css("styles.css")
 
