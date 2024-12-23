@@ -707,37 +707,35 @@ def main_screen():
             with tab2:
                 st.subheader("🧠 Learning Path")
 
-                # Attempt to fetch weak concepts from auth_data
+                # Fetch weak concepts from auth_data
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
                 
-                # Debugging: Log weak concepts
+                # Debugging output for weak concepts
                 st.markdown("### Debugging: Weak Concepts List")
                 st.json(weak_concepts)
 
-                # Retry logic for fetching weak concepts (if needed)
-                if not weak_concepts:
-                    try:
-                        headers = {"Content-Type": "application/json"}
-                        retry_response = requests.post(API_CONTENT_URL, json={"TopicID": st.session_state.topic_id}, headers=headers)
-                        retry_response.raise_for_status()
-                        weak_concepts = retry_response.json().get("WeakConceptList", [])
-                        st.session_state.auth_data["WeakConceptList"] = weak_concepts
-                    except Exception as e:
-                        st.error(f"Error fetching weak concepts: {e}")
-
-                # Generate Learning Path
-                if not st.session_state.learning_path_generated:
-                    if st.button("🧠 Generate Learning Path"):
-                        if weak_concepts:
+                # Ensure weak concepts are available
+                if weak_concepts:
+                    if not st.session_state.learning_path_generated:
+                        # Show button to generate the learning path
+                        if st.button("🧠 Generate Learning Path"):
                             with st.spinner("Generating learning path..."):
-                                st.session_state.learning_path = generate_learning_path(weak_concepts)
-                                st.session_state.learning_path_generated = True
-                        else:
-                            st.error("No weak concepts found!")
+                                try:
+                                    st.session_state.learning_path = generate_learning_path(weak_concepts)
+                                    st.session_state.learning_path_generated = True
+                                    st.success("Learning path generated successfully!")
+                                except Exception as e:
+                                    st.error(f"Error generating learning path: {e}")
 
-                # Display Learning Path if generated
+                else:
+                    st.warning("No weak concepts found!")
+
+                # Display the generated learning path
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
+                    st.markdown("### Generated Learning Path")
                     display_learning_path(st.session_state.learning_path)
+
+                    # Button to download the PDF
                     if st.button("📄 Download Learning Path as PDF"):
                         try:
                             pdf_bytes = generate_learning_path_pdf(
@@ -753,6 +751,7 @@ def main_screen():
                             )
                         except Exception as e:
                             st.error(f"Error creating PDF: {e}")
+
 
             with tab3:
                 concept_list = st.session_state.auth_data.get('ConceptList', [])
