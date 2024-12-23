@@ -229,15 +229,46 @@ def generate_learning_path(weak_concepts):
     return learning_path
 
 def display_learning_path(learning_path):
-    MATH_REGEX = r"(\$\$.*?\$\$|\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\])"
+    """
+    Display the generated learning path with enhanced formatting.
+    """
+    MATH_REGEX = r"(\$\$.*?\$\$|\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\])"  
+    
     with st.expander("📚 Generated Learning Path", expanded=True):
         for concept, path in learning_path.items():
-            st.markdown(f"### Weak Concept: {concept}")
+            # Concept Header with Emoji
+            st.markdown(f"### 🧩 **Weak Concept:** {concept}")
+            st.markdown("---")  # Horizontal divider
+            
+            # Split the learning path into parts (math and non-math)
             parts = re.split(MATH_REGEX, path)
+            
+            # Initialize an empty string to accumulate markdown content
+            markdown_content = ""
+            
             for part in parts:
                 part = part.strip()
-                if part:
-                    st.markdown(part)
+                if re.match(MATH_REGEX, part):
+                    try:
+                        # Clean LaTeX delimiters for Streamlit's st.latex
+                        clean_part = re.sub(r"(\$\$|\\\(|\\\[)", "", part)
+                        clean_part = re.sub(r"(\$\$|\\\)|\\\]|\\\[)", "", clean_part)
+                        markdown_content += f"#### 📐 Mathematical Expression:\n"
+                        markdown_content += f"`{part}`\n\n"
+                        # Display LaTeX using st.latex
+                        st.latex(clean_part)
+                    except Exception as e:
+                        markdown_content += f"**Math Error:** Unable to render `{part}`. Error: {e}\n\n"
+                elif part:
+                    # Append non-math content
+                    markdown_content += f"{part}\n\n"
+            
+            # Display the accumulated markdown content
+            if markdown_content:
+                st.markdown(markdown_content)
+            
+            st.markdown("<br>", unsafe_allow_html=True)  # Extra space after each concept
+
 
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
