@@ -61,9 +61,6 @@ if "generated_description" not in st.session_state:
     st.session_state.generated_description = ""
 if "is_english_mode" not in st.session_state:
     st.session_state.is_english_mode = False  # default initialization
-if "weak_concepts" not in st.session_state:
-    st.session_state.weak_concepts = []
-
 
 # Page config
 st.set_page_config(
@@ -423,7 +420,7 @@ def login_screen():
     st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
     user_type = st.radio("Select User Type", ["Student", "Teacher"])
-    user_type_value = 2 if user_type == "Teacher" else 1
+    user_type_value = 2 if user_type == "Teacher" else None  # Set to None for students
 
     org_code = st.text_input("🏫 School Code", key="org_code")
     login_id = st.text_input("👤 Login ID", key="login_id")
@@ -466,8 +463,11 @@ def login_screen():
             'TopicID': int(topic_id),
             'LoginID': login_id,
             'Password': password,
-            'UserType': user_type_value
         }
+
+        if user_type_value:
+            auth_payload['UserType'] = user_type_value  # Only add if user is Teacher
+
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0",
@@ -479,15 +479,20 @@ def login_screen():
             auth_data = auth_response.json()
             if auth_data.get("statusCode") == 1:
                 st.session_state.auth_data = auth_data
-                st.session_state.weak_concepts = auth_data.get("WeakConceptList", [])
                 st.session_state.is_authenticated = True
                 st.session_state.topic_id = int(topic_id)
                 st.session_state.is_teacher = (user_type_value == 2)
+                
+                # Debugging: Display auth_data
+                st.write("🔍 **Auth Data:**")
+                st.json(auth_data)
+                
                 st.rerun()
             else:
                 st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+
 
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
@@ -709,46 +714,39 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
-                st.subheader("🧠 Learning Path")
-            
-                # Attempt to fetch weak concepts from session state
-                weak_concepts = st.session_state.weak_concepts
-            
-                # Debugging: Log weak concepts
-                st.markdown("### Debugging: Weak Concepts List")
-                st.json(weak_concepts)
-            
-                # Generate Learning Path
+               
+
+                # Attempt to fetch weak concepts
+                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                
+
                 if not st.session_state.learning_path_generated:
                     if st.button("🧠 Generate Learning Path"):
+                        # Check if we have weak concepts
                         if weak_concepts:
                             with st.spinner("Generating learning path..."):
                                 st.session_state.learning_path = generate_learning_path(weak_concepts)
                                 st.session_state.learning_path_generated = True
                         else:
                             st.error("No weak concepts found!")
-            
-                # Display Learning Path if generated
+                
                 if st.session_state.learning_path_generated and st.session_state.learning_path:
                     display_learning_path(st.session_state.learning_path)
                     if st.button("📄 Download Learning Path as PDF"):
                         try:
                             pdf_bytes = generate_learning_path_pdf(
                                 st.session_state.learning_path,
-                                st.session_state.auth_data['UserInfo'][0]['FullName'],
-                                st.session_state.auth_data['TopicName']
+                                user_name,
+                                topic_name
                             )
                             st.download_button(
                                 label="Click here to download PDF",
                                 data=pdf_bytes,
-                                file_name=f"Learning_Path_{st.session_state.auth_data['TopicName']}.pdf",
+                                file_name=f"{user_name}_Learning_Path_{topic_name}.pdf",
                                 mime="application/pdf"
                             )
                         except Exception as e:
                             st.error(f"Error creating PDF: {e}")
-
-
-
 
             with tab3:
                 concept_list = st.session_state.auth_data.get('ConceptList', [])
