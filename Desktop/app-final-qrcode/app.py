@@ -8,6 +8,7 @@ import openai
 import requests
 import streamlit.components.v1 as components
 from PIL import Image
+import requests
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -43,19 +44,6 @@ if "is_authenticated" not in st.session_state:
     st.session_state.is_authenticated = False
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "is_teacher" not in st.session_state:
-    st.session_state.is_teacher = False
-if "topic_id" not in st.session_state:
-    st.session_state.topic_id = None
-if "exam_questions" not in st.session_state:
-    st.session_state.exam_questions = ""
-if "learning_path_generated" not in st.session_state:
-    st.session_state.learning_path_generated = False
-    st.session_state.learning_path = None
-if "generated_description" not in st.session_state:
-    st.session_state.generated_description = ""
-if "selected_batch_id" not in st.session_state:
-    st.session_state.selected_batch_id = None
 
 # Streamlit page settings
 st.set_page_config(
@@ -160,7 +148,6 @@ def generate_learning_path_pdf(learning_path, user_name, topic_name):
     
     return pdf_bytes
 
-
 # Utility Function to Generate Learning Path
 def generate_learning_path(weak_concepts):
     """
@@ -191,7 +178,6 @@ def generate_learning_path(weak_concepts):
             learning_path[concept_text] = f"Error generating learning path: {e}"
     return learning_path
 
-
 # Utility Function to Display Learning Path
 def display_learning_path(learning_path):
     """
@@ -219,7 +205,6 @@ def display_learning_path(learning_path):
                         st.markdown(f"**Math Error:** Unable to render `{part}`. Error: {e}")
                 elif part:  # Handle non-empty non-math text
                     st.markdown(part)
-
 
 # Define login screen
 def login_screen():
@@ -293,7 +278,7 @@ def login_screen():
                 auth_response.raise_for_status()
                 auth_data = auth_response.json()
 
-                # Debugging: Display auth_data structure
+                # **Debugging: Display auth_data structure**
                 st.markdown("### 🛠️ Debugging: Authentication Data")
                 st.json(auth_data)
 
@@ -316,7 +301,7 @@ def login_screen():
                             auth_data.get("WeakconceptList", [])
                         )
 
-                        # Debugging: Display retrieved weak concepts
+                        # **Debugging: Display retrieved weak concepts**
                         st.markdown("### 🛠️ Debugging: Retrieved Weak Concepts from auth_data")
                         st.json(weak_concepts)
 
@@ -336,7 +321,7 @@ def login_screen():
                                 student_response.raise_for_status()
                                 student_weak_concepts = student_response.json()
 
-                                # Debugging: Display fetched student weak concepts
+                                # **Debugging: Display fetched student weak concepts**
                                 st.markdown("### 🛠️ Debugging: Fetched Student Weak Concepts")
                                 st.json(student_weak_concepts)
 
@@ -371,8 +356,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.experimental_rerun()  # Force rerun to immediately display the new message
-
+        st.rerun()  # Force rerun to immediately display the new message
 
 # Define the main screen
 def main_screen():
@@ -385,7 +369,7 @@ def main_screen():
         if st.button("Logout"):
             # Clear session states related to authentication and conversation history
             st.session_state.clear()  # Clears all session states
-            st.experimental_rerun()  # Refresh the app to go back to the login screen
+            st.rerun()  # Refresh the app to go back to the login screen
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
 
@@ -397,7 +381,7 @@ def main_screen():
         unsafe_allow_html=True,
     )
     
-    # Determine which tabs to show based on user type
+    # Tabs for different functionalities
     if st.session_state.is_teacher:
         # Teacher sees only Chat and Resources tabs
         tab1, tab2 = st.tabs(["Chat", "Resources"])
@@ -479,7 +463,6 @@ def main_screen():
         if st.session_state.selected_concept_id:
             load_concept_content()
 
-
 # Function to get GPT-4 response
 def get_gpt_response(user_input):
     if st.session_state.is_teacher:
@@ -513,7 +496,6 @@ Student Mode Instructions:
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
         st.error(f"Error in GPT-4 response generation: {e}")
-
 
 # Function to load content and generate a description for the selected concept
 def load_concept_content():
@@ -565,7 +547,6 @@ def load_concept_content():
     except Exception as e:
         st.error(f"Error generating concept description: {e}")
 
-
 # Function to display resources (videos, notes, exercises) with generated concept description
 def display_resources(content_data):
     with st.expander("Resources", expanded=True):
@@ -591,7 +572,6 @@ def display_resources(content_data):
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                 st.write(f"- [Exercise]({exercise_url})")
-
 
 # Display login or main screen based on authentication
 if st.session_state.is_authenticated:
