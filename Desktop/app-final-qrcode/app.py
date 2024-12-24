@@ -370,23 +370,24 @@ def display_learning_path(concept_text, learning_path):
             mime="application/pdf"
         )
 
-# Enhanced Resources Display Function
+# Enhanced Resources Display Function (Modified to remove inner expander)
 def display_resources(content_data):
-    with st.expander("📚 Resources", expanded=True):
-        concept_description = st.session_state.get("generated_description", "No description available.")
-        st.markdown(f"### Concept Description\n{concept_description}\n")
-        if content_data.get("Video_List"):
-            for video in content_data["Video_List"]:
-                video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                st.write(f"- [Video 🎥]({video_url})")
-        if content_data.get("Notes_List"):
-            for note in content_data["Notes_List"]:
-                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                st.write(f"- [Notes 📄]({note_url})")
-        if content_data.get("Exercise_List"):
-            for exercise in content_data["Exercise_List"]:
-                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                st.write(f"- [Exercise 📝]({exercise_url})")
+    """
+    Display resources without nesting expanders.
+    """
+    st.markdown("### 📚 Resources")
+    if content_data.get("Video_List"):
+        for video in content_data["Video_List"]:
+            video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
+            st.write(f"- [Video 🎥]({video_url})")
+    if content_data.get("Notes_List"):
+        for note in content_data["Notes_List"]:
+            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+            st.write(f"- [Notes 📄]({note_url})")
+    if content_data.get("Exercise_List"):
+        for exercise in content_data["Exercise_List"]:
+            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+            st.write(f"- [Exercise 📝]({exercise_url})")
 
 # Teacher Dashboard Function
 def teacher_dashboard():
