@@ -250,13 +250,8 @@ def display_learning_path(learning_path):
                 part = part.strip()
                 if re.match(MATH_REGEX, part):
                     try:
-                        # Clean LaTeX delimiters for Streamlit's st.latex
-                        clean_part = re.sub(r"(\$\$|\\\(|\\\[)", "", part)
-                        clean_part = re.sub(r"(\$\$|\\\)|\\\]|\\\[)", "", clean_part)
-                        markdown_content += f"#### 📐 Mathematical Expression:\n"
-                        markdown_content += f"`{part}`\n\n"
-                        # Display LaTeX using st.latex
-                        st.latex(clean_part)
+                        # Retain LaTeX delimiters for Markdown rendering
+                        markdown_content += f"#### 📐 Mathematical Expression:\n{part}\n\n"
                     except Exception as e:
                         markdown_content += f"**Math Error:** Unable to render `{part}`. Error: {e}\n\n"
                 elif part:
