@@ -693,15 +693,10 @@ def get_gpt_response(user_input):
         st.error(f"Error in GPT response generation: {e}")
 
 # Concept Content Loading Function
-def load_concept_content():
-    selected_concept_id = st.session_state.selected_concept_id
-    selected_concept_name = next(
-        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
-        "Unknown Concept"
-    )
+def load_concept_content(concept_id, concept_text):
     content_payload = {
         'TopicID': st.session_state.topic_id,
-        'ConceptID': int(selected_concept_id)
+        'ConceptID': int(concept_id)
     }
     headers = {
         "Content-Type": "application/json",
@@ -714,13 +709,13 @@ def load_concept_content():
             content_response.raise_for_status()
             content_data = content_response.json()
 
-            prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
+            prompt = f"Provide a concise and educational description of the concept '{concept_text}' to help students understand it better."
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "system", "content": prompt}],
                 max_tokens=500
             ).choices[0].message['content'].strip()
-            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
+            gpt_response = gpt_response.replace("This concept", concept_text).replace("this concept", concept_text)
             gpt_response += "\n\nYou can check the resources below for more information."
             st.session_state.generated_description = gpt_response
 
@@ -873,9 +868,10 @@ def main_screen():
                             st.session_state.selected_concept_id = concept_id
                             st.session_state.selected_concept_text = concept_text
 
-                    # Load and display concept content if selected
-                    if st.session_state.selected_concept_id:
-                        load_concept_content()
+                        # If this concept is selected, display its content here
+                        if st.session_state.selected_concept_id == concept_id:
+                            with st.expander(f"Details for {concept_text}", expanded=True):
+                                load_concept_content(concept_id, concept_text)
 
 # Display login or main screen based on authentication
 def main():
