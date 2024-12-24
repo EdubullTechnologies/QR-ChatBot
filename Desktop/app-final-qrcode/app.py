@@ -339,7 +339,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Corrected model name
+            model="gpt-4o-mini",  # Corrected model name
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1000
         ).choices[0].message['content'].strip()
@@ -486,7 +486,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4",  # Corrected model name
+                            model="gpt-4o-mini",  # Corrected model name
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=2000
                         )
@@ -701,7 +701,7 @@ def get_gpt_response(user_input):
     
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Ensure you're using the correct model
+            model="gpt-4o-mini",  # Ensure you're using the correct model
             messages=conversation_history_formatted,
             max_tokens=2000
         ).choices[0].message['content'].strip()
@@ -731,7 +731,9 @@ def load_concept_content():
             content_response.raise_for_status()
             content_data = content_response.json()
 
-            prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
+            prompt = (f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
+                      f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)"
+                     )
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4o-mini",  # Corrected model name
                 messages=[{"role": "system", "content": prompt}],
