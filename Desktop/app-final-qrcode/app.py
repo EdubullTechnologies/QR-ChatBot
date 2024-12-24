@@ -23,7 +23,6 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
 from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
-import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
@@ -185,8 +184,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         story.append(ListFlowable(question_items, bulletType='1'))
         story.append(Spacer(1, 12))
 
-    # Build the PDF with LaTeX images
-    # Reset the buffer and rebuild the story to include images
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
@@ -299,14 +296,13 @@ def display_learning_path(concept_text, learning_path):
     """
     Display the generated learning path with enhanced formatting for a single concept.
     """
-    # Remove the '📐 Mathematical Expression:' labels and render LaTeX directly
+    # Use Streamlit's markdown to render LaTeX directly without additional labels
     with st.expander(f"📚 Learning Path for {concept_text}", expanded=False):
-        # Use Streamlit's markdown to render LaTeX
         st.markdown(learning_path, unsafe_allow_html=True)
 
         # Download Button for the specific learning path
         pdf_bytes = generate_learning_path_pdf(
-            {concept_text: learning_path},
+            learning_path,  # Passing a string instead of a dict
             concept_text,
             st.session_state.auth_data['UserInfo'][0]['FullName']
         )
