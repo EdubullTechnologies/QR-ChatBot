@@ -9,12 +9,22 @@ import requests
 from PIL import Image
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, PageBreak
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    ListFlowable,
+    ListItem,
+    Image as RLImage,
+    PageBreak
+)
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
 from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
 
 # Ignore all deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -83,6 +93,24 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
+# Helper function to convert LaTeX to image
+def latex_to_image(latex_code, dpi=300):
+    """
+    Converts LaTeX code to a PNG image and returns it as a BytesIO object.
+    """
+    try:
+        plt.figure(figsize=(0.01, 0.01))
+        plt.text(0.5, 0.5, f"${latex_code}$", fontsize=12, ha='center', va='center')
+        plt.axis('off')
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.1, transparent=True)
+        plt.close()
+        buf.seek(0)
+        return buf
+    except Exception as e:
+        st.error(f"Error converting LaTeX to image: {e}")
+        return None
+
 # PDF Generation Functions
 def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer = io.BytesIO()
@@ -146,10 +174,18 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         # Add questions as a numbered list
         question_items = []
         for line in lines[1:]:
+            # Detect LaTeX expressions in the line
+            latex_matches = re.findall(r'\$(.*?)\$', line)
+            if latex_matches:
+                for latex in latex_matches:
+                    # Replace LaTeX with placeholder
+                    line = line.replace(f"${latex}$", f"{{{{latex_{latex}}}}}")
             question_items.append(ListItem(Paragraph(line, question_style)))
         story.append(ListFlowable(question_items, bulletType='1'))
         story.append(Spacer(1, 12))
 
+    # Build the PDF with LaTeX images
+    # Reset the buffer and rebuild the story to include images
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
@@ -194,16 +230,38 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    MATH_REGEX = r"(\$\$.*?\$\$|\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\])"
-    for concept, path in learning_path.items():
-        story.append(Paragraph(f"Weak Concept: {concept}", styles['Heading3']))
+    # Process each section in the learning path
+    sections = re.split(r'\n\n', learning_path.strip())
+    for section in sections:
+        lines = [line.strip() for line in section.split('\n') if line.strip()]
+        if not lines:
+            continue
+        # First line as section header
+        story.append(Paragraph(lines[0], styles['Heading3']))
         story.append(Spacer(1, 6))
-        parts = re.split(MATH_REGEX, path)
-        for part in parts:
-            part = part.strip()
-            if part:
-                story.append(Paragraph(part, content_style))
-                story.append(Spacer(1, 6))
+
+        for line in lines[1:]:
+            # Detect LaTeX expressions in the line
+            latex_matches = re.findall(r'\$(.*?)\$', line)
+            if latex_matches:
+                for latex in latex_matches:
+                    # Convert LaTeX to image
+                    img_buffer = latex_to_image(latex)
+                    if img_buffer:
+                        # Add text before LaTeX
+                        pre_text = line.split(f"${latex}$")[0]
+                        post_text = line.split(f"${latex}$")[1] if f"${latex}$" in line else ""
+                        if pre_text:
+                            story.append(Paragraph(pre_text, content_style))
+                        # Add LaTeX image
+                        img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
+                        story.append(img)
+                        if post_text:
+                            story.append(Paragraph(post_text, content_style))
+            else:
+                # Regular text
+                story.append(Paragraph(line, content_style))
+            story.append(Spacer(1, 6))
         story.append(Spacer(1, 12))
 
     doc.build(story)
@@ -240,28 +298,11 @@ def display_learning_path(concept_text, learning_path):
     """
     Display the generated learning path with enhanced formatting for a single concept.
     """
-    MATH_REGEX = r"(\$\$.*?\$\$|\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\])"  
-
+    # Remove the '📐 Mathematical Expression:' labels and render LaTeX directly
     with st.expander(f"📚 Learning Path for {concept_text}", expanded=False):
-        # Split the learning path into parts (math and non-math)
-        parts = re.split(MATH_REGEX, learning_path)
-        
-        # Initialize an empty string to accumulate markdown content
-        markdown_content = ""
-        
-        for part in parts:
-            part = part.strip()
-            if re.match(MATH_REGEX, part):
-                # Retain LaTeX delimiters for Markdown rendering
-                markdown_content += f"#### 📐 Mathematical Expression:\n{part}\n\n"
-            elif part:
-                # Append non-math content
-                markdown_content += f"{part}\n\n"
-        
-        # Display the accumulated markdown content
-        if markdown_content:
-            st.markdown(markdown_content)
-        
+        # Use Streamlit's markdown to render LaTeX
+        st.markdown(learning_path, unsafe_allow_html=True)
+
         # Download Button for the specific learning path
         pdf_bytes = generate_learning_path_pdf(
             {concept_text: learning_path},
@@ -401,7 +442,7 @@ def teacher_dashboard():
 
         if st.session_state.exam_questions:
             branch_name = st.session_state.auth_data.get("BranchName", "their class")
-            st.markdown(f"### Generated Exam Questions for {branch_name}")
+            st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
             st.markdown(st.session_state.exam_questions)
 
             pdf_bytes = generate_exam_questions_pdf(
@@ -550,7 +591,7 @@ def login_screen():
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
-# Placeholder for undefined functions
+# Chat-related functions
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
@@ -582,7 +623,7 @@ Teacher Mode Instructions:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Student Mode Instructions:
 - The student is in {branch_name}, following the NCERT curriculum.
-- only talk about {topic_name} and nothing else.
+- Only talk about {topic_name} and nothing else.
 - Encourage the student to think critically and solve problems step-by-step.
 - Avoid giving direct answers; ask guiding questions.
 - Be supportive and build understanding and confidence.
@@ -601,6 +642,7 @@ Student Mode Instructions:
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
 
+# Concept Content Loading Function
 def load_concept_content():
     selected_concept_id = st.session_state.selected_concept_id
     selected_concept_name = next(
@@ -617,27 +659,29 @@ def load_concept_content():
         "Accept": "application/json"
     }
     try:
-        content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-        content_response.raise_for_status()
-        content_data = content_response.json()
+        with st.spinner("🔄 Fetching concept content..."):
+            content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+            content_response.raise_for_status()
+            content_data = content_response.json()
 
-        prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
-        gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Corrected model name
-            messages=[{"role": "system", "content": prompt}],
-            max_tokens=500
-        ).choices[0].message['content'].strip()
-        gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
-        gpt_response += "\n\nYou can check the resources below for more information."
-        st.session_state.generated_description = gpt_response
+            prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4",  # Corrected model name
+                messages=[{"role": "system", "content": prompt}],
+                max_tokens=500
+            ).choices[0].message['content'].strip()
+            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
+            gpt_response += "\n\nYou can check the resources below for more information."
+            st.session_state.generated_description = gpt_response
 
-        display_resources(content_data)
+            display_resources(content_data)
 
     except requests.exceptions.RequestException as req_err:
         st.error(f"Error fetching content: {req_err}")
     except Exception as e:
         st.error(f"Error generating concept description: {e}")
 
+# Main Screen Function
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
@@ -658,56 +702,29 @@ def main_screen():
 
     if st.session_state.is_teacher:
         # Teacher Mode
-        if st.session_state.is_english_mode:
-            # Teacher in English mode: Chat + Teacher Dashboard
-            tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
-            with tabs[0]:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                chat_container = st.container()
-                with chat_container:
-                    chat_history_html = """
-                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                    """
-                    for role, message in st.session_state.chat_history:
-                        if role == "assistant":
-                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                        else:
-                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                    chat_history_html += "</div>"
-                    st.markdown(chat_history_html, unsafe_allow_html=True)
-                user_input = st.chat_input("Enter your question about the topic")
-                if user_input:
-                    handle_user_input(user_input)
+        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
+        with tabs[0]:
+            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+            add_initial_greeting()
+            chat_container = st.container()
+            with chat_container:
+                chat_history_html = """
+                <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                """
+                for role, message in st.session_state.chat_history:
+                    if role == "assistant":
+                        chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                    else:
+                        chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                chat_history_html += "</div>"
+                st.markdown(chat_history_html, unsafe_allow_html=True)
+            user_input = st.chat_input("Enter your question about the topic")
+            if user_input:
+                handle_user_input(user_input)
 
-            with tabs[1]:
-                st.subheader("Teacher Dashboard")
-                teacher_dashboard()
-        else:
-            # Teacher in Non-English mode: Chat + Teacher Dashboard
-            tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
-            with tabs[0]:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                chat_container = st.container()
-                with chat_container:
-                    chat_history_html = """
-                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                    """
-                    for role, message in st.session_state.chat_history:
-                        if role == "assistant":
-                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                        else:
-                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                    chat_history_html += "</div>"
-                    st.markdown(chat_history_html, unsafe_allow_html=True)
-                user_input = st.chat_input("Enter your question about the topic")
-                if user_input:
-                    handle_user_input(user_input)
-
-            with tabs[1]:
-                st.subheader("Teacher Dashboard")
-                teacher_dashboard()
+        with tabs[1]:
+            st.subheader("Teacher Dashboard")
+            teacher_dashboard()
     else:
         # Student Mode
         if st.session_state.is_english_mode:
