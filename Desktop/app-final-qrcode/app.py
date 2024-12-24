@@ -99,6 +99,8 @@ def latex_to_image(latex_code, dpi=300):
     Converts LaTeX code to a PNG image and returns it as a BytesIO object.
     """
     try:
+        # Adjust figure size based on display or inline math
+        # For simplicity, we'll use a default size; can be adjusted as needed
         plt.figure(figsize=(0.01, 0.01))
         plt.text(0.5, 0.5, f"${latex_code}$", fontsize=12, ha='center', va='center')
         plt.axis('off')
@@ -175,12 +177,46 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         question_items = []
         for line in lines[1:]:
             # Detect LaTeX expressions in the line
-            latex_matches = re.findall(r'\$(.*?)\$', line)
+            latex_matches = re.finditer(r'\$\$(.*?)\$\$|\$(.*?)\$', line)
             if latex_matches:
-                for latex in latex_matches:
-                    # Replace LaTeX with placeholder
-                    line = line.replace(f"${latex}$", f"{{{{latex_{latex}}}}}")
-            question_items.append(ListItem(Paragraph(line, question_style)))
+                # Keep track of the last index processed
+                last_index = 0
+                for match in latex_matches:
+                    if match.group(1):
+                        # Display math
+                        latex = match.group(1).strip()
+                        display_math = True
+                    else:
+                        # Inline math
+                        latex = match.group(2).strip()
+                        display_math = False
+
+                    if latex:
+                        # Add text before LaTeX
+                        pre_text = line[last_index:match.start()]
+                        if pre_text:
+                            question_items.append(ListItem(Paragraph(pre_text, question_style)))
+
+                        # Convert LaTeX to image
+                        img_buffer = latex_to_image(latex)
+                        if img_buffer:
+                            # Adjust image size based on math type
+                            if display_math:
+                                img = RLImage(img_buffer, width=4*inch, height=1*inch)
+                            else:
+                                img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
+                            question_items.append(ListItem(img))
+                        
+                        # Update last_index
+                        last_index = match.end()
+
+                # Add remaining text after last LaTeX
+                post_text = line[last_index:]
+                if post_text:
+                    question_items.append(ListItem(Paragraph(post_text, question_style)))
+            else:
+                # Regular text
+                question_items.append(ListItem(Paragraph(line, question_style)))
         story.append(ListFlowable(question_items, bulletType='1'))
         story.append(Spacer(1, 12))
 
@@ -240,22 +276,43 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
 
         for line in lines[1:]:
             # Detect LaTeX expressions in the line
-            latex_matches = re.findall(r'\$(.*?)\$', line)
+            latex_matches = re.finditer(r'\$\$(.*?)\$\$|\$(.*?)\$', line)
             if latex_matches:
-                for latex in latex_matches:
-                    # Convert LaTeX to image
-                    img_buffer = latex_to_image(latex)
-                    if img_buffer:
+                # Keep track of the last index processed
+                last_index = 0
+                for match in latex_matches:
+                    if match.group(1):
+                        # Display math
+                        latex = match.group(1).strip()
+                        display_math = True
+                    else:
+                        # Inline math
+                        latex = match.group(2).strip()
+                        display_math = False
+
+                    if latex:
                         # Add text before LaTeX
-                        pre_text = line.split(f"${latex}$")[0]
-                        post_text = line.split(f"${latex}$")[1] if f"${latex}$" in line else ""
+                        pre_text = line[last_index:match.start()]
                         if pre_text:
                             story.append(Paragraph(pre_text, content_style))
-                        # Add LaTeX image
-                        img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
-                        story.append(img)
-                        if post_text:
-                            story.append(Paragraph(post_text, content_style))
+
+                        # Convert LaTeX to image
+                        img_buffer = latex_to_image(latex)
+                        if img_buffer:
+                            # Adjust image size based on math type
+                            if display_math:
+                                img = RLImage(img_buffer, width=4*inch, height=1*inch)
+                            else:
+                                img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
+                            story.append(img)
+                        
+                        # Update last_index
+                        last_index = match.end()
+
+                # Add remaining text after last LaTeX
+                post_text = line[last_index:]
+                if post_text:
+                    story.append(Paragraph(post_text, content_style))
             else:
                 # Regular text
                 story.append(Paragraph(line, content_style))
@@ -296,13 +353,13 @@ def display_learning_path(concept_text, learning_path):
     """
     Display the generated learning path with enhanced formatting for a single concept.
     """
-    # Use Streamlit's markdown to render LaTeX directly without additional labels
+    # Directly render the learning path using Streamlit's markdown
     with st.expander(f"📚 Learning Path for {concept_text}", expanded=False):
         st.markdown(learning_path, unsafe_allow_html=True)
 
         # Download Button for the specific learning path
         pdf_bytes = generate_learning_path_pdf(
-            learning_path,  # Passing a string instead of a dict
+            learning_path,  # Pass the learning_path string directly
             concept_text,
             st.session_state.auth_data['UserInfo'][0]['FullName']
         )
@@ -437,22 +494,22 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-        if st.session_state.exam_questions:
-            branch_name = st.session_state.auth_data.get("BranchName", "their class")
-            st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
-            st.markdown(st.session_state.exam_questions)
+    if st.session_state.exam_questions:
+        branch_name = st.session_state.auth_data.get("BranchName", "their class")
+        st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
+        st.markdown(st.session_state.exam_questions)
 
-            pdf_bytes = generate_exam_questions_pdf(
-                st.session_state.exam_questions,
-                st.session_state.selected_teacher_concept_text,
-                st.session_state.auth_data['UserInfo'][0]['FullName']
-            )
-            st.download_button(
-                label="📥 Download Exam Questions as PDF",
-                data=pdf_bytes,
-                file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
-                mime="application/pdf"
-            )
+        pdf_bytes = generate_exam_questions_pdf(
+            st.session_state.exam_questions,
+            st.session_state.selected_teacher_concept_text,
+            st.session_state.auth_data['UserInfo'][0]['FullName']
+        )
+        st.download_button(
+            label="📥 Download Exam Questions as PDF",
+            data=pdf_bytes,
+            file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
+            mime="application/pdf"
+        )
 
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
