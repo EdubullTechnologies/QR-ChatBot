@@ -24,7 +24,6 @@ from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
 
 # Ignore all deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -74,6 +73,8 @@ if "is_english_mode" not in st.session_state:
     st.session_state.is_english_mode = False  # default initialization
 if "student_learning_paths" not in st.session_state:
     st.session_state.student_learning_paths = {}  # Dictionary to store multiple learning paths
+if "student_weak_concepts" not in st.session_state:
+    st.session_state.student_weak_concepts = []  # List to store student's weak concepts
 
 # Page config
 st.set_page_config(
@@ -100,7 +101,6 @@ def latex_to_image(latex_code, dpi=300):
     """
     try:
         # Adjust figure size based on display or inline math
-        # For simplicity, we'll use a default size; can be adjusted as needed
         plt.figure(figsize=(0.01, 0.01))
         plt.text(0.5, 0.5, f"${latex_code}$", fontsize=12, ha='center', va='center')
         plt.axis('off')
@@ -206,7 +206,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
                             question_items.append(ListItem(img))
-                        
+
                         # Update last_index
                         last_index = match.end()
 
@@ -305,7 +305,7 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
                             story.append(img)
-                        
+
                         # Update last_index
                         last_index = match.end()
 
@@ -339,7 +339,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Corrected model name
+            model="gpt-4",
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1000
         ).choices[0].message['content'].strip()
@@ -485,7 +485,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4",  # Corrected model name
+                            model="gpt-4",
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=2000
                         )
@@ -494,64 +494,47 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-    if st.session_state.exam_questions:
-        branch_name = st.session_state.auth_data.get("BranchName", "their class")
-        st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
-        st.markdown(st.session_state.exam_questions)
+    def display_additional_graphs(weak_concepts):
+        df = pd.DataFrame(weak_concepts)
+        total_attended = df["AttendedStudentCount"].sum()
+        total_cleared = df["ClearedStudentCount"].sum()
+        total_not_cleared = total_attended - total_cleared
 
-        pdf_bytes = generate_exam_questions_pdf(
-            st.session_state.exam_questions,
-            st.session_state.selected_teacher_concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
+        # Donut chart
+        data_overall = pd.DataFrame({
+            'Category': ['Cleared', 'Not Cleared'],
+            'Count': [total_cleared, total_not_cleared]
+        })
+        donut_chart = alt.Chart(data_overall).mark_arc(innerRadius=50).encode(
+            theta='Count:Q',
+            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
+            tooltip=['Category:N', 'Count:Q']
+        ).properties(
+            title='Overall Cleared vs Not Cleared Students'
         )
-        st.download_button(
-            label="📥 Download Exam Questions as PDF",
-            data=pdf_bytes,
-            file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
-            mime="application/pdf"
+        st.altair_chart(donut_chart, use_container_width=True)
+
+        # Horizontal bar chart
+        df_long = df.melt(
+            id_vars='ConceptText',
+            value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
+            var_name='Category',
+            value_name='Count'
         )
-
-def display_additional_graphs(weak_concepts):
-    df = pd.DataFrame(weak_concepts)
-    total_attended = df["AttendedStudentCount"].sum()
-    total_cleared = df["ClearedStudentCount"].sum()
-    total_not_cleared = total_attended - total_cleared
-
-    # Donut chart
-    data_overall = pd.DataFrame({
-        'Category': ['Cleared', 'Not Cleared'],
-        'Count': [total_cleared, total_not_cleared]
-    })
-    donut_chart = alt.Chart(data_overall).mark_arc(innerRadius=50).encode(
-        theta='Count:Q',
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['Category:N', 'Count:Q']
-    ).properties(
-        title='Overall Cleared vs Not Cleared Students'
-    )
-    st.altair_chart(donut_chart, use_container_width=True)
-
-    # Horizontal bar chart
-    df_long = df.melt(
-        id_vars='ConceptText',
-        value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
-        var_name='Category',
-        value_name='Count'
-    )
-    df_long['Category'] = df_long['Category'].replace({
-        'AttendedStudentCount': 'Attended',
-        'ClearedStudentCount': 'Cleared'
-    })
-    horizontal_bar = alt.Chart(df_long).mark_bar().encode(
-        x=alt.X('Count:Q'),
-        y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
-    ).properties(
-        title='Attended vs Cleared per Concept (Horizontal View)',
-        width=600
-    )
-    st.altair_chart(horizontal_bar, use_container_width=True)
+        df_long['Category'] = df_long['Category'].replace({
+            'AttendedStudentCount': 'Attended',
+            'ClearedStudentCount': 'Cleared'
+        })
+        horizontal_bar = alt.Chart(df_long).mark_bar().encode(
+            x=alt.X('Count:Q'),
+            y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
+            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
+            tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
+        ).properties(
+            title='Attended vs Cleared per Concept (Horizontal View)',
+            width=600
+        )
+        st.altair_chart(horizontal_bar, use_container_width=True)
 
 # Login Screen Function
 def login_screen():
@@ -639,7 +622,10 @@ def login_screen():
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
-                    st.rerun()
+                    # If student, populate weak concepts
+                    if not st.session_state.is_teacher:
+                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+                    st.experimental_rerun()
                 else:
                     st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
@@ -660,12 +646,12 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.rerun()
+        st.experimental_rerun()
 
-def get_gpt_response(user_input):
+def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-
+    
     if st.session_state.is_teacher:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Teacher Mode Instructions:
@@ -674,21 +660,31 @@ Teacher Mode Instructions:
 - Offer insights into student difficulties and how to address them.
 - Maintain a professional, informative tone and provide curriculum-aligned advice."""
     else:
+        # Fetch student's weak concepts
+        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
+        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
+        
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Student Mode Instructions:
 - The student is in {branch_name}, following the NCERT curriculum.
+- The student's weak concepts include: {weak_concepts_text}.
 - Only talk about {topic_name} and nothing else.
 - Encourage the student to think critically and solve problems step-by-step.
 - Avoid giving direct answers; ask guiding questions.
 - Be supportive and build understanding and confidence.
 - If asked for exam questions, provide progressive questions aligned with NCERT and suitable for {branch_name} students."""
+    
+    return system_prompt
 
+def get_gpt_response(user_input):
+    system_prompt = get_system_prompt()
+    
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
-
+    
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Corrected model name
+            model="gpt-4",  # Ensure you're using the correct model
             messages=conversation_history_formatted,
             max_tokens=2000
         ).choices[0].message['content'].strip()
@@ -720,7 +716,7 @@ def load_concept_content():
 
             prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",  # Corrected model name
+                model="gpt-4",
                 messages=[{"role": "system", "content": prompt}],
                 max_tokens=500
             ).choices[0].message['content'].strip()
@@ -744,7 +740,7 @@ def main_screen():
     with col2:
         if st.button("Logout"):
             st.session_state.clear()
-            st.rerun()
+            st.experimental_rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
@@ -826,7 +822,7 @@ def main_screen():
 
             with tab2:
                 st.markdown('<div class="learning-path-header">🧠 Learning Path</div>', unsafe_allow_html=True)
-                weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+                weak_concepts = st.session_state.student_weak_concepts
 
                 if not weak_concepts:
                     st.warning("No weak concepts found.")
@@ -860,14 +856,26 @@ def main_screen():
                             display_learning_path(lp_data["concept_text"], lp_data["learning_path"])
 
             with tab3:
-                concept_list = st.session_state.auth_data.get('ConceptList', [])
-                concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
-                for c_text, c_id in concept_options.items():
-                    if st.button(c_text, key=f"concept_{c_id}"):
-                        st.session_state.selected_concept_id = c_id
+                st.markdown("### 🧠 Weak Concepts")
+                weak_concepts = st.session_state.student_weak_concepts
 
-                if st.session_state.selected_concept_id:
-                    load_concept_content()
+                if not weak_concepts:
+                    st.warning("No weak concepts found.")
+                else:
+                    for concept in weak_concepts:
+                        concept_text = concept['ConceptText']
+                        concept_id = concept['ConceptID']
+
+                        st.markdown(f"#### {concept_text}")
+
+                        # Option to discuss the concept
+                        if st.button(f"Discuss {concept_text}", key=f"discuss_{concept_id}"):
+                            st.session_state.selected_concept_id = concept_id
+                            st.session_state.selected_concept_text = concept_text
+
+                    # Load and display concept content if selected
+                    if st.session_state.selected_concept_id:
+                        load_concept_content()
 
 # Display login or main screen based on authentication
 def main():
