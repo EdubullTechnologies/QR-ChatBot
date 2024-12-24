@@ -23,6 +23,7 @@ from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
 from reportlab.lib.units import inch
 import pandas as pd
 import altair as alt
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
