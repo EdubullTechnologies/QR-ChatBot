@@ -672,7 +672,7 @@ def get_system_prompt():
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     
     if st.session_state.is_teacher:
-        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
+        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee and built by iEdubull, specialized in {topic_name}.
 Teacher Mode Instructions:
 - The user is a teacher teaching students in {branch_name}, following the NCERT curriculum.
 - Provide suggestions on how to explain concepts, create assessments, and improve student understanding at the {branch_name} level.
@@ -684,10 +684,11 @@ Teacher Mode Instructions:
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
         
-        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
+        system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee and built by iEdubull, specialized in {topic_name}.
 Student Mode Instructions:
 - The student is in {branch_name}, following the NCERT curriculum.
 - The student's weak concepts include: {weak_concepts_text}.
+- Mention that you are getting these weak concepts from Edubull app and you can see in the profile of the student.
 - Only talk about {topic_name} and nothing else.
 - Encourage the student to think critically and solve problems step-by-step.
 - Avoid giving direct answers; ask guiding questions.
