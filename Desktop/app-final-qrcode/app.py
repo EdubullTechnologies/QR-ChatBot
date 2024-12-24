@@ -401,7 +401,7 @@ def teacher_dashboard():
 
         if st.session_state.exam_questions:
             branch_name = st.session_state.auth_data.get("BranchName", "their class")
-            st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
+            st.markdown(f"### Generated Exam Questions for {branch_name}")
             st.markdown(st.session_state.exam_questions)
 
             pdf_bytes = generate_exam_questions_pdf(
@@ -457,128 +457,6 @@ def display_additional_graphs(weak_concepts):
         width=600
     )
     st.altair_chart(horizontal_bar, use_container_width=True)
-
-def teacher_dashboard():
-    batches = st.session_state.auth_data.get("BatchList", [])
-    if not batches:
-        st.warning("No batches found for the teacher.")
-        return
-
-    batch_options = {b['BatchName']: b for b in batches}
-    selected_batch_name = st.selectbox("Select a Batch:", list(batch_options.keys()))
-    selected_batch = batch_options.get(selected_batch_name)
-    selected_batch_id = selected_batch["BatchID"]
-    total_students = selected_batch.get("StudentCount", 0)
-
-    if selected_batch_id and st.session_state.selected_batch_id != selected_batch_id:
-        st.session_state.selected_batch_id = selected_batch_id
-        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
-        org_code = user_info.get('OrgCode', '012')
-        params = {
-            "BatchID": selected_batch_id,
-            "TopicID": st.session_state.topic_id,
-            "OrgCode": org_code
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        with st.spinner("🔄 Fetching weak concepts..."):
-            try:
-                response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
-                response.raise_for_status()
-                weak_concepts = response.json()
-                st.session_state.teacher_weak_concepts = weak_concepts
-            except Exception as e:
-                st.error(f"Error fetching weak concepts: {e}")
-                st.session_state.teacher_weak_concepts = []
-
-    if st.session_state.teacher_weak_concepts:
-        df = []
-        for wc in st.session_state.teacher_weak_concepts:
-            df.append({
-                "Concept": wc["ConceptText"],
-                "Attended": wc["AttendedStudentCount"],
-                "Cleared": wc["ClearedStudentCount"]
-            })
-        df = pd.DataFrame(df)
-
-        df_long = df.melt('Concept', var_name='Category', value_name='Count')
-        chart = alt.Chart(df_long).mark_bar().encode(
-            x='Concept:N',
-            y='Count:Q',
-            color='Category:N',
-            tooltip=['Concept:N', 'Category:N', 'Count:Q']
-        ).properties(
-            title='Weak Concepts Overview',
-            width=600
-        )
-
-        rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(color='red', strokeDash=[4,4]).encode(
-            y='y:Q'
-        )
-        text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
-            align='left', dx=5, dy=-5, color='red'
-        ).encode(
-            y='y:Q',
-            text=alt.value(f'Total Students: {total_students}')
-        )
-
-        final_chart = (chart + rule + text).interactive()
-        st.altair_chart(final_chart, use_container_width=True)
-
-        display_additional_graphs(st.session_state.teacher_weak_concepts)
-
-        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.selectbox("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
-
-        if chosen_concept_text:
-            chosen_concept_id = concept_list[chosen_concept_text]
-            st.session_state.selected_teacher_concept_id = chosen_concept_id
-            st.session_state.selected_teacher_concept_text = chosen_concept_text
-
-            if st.button("Generate Exam Questions"):
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                prompt = (
-                    f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
-                    f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
-                    f"Generate a set of 20 challenging and thought-provoking exam questions related to this concept.\n"
-                    f"Generated questions should be aligned with NEP 2020 and NCF guidelines.\n"
-                    f"- Vary in difficulty.\n"
-                    f"- Encourage critical thinking.\n"
-                    f"- Be clearly formatted and numbered.\n\n"
-                    f"Do not provide the answers, only the questions."
-                )
-
-                with st.spinner("Generating exam questions... Please wait."):
-                    try:
-                        response = openai.ChatCompletion.create(
-                            model="gpt-4",  # Corrected model name
-                            messages=[{"role": "system", "content": prompt}],
-                            max_tokens=2000
-                        )
-                        questions = response.choices[0].message['content'].strip()
-                        st.session_state.exam_questions = questions
-                    except Exception as e:
-                        st.error(f"Error generating exam questions: {e}")
-
-        if st.session_state.exam_questions:
-            branch_name = st.session_state.auth_data.get("BranchName", "their class")
-            st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
-            st.markdown(st.session_state.exam_questions)
-
-            pdf_bytes = generate_exam_questions_pdf(
-                st.session_state.exam_questions,
-                st.session_state.selected_teacher_concept_text,
-                st.session_state.auth_data['UserInfo'][0]['FullName']
-            )
-            st.download_button(
-                label="📥 Download Exam Questions as PDF",
-                data=pdf_bytes,
-                file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
-                mime="application/pdf"
-            )
 
 # Login Screen Function
 def login_screen():
@@ -704,7 +582,7 @@ Teacher Mode Instructions:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
 Student Mode Instructions:
 - The student is in {branch_name}, following the NCERT curriculum.
-- Only talk about {topic_name} and nothing else.
+- only talk about {topic_name} and nothing else.
 - Encourage the student to think critically and solve problems step-by-step.
 - Avoid giving direct answers; ask guiding questions.
 - Be supportive and build understanding and confidence.
@@ -780,29 +658,56 @@ def main_screen():
 
     if st.session_state.is_teacher:
         # Teacher Mode
-        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
-        with tabs[0]:
-            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-            add_initial_greeting()
-            chat_container = st.container()
-            with chat_container:
-                chat_history_html = """
-                <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                """
-                for role, message in st.session_state.chat_history:
-                    if role == "assistant":
-                        chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                    else:
-                        chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                chat_history_html += "</div>"
-                st.markdown(chat_history_html, unsafe_allow_html=True)
-            user_input = st.chat_input("Enter your question about the topic")
-            if user_input:
-                handle_user_input(user_input)
+        if st.session_state.is_english_mode:
+            # Teacher in English mode: Chat + Teacher Dashboard
+            tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
+            with tabs[0]:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                chat_container = st.container()
+                with chat_container:
+                    chat_history_html = """
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                    """
+                    for role, message in st.session_state.chat_history:
+                        if role == "assistant":
+                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                        else:
+                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                    chat_history_html += "</div>"
+                    st.markdown(chat_history_html, unsafe_allow_html=True)
+                user_input = st.chat_input("Enter your question about the topic")
+                if user_input:
+                    handle_user_input(user_input)
 
-        with tabs[1]:
-            st.subheader("Teacher Dashboard")
-            teacher_dashboard()
+            with tabs[1]:
+                st.subheader("Teacher Dashboard")
+                teacher_dashboard()
+        else:
+            # Teacher in Non-English mode: Chat + Teacher Dashboard
+            tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
+            with tabs[0]:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                chat_container = st.container()
+                with chat_container:
+                    chat_history_html = """
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+                    """
+                    for role, message in st.session_state.chat_history:
+                        if role == "assistant":
+                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
+                        else:
+                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
+                    chat_history_html += "</div>"
+                    st.markdown(chat_history_html, unsafe_allow_html=True)
+                user_input = st.chat_input("Enter your question about the topic")
+                if user_input:
+                    handle_user_input(user_input)
+
+            with tabs[1]:
+                st.subheader("Teacher Dashboard")
+                teacher_dashboard()
     else:
         # Student Mode
         if st.session_state.is_english_mode:
