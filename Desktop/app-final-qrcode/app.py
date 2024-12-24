@@ -370,24 +370,23 @@ def display_learning_path(concept_text, learning_path):
             mime="application/pdf"
         )
 
-# Enhanced Resources Display Function (Modified to remove inner expander)
+# Enhanced Resources Display Function
 def display_resources(content_data):
-    """
-    Display resources without nesting expanders.
-    """
-    st.markdown("### 📚 Resources")
-    if content_data.get("Video_List"):
-        for video in content_data["Video_List"]:
-            video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-            st.write(f"- [Video 🎥]({video_url})")
-    if content_data.get("Notes_List"):
-        for note in content_data["Notes_List"]:
-            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-            st.write(f"- [Notes 📄]({note_url})")
-    if content_data.get("Exercise_List"):
-        for exercise in content_data["Exercise_List"]:
-            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-            st.write(f"- [Exercise 📝]({exercise_url})")
+    with st.expander("📚 Resources", expanded=True):
+        concept_description = st.session_state.get("generated_description", "No description available.")
+        st.markdown(f"### Concept Description\n{concept_description}\n")
+        if content_data.get("Video_List"):
+            for video in content_data["Video_List"]:
+                video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
+                st.write(f"- [Video 🎥]({video_url})")
+        if content_data.get("Notes_List"):
+            for note in content_data["Notes_List"]:
+                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                st.write(f"- [Notes 📄]({note_url})")
+        if content_data.get("Exercise_List"):
+            for exercise in content_data["Exercise_List"]:
+                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                st.write(f"- [Exercise 📝]({exercise_url})")
 
 # Teacher Dashboard Function
 def teacher_dashboard():
@@ -694,10 +693,15 @@ def get_gpt_response(user_input):
         st.error(f"Error in GPT response generation: {e}")
 
 # Concept Content Loading Function
-def load_concept_content(concept_id, concept_text):
+def load_concept_content():
+    selected_concept_id = st.session_state.selected_concept_id
+    selected_concept_name = next(
+        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
+        "Unknown Concept"
+    )
     content_payload = {
         'TopicID': st.session_state.topic_id,
-        'ConceptID': int(concept_id)
+        'ConceptID': int(selected_concept_id)
     }
     headers = {
         "Content-Type": "application/json",
@@ -710,13 +714,13 @@ def load_concept_content(concept_id, concept_text):
             content_response.raise_for_status()
             content_data = content_response.json()
 
-            prompt = f"Provide a concise and educational description of the concept '{concept_text}' to help students understand it better."
+            prompt = f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "system", "content": prompt}],
                 max_tokens=500
             ).choices[0].message['content'].strip()
-            gpt_response = gpt_response.replace("This concept", concept_text).replace("this concept", concept_text)
+            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
             gpt_response += "\n\nYou can check the resources below for more information."
             st.session_state.generated_description = gpt_response
 
@@ -869,10 +873,9 @@ def main_screen():
                             st.session_state.selected_concept_id = concept_id
                             st.session_state.selected_concept_text = concept_text
 
-                        # If this concept is selected, display its content here
-                        if st.session_state.selected_concept_id == concept_id:
-                            with st.expander(f"Details for {concept_text}", expanded=True):
-                                load_concept_content(concept_id, concept_text)
+                    # Load and display concept content if selected
+                    if st.session_state.selected_concept_id:
+                        load_concept_content()
 
 # Display login or main screen based on authentication
 def main():
