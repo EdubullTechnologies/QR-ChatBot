@@ -74,6 +74,8 @@ if "is_english_mode" not in st.session_state:
     st.session_state.is_english_mode = False  # default initialization
 if "student_learning_paths" not in st.session_state:
     st.session_state.student_learning_paths = {}  # Dictionary to store multiple learning paths
+if "student_weak_concepts" not in st.session_state:
+    st.session_state.student_weak_concepts = []
 
 # Page config
 st.set_page_config(
