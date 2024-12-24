@@ -215,6 +215,8 @@ def generate_learning_path(weak_concepts):
             f"Create a detailed and structured learning path with the following sections:\n\n"
             f"1. Introduction\n2. Step-by-Step Learning\n3. Engagement\n4. Real-World Applications\n5. Practice Problems\n"
             f"Ensure the response is well-organized and includes actionable steps."
+            f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+            
         )
 
         try:
@@ -263,6 +265,7 @@ def display_learning_path(learning_path):
                 st.markdown(markdown_content)
             
             st.markdown("<br>", unsafe_allow_html=True)  # Extra space after each concept
+
 
 
 def display_additional_graphs(weak_concepts):
