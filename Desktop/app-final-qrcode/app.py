@@ -845,7 +845,7 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
-                st.markdown('<div class="learning-path-header">🧠 Learning Path</div>', unsafe_allow_html=True)
+                
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
 
                 if not weak_concepts:
