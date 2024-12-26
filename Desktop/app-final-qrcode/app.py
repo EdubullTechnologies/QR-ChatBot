@@ -341,7 +341,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Corrected model name
+            model="o1-mini",  # Corrected model name
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1000
         ).choices[0].message['content'].strip()
