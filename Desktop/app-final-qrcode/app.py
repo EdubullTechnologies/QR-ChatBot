@@ -341,9 +341,9 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="o1-mini",  # Corrected model name
-            messages=[{"role": "user", "content": prompt}],
-            max_completion_tokens=1000
+            model="gpt-4o-mini",  # Corrected model name
+            messages=[{"role": "system", "content": prompt}],
+            max_tokens=1000
         ).choices[0].message['content'].strip()
         return gpt_response
     except Exception as e:
