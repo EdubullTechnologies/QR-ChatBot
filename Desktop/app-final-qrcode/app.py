@@ -366,7 +366,8 @@ def display_learning_path(concept_text, learning_path):
     """
     Display the generated learning path with enhanced formatting for a single concept.
     """
-    with st.expander(f"📚 Learning Path for {concept_text}", expanded=False):
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    with st.expander(f"📚 Learning Path for {concept_text} according to your learning gaps for {branch_name}", expanded=False):
         st.markdown(learning_path, unsafe_allow_html=True)
 
         # Download Button for the specific learning path
@@ -385,9 +386,10 @@ def display_learning_path(concept_text, learning_path):
 
 # ================= ENHANCED RESOURCES DISPLAY FUNCTION =================
 def display_resources(content_data):
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     with st.expander("📚 Resources", expanded=True):
         concept_description = st.session_state.get("generated_description", "No description available.")
-        st.markdown(f"### Concept Description\n{concept_description}\n")
+        st.markdown(f"### Concept Description for {branch_name}\n{concept_description}\n")
         if content_data.get("Video_List"):
             for video in content_data["Video_List"]:
                 video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
