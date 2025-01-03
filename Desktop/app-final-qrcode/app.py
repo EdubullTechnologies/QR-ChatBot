@@ -481,7 +481,7 @@ def teacher_dashboard():
 
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
-        bloom_level = st.selectbox(
+        bloom_level = st.radio(
                 "Select Bloom's Taxonomy Level for the Questions",
                 [
                     "L1 (Remember)",
