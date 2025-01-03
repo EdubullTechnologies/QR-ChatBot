@@ -337,23 +337,32 @@ def generate_learning_path(concept_text):
     """
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     prompt = (
-        f"The student is in {branch_name} and is struggling with the weak concept: '{concept_text}'. "
-        f"Create a detailed and structured learning path, appropriate for {branch_name} students, "
-        f"with the following sections:\n\n"
-        f"1. **Introduction to the Concept**: Explain the importance and applications of the concept.\n"
-        f"2. **Step-by-Step Learning**: Provide a clear sequence of steps to master the concept.\n"
-        f"3. **Engagement**: Suggest interactive activities or problem-solving exercises to reinforce learning.\n"
-        f"4. **Real-World Applications**: Explain how this concept can be applied in practical situations.\n"
-        f"5. **Practice Problems**: Recommend types of problems and exercises to practice.\n\n"
-        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline "
-        f"and `$$...$$` for display)."
+    f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
+    f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
+    f"Please create a structured, step-by-step learning path tailored to {branch_name} students, ensuring clarity, engagement, and curriculum alignment. "
+    f"Your plan should include the following sections:\n\n"
+    f"1. **Introduction to the Concept**: Briefly explain the concept in simple terms, highlighting its importance and core principles. "
+    f"Emphasize how understanding it will benefit students in their studies and daily life.\n\n"
+    f"2. **Step-by-Step Learning**: Provide a clear, logical progression of the subtopics or skills needed to master this concept. "
+    f"Include any foundational knowledge required and tips for retaining each step.\n\n"
+    f"3. **Engagement**: Suggest interactive, hands-on activities or problem-based learning tasks that reinforce the concept. "
+    f"Mention creative ways to make these exercises fun and relevant to real-life scenarios.\n\n"
+    f"4. **Real-World Applications**: Illustrate how the concept applies to practical situations or real-world problems. "
+    f"Offer examples that resonate with {branch_name}-level students’ experiences or surroundings.\n\n"
+    f"5. **Practice Problems**: Recommend specific types of problems or exercises students can work on. "
+    f"Vary the difficulty level, ensuring alignment with NCERT guidelines. "
+    f"Encourage students to think critically and to practice regularly.\n\n"
+    f"Throughout your explanation, ensure that **all mathematical expressions are enclosed within LaTeX delimiters** "
+    f"(`$...$` for inline and `$$...$$` for display math). "
+    f"Your goal is to provide a clear, engaging, and age-appropriate roadmap that helps the student gain confidence and proficiency in '{concept_text}'."
     )
+
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # or whichever GPT model you have access to
+            model="gpt-4o",  # or whichever GPT model you have access to
             messages=[{"role": "system", "content": prompt}],
-            max_tokens=1000
+            max_tokens=1500
         ).choices[0].message['content'].strip()
         return gpt_response
     except Exception as e:
