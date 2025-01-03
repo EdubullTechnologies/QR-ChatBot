@@ -478,11 +478,13 @@ def teacher_dashboard():
                     f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
                     f"Generate a set of 20 challenging and thought-provoking exam questions related to this concept.\n"
                     f"Generated questions should be aligned with NEP 2020 and NCF guidelines.\n"
-                    f"- Vary in difficulty.\n"
-                    f"- Encourage critical thinking.\n"
-                    f"- Be clearly formatted and numbered.\n\n"
+                    f"Vary in difficulty.\n"
+                    f"Encourage critical thinking.\n"
+                    f"Be clearly formatted and numbered.\n\n"
                     f"Do not provide the answers, only the questions."
                     f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+                    f"Focus on Bloom's Taxonomy Levels 4 (Analysis) and 5 (Evaluation)."
+                    f"Label each question with either **(L4)** or **(L5)** to indicate which level it addresses.\n"
                 )
 
                 with st.spinner("Generating exam questions... Please wait."):
@@ -490,7 +492,7 @@ def teacher_dashboard():
                         response = openai.ChatCompletion.create(
                             model="gpt-4o-mini",  # Corrected model name
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=2000
+                            max_tokens=5000
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
