@@ -95,6 +95,7 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
+
 # Helper function to convert LaTeX to image
 def latex_to_image(latex_code, dpi=300):
     """
@@ -102,7 +103,6 @@ def latex_to_image(latex_code, dpi=300):
     """
     try:
         # Adjust figure size based on display or inline math
-        # For simplicity, we'll use a default size; can be adjusted as needed
         plt.figure(figsize=(0.01, 0.01))
         plt.text(0.5, 0.5, f"${latex_code}$", fontsize=12, ha='center', va='center')
         plt.axis('off')
@@ -115,7 +115,8 @@ def latex_to_image(latex_code, dpi=300):
         st.error(f"Error converting LaTeX to image: {e}")
         return None
 
-# PDF Generation Functions
+
+# ================= PDF GENERATION FUNCTIONS =================
 def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -208,7 +209,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
                             question_items.append(ListItem(img))
-                        
+
                         # Update last_index
                         last_index = match.end()
 
@@ -226,6 +227,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer = io.BytesIO()
@@ -307,7 +309,7 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
                             story.append(img)
-                        
+
                         # Update last_index
                         last_index = match.end()
 
@@ -326,22 +328,30 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer.close()
     return pdf_bytes
 
-# Learning Path Generation Function
+
+# ================= LEARNING PATH GENERATION FUNCTION =================
 def generate_learning_path(concept_text):
+    """
+    Incorporate the class/grade (branch_name) into the prompt so the content
+    is pitched at the student's level.
+    """
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     prompt = (
-        f"The student is struggling with the weak concept: '{concept_text}'. "
-        f"Create a detailed and structured learning path with the following sections:\n\n"
+        f"The student is in {branch_name} and is struggling with the weak concept: '{concept_text}'. "
+        f"Create a detailed and structured learning path, appropriate for {branch_name} students, "
+        f"with the following sections:\n\n"
         f"1. **Introduction to the Concept**: Explain the importance and applications of the concept.\n"
         f"2. **Step-by-Step Learning**: Provide a clear sequence of steps to master the concept.\n"
         f"3. **Engagement**: Suggest interactive activities or problem-solving exercises to reinforce learning.\n"
         f"4. **Real-World Applications**: Explain how this concept can be applied in practical situations.\n"
-        f"5. **Practice Problems**: Recommend types of problems and exercises to practice.\n"
-        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+        f"5. **Practice Problems**: Recommend types of problems and exercises to practice.\n\n"
+        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline "
+        f"and `$$...$$` for display)."
     )
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Corrected model name
+            model="gpt-4o-mini",  # or whichever GPT model you have access to
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1000
         ).choices[0].message['content'].strip()
@@ -350,18 +360,18 @@ def generate_learning_path(concept_text):
         st.error(f"Error generating learning path: {e}")
         return None
 
-# Learning Path Display Function
+
+# ================= LEARNING PATH DISPLAY FUNCTION =================
 def display_learning_path(concept_text, learning_path):
     """
     Display the generated learning path with enhanced formatting for a single concept.
     """
-    # Directly render the learning path using Streamlit's markdown
     with st.expander(f"📚 Learning Path for {concept_text}", expanded=False):
         st.markdown(learning_path, unsafe_allow_html=True)
 
         # Download Button for the specific learning path
         pdf_bytes = generate_learning_path_pdf(
-            learning_path,  # Pass the learning_path string directly
+            learning_path,
             concept_text,
             st.session_state.auth_data['UserInfo'][0]['FullName']
         )
@@ -372,7 +382,8 @@ def display_learning_path(concept_text, learning_path):
             mime="application/pdf"
         )
 
-# Enhanced Resources Display Function
+
+# ================= ENHANCED RESOURCES DISPLAY FUNCTION =================
 def display_resources(content_data):
     with st.expander("📚 Resources", expanded=True):
         concept_description = st.session_state.get("generated_description", "No description available.")
@@ -390,7 +401,8 @@ def display_resources(content_data):
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                 st.write(f"- [Exercise 📝]({exercise_url})")
 
-# Teacher Dashboard Function
+
+# ================= TEACHER DASHBOARD FUNCTIONS =================
 def teacher_dashboard():
     batches = st.session_state.auth_data.get("BatchList", [])
     if not batches:
@@ -437,6 +449,7 @@ def teacher_dashboard():
             })
         df = pd.DataFrame(df)
 
+        # Create an Altair chart
         df_long = df.melt('Concept', var_name='Category', value_name='Count')
         chart = alt.Chart(df_long).mark_bar().encode(
             x='Concept:N',
@@ -448,9 +461,11 @@ def teacher_dashboard():
             width=600
         )
 
-        rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(color='red', strokeDash=[4,4]).encode(
+        # Red rule for total students
+        rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(color='red', strokeDash=[4, 4]).encode(
             y='y:Q'
         )
+        # Label for the rule
         text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
             align='left', dx=5, dy=-5, color='red'
         ).encode(
@@ -464,16 +479,16 @@ def teacher_dashboard():
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
         bloom_level = st.radio(
-                "Select Bloom's Taxonomy Level for the Questions",
-                [
-                    "L1 (Remember)",
-                    "L2 (Understand)",
-                    "L3 (Apply)",
-                    "L4 (Analyze)",
-                    "L5 (Evaluate)"
-                ],
-                index=3  # Default to L4
-            )
+            "Select Bloom's Taxonomy Level for the Questions",
+            [
+                "L1 (Remember)",
+                "L2 (Understand)",
+                "L3 (Apply)",
+                "L4 (Analyze)",
+                "L5 (Evaluate)"
+            ],
+            index=3  # Default to L4
+        )
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
@@ -483,18 +498,13 @@ def teacher_dashboard():
             st.session_state.selected_teacher_concept_id = chosen_concept_id
             st.session_state.selected_teacher_concept_text = chosen_concept_text
 
-            # Bloom’s Level Selection:
-            # You could use a single selectbox or a multi-select. Example below: single selectbox.
-
-
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
 
                 # Parse out the short code (L1, L2, etc.) from the selectbox choice
-                # E.g. "L4 (Analyze)" -> "L4"
-                bloom_short = bloom_level.split()[0]  # "L4"
+                bloom_short = bloom_level.split()[0]  # E.g., "L4"
 
-                # Build the prompt incorporating the chosen Bloom level
+                # Build the prompt
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create "
                     f"exam questions for the concept '{chosen_concept_text}'.\n"
@@ -505,7 +515,8 @@ def teacher_dashboard():
                     f"Encourage critical thinking.\n"
                     f"Be clearly formatted and numbered.\n\n"
                     f"Do not provide the answers, only the questions.\n"
-                    f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display).\n"
+                    f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline "
+                    f"and `$$...$$` for display).\n"
                     f"Focus on **Bloom's Taxonomy Level {bloom_short}**.\n"
                     f"Label each question clearly with **({bloom_short})** at the end of the question.\n"
                 )
@@ -513,7 +524,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4o",  # or whichever model
+                            model="gpt-4o",  # or whichever GPT model you have access to
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=5000
                         )
@@ -538,6 +549,8 @@ def teacher_dashboard():
             file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
             mime="application/pdf"
         )
+
+
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
     total_attended = df["AttendedStudentCount"].sum()
@@ -580,7 +593,8 @@ def display_additional_graphs(weak_concepts):
     )
     st.altair_chart(horizontal_bar, use_container_width=True)
 
-# Login Screen Function
+
+# ================= LOGIN SCREEN FUNCTION =================
 def login_screen():
     try:
         image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
@@ -674,7 +688,9 @@ def login_screen():
                     st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
-# Chat-related functions
+
+
+# ================= CHAT-RELATED FUNCTIONS =================
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
@@ -685,29 +701,31 @@ def add_initial_greeting():
         )
         st.session_state.chat_history.append(("assistant", greeting_message))
 
+
 def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
         st.rerun()
 
+
 def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    
+
     if st.session_state.is_teacher:
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee and built by iEdubull, specialized in {topic_name}.
 Teacher Mode Instructions:
 - The user is a teacher teaching students in {branch_name}, following the NCERT curriculum.
 - Provide suggestions on how to explain concepts, create assessments, and improve student understanding at the {branch_name} level.
 - Offer insights into student difficulties and how to address them.
-- Maintain a professional, informative tone and provide curriculum-aligned advice
+- Maintain a professional, informative tone and provide curriculum-aligned advice.
 - Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."""
     else:
         # Fetch student's weak concepts
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
-        
+
         system_prompt = f"""You are a highly knowledgeable educational assistant named EeeBee and built by iEdubull, specialized in {topic_name}.
 Student Mode Instructions:
 - The student is in {branch_name}, following the NCERT curriculum.
@@ -719,18 +737,19 @@ Student Mode Instructions:
 - Be supportive and build understanding and confidence.
 - If asked for exam questions, provide progressive questions aligned with NCERT and suitable for {branch_name} students.
 - Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)"""
-    
+
     return system_prompt
+
 
 def get_gpt_response(user_input):
     system_prompt = get_system_prompt()
-    
+
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
-    
+
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Ensure you're using the correct model
+            model="gpt-4o-mini",  # or whichever GPT model
             messages=conversation_history_formatted,
             max_tokens=2000
         ).choices[0].message['content'].strip()
@@ -738,13 +757,23 @@ def get_gpt_response(user_input):
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
 
-# Concept Content Loading Function
+
+# ================= CONCEPT CONTENT LOADING FUNCTION =================
 def load_concept_content():
     selected_concept_id = st.session_state.selected_concept_id
     selected_concept_name = next(
         (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
         "Unknown Concept"
     )
+
+    # We'll also pass the student's class/grade level (branch_name) to the prompt
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    prompt = (
+        f"The student is in {branch_name}. Provide a concise and educational description of the concept "
+        f"'{selected_concept_name}', pitched at the level of {branch_name} students, to help them understand it better. "
+        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+    )
+
     content_payload = {
         'TopicID': st.session_state.topic_id,
         'ConceptID': int(selected_concept_id)
@@ -760,14 +789,14 @@ def load_concept_content():
             content_response.raise_for_status()
             content_data = content_response.json()
 
-            prompt = (f"Provide a concise and educational description of the concept '{selected_concept_name}' to help students understand it better."
-                      f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)"
-                     )
+            # Generate concept description from GPT
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",  # Corrected model name
+                model="gpt-4o-mini",  # or whichever GPT model
                 messages=[{"role": "system", "content": prompt}],
                 max_tokens=500
             ).choices[0].message['content'].strip()
+
+            # Minor replacements if needed
             gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
             gpt_response += "\n\nYou can check the resources below for more information."
             st.session_state.generated_description = gpt_response
@@ -779,7 +808,8 @@ def load_concept_content():
     except Exception as e:
         st.error(f"Error generating concept description: {e}")
 
-# Main Screen Function
+
+# ================= MAIN SCREEN FUNCTION (POST-LOGIN) =================
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
@@ -823,6 +853,7 @@ def main_screen():
         with tabs[1]:
             st.subheader("Teacher Dashboard")
             teacher_dashboard()
+
     else:
         # Student Mode
         if st.session_state.is_english_mode:
@@ -846,6 +877,7 @@ def main_screen():
                 user_input = st.chat_input("Enter your question about the topic")
                 if user_input:
                     handle_user_input(user_input)
+
         else:
             # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 Concepts"])
@@ -869,7 +901,6 @@ def main_screen():
                     handle_user_input(user_input)
 
             with tab2:
-                
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
 
                 if not weak_concepts:
@@ -913,7 +944,8 @@ def main_screen():
                 if st.session_state.selected_concept_id:
                     load_concept_content()
 
-# Display login or main screen based on authentication
+
+# ================= MAIN APP LOGIC =================
 def main():
     if st.session_state.is_authenticated:
         main_screen()
@@ -922,6 +954,7 @@ def main():
         placeholder = st.empty()
         with placeholder.container():
             login_screen()
+
 
 if __name__ == "__main__":
     main()
