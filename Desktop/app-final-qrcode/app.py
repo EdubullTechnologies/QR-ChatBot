@@ -461,6 +461,8 @@ def teacher_dashboard():
         final_chart = (chart + rule + text).interactive()
         st.altair_chart(final_chart, use_container_width=True)
 
+        display_additional_graphs(st.session_state.teacher_weak_concepts)
+
         bloom_level = st.radio(
                 "Select Bloom's Taxonomy Level for the Questions",
                 [
@@ -511,9 +513,9 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4o-mini",  # Corrected model name
+                            model="gpt-4o",  # or whichever model
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=3500
+                            max_tokens=5000
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
@@ -536,7 +538,6 @@ def teacher_dashboard():
             file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
             mime="application/pdf"
         )
-
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
     total_attended = df["AttendedStudentCount"].sum()
