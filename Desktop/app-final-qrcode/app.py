@@ -481,17 +481,7 @@ def teacher_dashboard():
 
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
-        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.selectbox("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
-
-        if chosen_concept_text:
-            chosen_concept_id = concept_list[chosen_concept_text]
-            st.session_state.selected_teacher_concept_id = chosen_concept_id
-            st.session_state.selected_teacher_concept_text = chosen_concept_text
-
-            # Bloom’s Level Selection:
-            # You could use a single selectbox or a multi-select. Example below: single selectbox.
-            bloom_level = st.selectbox(
+        bloom_level = st.selectbox(
                 "Select Bloom's Taxonomy Level for the Questions",
                 [
                     "L1 (Remember)",
@@ -502,6 +492,18 @@ def teacher_dashboard():
                 ],
                 index=3  # Default to L4
             )
+
+        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
+        chosen_concept_text = st.selectbox("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
+
+        if chosen_concept_text:
+            chosen_concept_id = concept_list[chosen_concept_text]
+            st.session_state.selected_teacher_concept_id = chosen_concept_id
+            st.session_state.selected_teacher_concept_text = chosen_concept_text
+
+            # Bloom’s Level Selection:
+            # You could use a single selectbox or a multi-select. Example below: single selectbox.
+
 
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
