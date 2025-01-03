@@ -461,28 +461,51 @@ def teacher_dashboard():
         final_chart = (chart + rule + text).interactive()
         st.altair_chart(final_chart, use_container_width=True)
 
-        display_additional_graphs(st.session_state.teacher_weak_concepts)
+        bloom_level = st.radio(
+                "Select Bloom's Taxonomy Level for the Questions",
+                [
+                    "L1 (Remember)",
+                    "L2 (Understand)",
+                    "L3 (Apply)",
+                    "L4 (Analyze)",
+                    "L5 (Evaluate)"
+                ],
+                index=3  # Default to L4
+            )
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.selectbox("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
+        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
 
         if chosen_concept_text:
             chosen_concept_id = concept_list[chosen_concept_text]
             st.session_state.selected_teacher_concept_id = chosen_concept_id
             st.session_state.selected_teacher_concept_text = chosen_concept_text
 
+            # Bloom’s Level Selection:
+            # You could use a single selectbox or a multi-select. Example below: single selectbox.
+
+
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
+
+                # Parse out the short code (L1, L2, etc.) from the selectbox choice
+                # E.g. "L4 (Analyze)" -> "L4"
+                bloom_short = bloom_level.split()[0]  # "L4"
+
+                # Build the prompt incorporating the chosen Bloom level
                 prompt = (
-                    f"You are an educational AI assistant helping a teacher. The teacher wants to create exam questions for the concept '{chosen_concept_text}'.\n"
+                    f"You are an educational AI assistant helping a teacher. The teacher wants to create "
+                    f"exam questions for the concept '{chosen_concept_text}'.\n"
                     f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
                     f"Generate a set of 20 challenging and thought-provoking exam questions related to this concept.\n"
                     f"Generated questions should be aligned with NEP 2020 and NCF guidelines.\n"
-                    f"- Vary in difficulty.\n"
-                    f"- Encourage critical thinking.\n"
-                    f"- Be clearly formatted and numbered.\n\n"
-                    f"Do not provide the answers, only the questions."
-                    f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+                    f"Vary in difficulty.\n"
+                    f"Encourage critical thinking.\n"
+                    f"Be clearly formatted and numbered.\n\n"
+                    f"Do not provide the answers, only the questions.\n"
+                    f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display).\n"
+                    f"Focus on **Bloom's Taxonomy Level {bloom_short}**.\n"
+                    f"Label each question clearly with **({bloom_short})** at the end of the question.\n"
                 )
 
                 with st.spinner("Generating exam questions... Please wait."):
@@ -490,7 +513,7 @@ def teacher_dashboard():
                         response = openai.ChatCompletion.create(
                             model="gpt-4o-mini",  # Corrected model name
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=2000
+                            max_tokens=3500
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
