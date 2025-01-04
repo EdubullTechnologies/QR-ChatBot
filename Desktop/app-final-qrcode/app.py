@@ -731,7 +731,9 @@ Teacher Mode Instructions:
 - Provide suggestions on how to explain concepts, create assessments, and improve student understanding at the {branch_name} level.
 - Offer insights into student difficulties and how to address them.
 - Maintain a professional, informative tone and provide curriculum-aligned advice.
-- Ensure that all mathematical expressions are enclosed within LaTeX delimiters."""
+- Ensure that all mathematical expressions are enclosed within LaTeX delimiters.
+- Throughout your explanation, ensure that **all mathematical expressions are enclosed within LaTeX delimiters**
+- (`$...$` for inline and `$$...$$` for display math). """"
     else:
         # Fetch student's weak concepts
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
@@ -747,7 +749,8 @@ Student Mode Instructions:
 - Avoid giving direct answers; ask guiding questions.
 - Be supportive and build understanding and confidence.
 - If asked for exam questions, provide progressive questions aligned with NCERT and suitable for {branch_name} students.
-- Ensure that all mathematical expressions are enclosed within LaTeX delimiters."""
+- Throughout your explanation, ensure that **all mathematical expressions are enclosed within LaTeX delimiters**
+- (`$...$` for inline and `$$...$$` for display math)"""
 
     return system_prompt
 
