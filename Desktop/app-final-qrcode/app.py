@@ -733,7 +733,7 @@ Teacher Mode Instructions:
 - Maintain a professional, informative tone and provide curriculum-aligned advice.
 - Ensure that all mathematical expressions are enclosed within LaTeX delimiters.
 - Throughout your explanation, ensure that **all mathematical expressions are enclosed within LaTeX delimiters**
-- (`$...$` for inline and `$$...$$` for display math). """"
+- (`$...$` for inline and `$$...$$` for display math). """
     else:
         # Fetch student's weak concepts
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
