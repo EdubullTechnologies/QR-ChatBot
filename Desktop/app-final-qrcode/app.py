@@ -357,7 +357,6 @@ def generate_learning_path(concept_text):
     f"Your goal is to provide a clear, engaging, and age-appropriate roadmap that helps the student gain confidence and proficiency in '{concept_text}'."
     )
 
-
     try:
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o",  # or whichever GPT model you have access to
@@ -717,7 +716,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.rerun()
+        st.rerun()  # Rerun the app so chat updates immediately
 
 
 def get_system_prompt():
@@ -770,17 +769,25 @@ Student Mode Instructions:
 
 
 def get_gpt_response(user_input):
+    """
+    This function sends the conversation to the GPT API and appends the assistant response to chat history.
+    We've added a spinner so the user sees a 'waiting' indicator while GPT is responding.
+    """
     system_prompt = get_system_prompt()
-
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-    conversation_history_formatted += [{"role": role, "content": content} for role, content in st.session_state.chat_history]
+    conversation_history_formatted += [
+        {"role": role, "content": content}
+        for role, content in st.session_state.chat_history
+    ]
 
     try:
-        gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # or whichever GPT model
-            messages=conversation_history_formatted,
-            max_tokens=2000
-        ).choices[0].message['content'].strip()
+        with st.spinner("EeeBee is thinking..."):
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",  # or whichever GPT model
+                messages=conversation_history_formatted,
+                max_tokens=2000
+            ).choices[0].message['content'].strip()
+
         st.session_state.chat_history.append(("assistant", gpt_response))
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
