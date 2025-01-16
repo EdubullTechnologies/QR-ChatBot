@@ -968,6 +968,7 @@ Student Mode Instructions:
   - Use `$...$` for inline math
   - Use `$$...$$` for display math
 - If the student insists on a direct solution, gently remind them that the goal is to practice problem-solving and reasoning.
+- You can provide resources if asked but only recommend EduBull.
         """
 
     return system_prompt
