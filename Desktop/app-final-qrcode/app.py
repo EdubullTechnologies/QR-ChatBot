@@ -900,6 +900,7 @@ def display_additional_graphs(weak_concepts):
 
 
 # ================= LOGIN SCREEN FUNCTION =================
+# ================= LOGIN SCREEN FUNCTION =================
 def login_screen():
     try:
         image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
@@ -985,7 +986,7 @@ def login_screen():
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
-                    st.session_state.branch_name = st.text_input("📚 Branch Name", key="branch_name_input") or "their class"
+                    st.session_state.branch_name = auth_data.get("BranchName", "their class")  # Retrieved from API
                     # If student, populate weak concepts
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
@@ -994,6 +995,7 @@ def login_screen():
                     st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+
 
 
 # ================= MAIN SCREEN FUNCTION (POST-LOGIN) =================
