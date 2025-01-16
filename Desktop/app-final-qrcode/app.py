@@ -76,6 +76,8 @@ if "student_learning_paths" not in st.session_state:
     st.session_state.student_learning_paths = {}  # Dictionary to store multiple learning paths
 if "student_weak_concepts" not in st.session_state:
     st.session_state.student_weak_concepts = []
+if "available_concepts" not in st.session_state:
+    st.session_state.available_concepts = {}
 
 # Page config
 st.set_page_config(
@@ -94,7 +96,6 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-
 
 # Helper function to convert LaTeX to image
 def latex_to_image(latex_code, dpi=300):
@@ -115,6 +116,108 @@ def latex_to_image(latex_code, dpi=300):
         st.error(f"Error converting LaTeX to image: {e}")
         return None
 
+def get_matching_resources(concept_text, concept_list, topic_id):
+    """
+    Find matching concept ID from the main concept list and fetch its resources.
+    """
+    # Clean and normalize concept texts for comparison
+    def clean_text(text):
+        return text.lower().strip().replace(" ", "")
+    
+    clean_weak_concept = clean_text(concept_text)
+    
+    # Find matching concept from the main concept list
+    matching_concept = next(
+        (c for c in concept_list if clean_text(c['ConceptText']) == clean_weak_concept),
+        None
+    )
+    
+    if matching_concept:
+        content_payload = {
+            'TopicID': topic_id,
+            'ConceptID': int(matching_concept['ConceptID'])
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        try:
+            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching resources: {e}")
+            return None
+    
+    return None
+
+def get_resources_for_concept(concept_text, concept_list, topic_id):
+    """
+    Fetch resources for a given concept text.
+    Returns the resources data if found, None otherwise.
+    """
+    # Clean and normalize concept texts for comparison
+    def clean_text(text):
+        return text.lower().strip().replace(" ", "")
+    
+    clean_concept = clean_text(concept_text)
+    
+    # Find matching concept from the concept list
+    matching_concept = next(
+        (c for c in concept_list if clean_text(c['ConceptText']) == clean_concept),
+        None
+    )
+    
+    if matching_concept:
+        content_payload = {
+            'TopicID': topic_id,
+            'ConceptID': int(matching_concept['ConceptID'])
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        try:
+            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching resources: {e}")
+            return None
+    
+    return None
+
+def format_resources_message(resources):
+    """
+    Format resources data into a chat-friendly message.
+    """
+    message = "Here are the available resources for this concept:\n\n"
+    
+    if resources.get("Video_List"):
+        message += "**🎥 Video Lectures:**\n"
+        for video in resources["Video_List"]:
+            video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+            message += f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})\n"
+        message += "\n"
+    
+    if resources.get("Notes_List"):
+        message += "**📄 Study Notes:**\n"
+        for note in resources["Notes_List"]:
+            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+            message += f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})\n"
+        message += "\n"
+    
+    if resources.get("Exercise_List"):
+        message += "**📝 Practice Exercises:**\n"
+        for exercise in resources["Exercise_List"]:
+            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+            message += f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})\n"
+    
+    return message
 
 # ================= PDF GENERATION FUNCTIONS =================
 def generate_exam_questions_pdf(questions, concept_text, user_name):
@@ -228,7 +331,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer.close()
     return pdf_bytes
 
-
 def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -328,7 +430,6 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer.close()
     return pdf_bytes
 
-
 # ================= LEARNING PATH GENERATION FUNCTION =================
 def generate_learning_path(concept_text):
     """
@@ -348,7 +449,7 @@ def generate_learning_path(concept_text):
     f"3. **Engagement**: Suggest interactive, hands-on activities or problem-based learning tasks that reinforce the concept. "
     f"Mention creative ways to make these exercises fun and relevant to real-life scenarios.\n\n"
     f"4. **Real-World Applications**: Illustrate how the concept applies to practical situations or real-world problems. "
-    f"Offer examples that resonate with {branch_name}-level students’ experiences or surroundings.\n\n"
+    f"Offer examples that resonate with {branch_name}-level students' experiences or surroundings.\n\n"
     f"5. **Practice Problems**: Recommend specific types of problems or exercises students can work on. "
     f"Vary the difficulty level, ensuring alignment with NCERT guidelines. "
     f"Encourage students to think critically and to practice regularly.\n\n"
@@ -370,59 +471,11 @@ def generate_learning_path(concept_text):
 
 
 # ================= LEARNING PATH DISPLAY FUNCTION =================
-def get_matching_resources(concept_text, concept_list, topic_id):
-    """
-    Find matching concept ID from the main concept list and fetch its resources.
-    
-    Args:
-        concept_text (str): The weak concept text to match
-        concept_list (list): List of all concepts from the auth response
-        topic_id (int): The topic ID
-        
-    Returns:
-        dict: Resources data if found, None otherwise
-    """
-    # Clean and normalize concept texts for comparison
-    def clean_text(text):
-        return text.lower().strip().replace(" ", "")
-    
-    clean_weak_concept = clean_text(concept_text)
-    
-    # Find matching concept from the main concept list
-    matching_concept = next(
-        (c for c in concept_list if clean_text(c['ConceptText']) == clean_weak_concept),
-        None
-    )
-    
-    if matching_concept:
-        # Fetch resources using the API
-        content_payload = {
-            'TopicID': topic_id,
-            'ConceptID': int(matching_concept['ConceptID'])
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        
-        try:
-            API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
-            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            print(f"Error fetching resources: {e}")
-            return None
-    
-    return None
-
 def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
     """
-    Enhanced display function that includes both learning path and resources.
+    Display the generated learning path with enhanced formatting and resources for a single concept.
     """
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    
     with st.expander(f"📚 Learning Path for {concept_text} according to your learning gaps for {branch_name}", expanded=False):
         # Display the learning path
         st.markdown(learning_path, unsafe_allow_html=True)
@@ -452,7 +505,7 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
                 for exercise in resources["Exercise_List"]:
                     exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                     st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
-        
+
         # Download Button for the learning path
         pdf_bytes = generate_learning_path_pdf(
             learning_path,
@@ -467,7 +520,7 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
         )
 
 
-# ================= ENHANCED RESOURCES DISPLAY FUNCTION =================
+# ================= RESOURCES DISPLAY FUNCTION =================
 def display_resources(content_data):
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     with st.expander("📚 Resources", expanded=True):
@@ -485,7 +538,6 @@ def display_resources(content_data):
             for exercise in content_data["Exercise_List"]:
                 exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                 st.write(f"- [Exercise 📝]({exercise_url})")
-
 
 # ================= TEACHER DASHBOARD FUNCTIONS =================
 def teacher_dashboard():
@@ -635,7 +687,6 @@ def teacher_dashboard():
             mime="application/pdf"
         )
 
-
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
     total_attended = df["AttendedStudentCount"].sum()
@@ -677,7 +728,6 @@ def display_additional_graphs(weak_concepts):
         width=600
     )
     st.altair_chart(horizontal_bar, use_container_width=True)
-
 
 # ================= LOGIN SCREEN FUNCTION =================
 def login_screen():
@@ -773,17 +823,97 @@ def login_screen():
                     st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+            
+# ================= LOAD CONCEPT CONTENT FUNCTION =================
+def load_concept_content():
+    selected_concept_id = st.session_state.selected_concept_id
+    selected_concept_name = next(
+        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
+        "Unknown Concept"
+    )
 
+    # We'll also pass the student's class/grade level (branch_name) to the prompt
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    prompt = (
+        f"The student is in {branch_name}. Provide a concise and educational description of the concept "
+        f"'{selected_concept_name}', pitched at the level of {branch_name} students, to help them understand it better. "
+        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+    )
+
+    content_payload = {
+        'TopicID': st.session_state.topic_id,
+        'ConceptID': int(selected_concept_id)
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        with st.spinner("🔄 Fetching concept content..."):
+            content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+            content_response.raise_for_status()
+            content_data = content_response.json()
+
+            # Generate concept description from GPT
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",  # or whichever GPT model
+                messages=[{"role": "system", "content": prompt}],
+                max_tokens=500
+            ).choices[0].message['content'].strip()
+
+            # Minor replacements if needed
+            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
+            gpt_response += "\n\nYou can check the resources below for more information."
+            st.session_state.generated_description = gpt_response
+
+            display_resources(content_data)
+
+    except requests.exceptions.RequestException as req_err:
+        st.error(f"Error fetching content: {req_err}")
+    except Exception as e:
+        st.error(f"Error generating concept description: {e}")
 
 # ================= CHAT-RELATED FUNCTIONS =================
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
         topic_name = st.session_state.auth_data['TopicName']
+        
+        # Get concepts and weak concepts
+        concept_list = st.session_state.auth_data.get('ConceptList', [])
+        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+        
+        # Create concept options markdown
+        concept_options = "\n\n**📚 Available Concepts:**\n"
+        for concept in concept_list:
+            concept_options += f"- {concept['ConceptText']}\n"
+            
+        # Create weak concepts markdown if any exist
+        weak_concepts_text = ""
+        if weak_concepts:
+            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
+            for concept in weak_concepts:
+                weak_concepts_text += f"- {concept['ConceptText']}\n"
+        
+        # Store concepts in session state for later use
+        st.session_state.available_concepts = {
+            concept['ConceptText']: concept['ConceptID'] 
+            for concept in concept_list
+        }
+        
         greeting_message = (
             f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-            f"How can I help you with {topic_name} today?"
+            f"I'm here to help you with {topic_name}.\n\n"
+            f"You can:\n"
+            f"1. Ask me questions about any concept\n"
+            f"2. Request learning resources (videos, notes, exercises)\n"
+            f"3. Get help understanding specific topics\n"
+            f"{concept_options}"
+            f"{weak_concepts_text}\n\n"
+            f"What would you like to discuss?"
         )
+        
         st.session_state.chat_history.append(("assistant", greeting_message))
 
 
@@ -791,7 +921,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.rerun()  # Rerun the app so chat updates immediately
+        st.rerun()
 
 
 def get_system_prompt():
@@ -845,8 +975,7 @@ Student Mode Instructions:
 
 def get_gpt_response(user_input):
     """
-    This function sends the conversation to the GPT API and appends the assistant response to chat history.
-    We've added a spinner so the user sees a 'waiting' indicator while GPT is responding.
+    Enhanced GPT response function that can handle resource requests and concept discussions
     """
     system_prompt = get_system_prompt()
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
@@ -854,70 +983,42 @@ def get_gpt_response(user_input):
         {"role": role, "content": content}
         for role, content in st.session_state.chat_history
     ]
-
+    
     try:
         with st.spinner("EeeBee is thinking..."):
+            # Check if user is asking about a specific concept
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
+            mentioned_concept = None
+            
+            # Look for concept mentions in the user input
+            for concept in concept_list:
+                if concept['ConceptText'].lower() in user_input.lower():
+                    mentioned_concept = concept['ConceptText']
+                    break
+            
+            # Get GPT response
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",  # or whichever GPT model
+                model="gpt-4o-mini",
                 messages=conversation_history_formatted,
                 max_tokens=2000
             ).choices[0].message['content'].strip()
-
-        st.session_state.chat_history.append(("assistant", gpt_response))
+            
+            st.session_state.chat_history.append(("assistant", gpt_response))
+            
+            # If a concept was mentioned and the user seems to be asking about resources
+            if mentioned_concept and any(word in user_input.lower() 
+                                       for word in ['resource', 'material', 'video', 'note', 'exercise']):
+                resources = get_resources_for_concept(
+                    mentioned_concept,
+                    concept_list,
+                    st.session_state.topic_id
+                )
+                if resources:
+                    resource_message = format_resources_message(resources)
+                    st.session_state.chat_history.append(("assistant", resource_message))
+                
     except Exception as e:
         st.error(f"Error in GPT response generation: {e}")
-
-
-# ================= CONCEPT CONTENT LOADING FUNCTION =================
-def load_concept_content():
-    selected_concept_id = st.session_state.selected_concept_id
-    selected_concept_name = next(
-        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
-        "Unknown Concept"
-    )
-
-    # We'll also pass the student's class/grade level (branch_name) to the prompt
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    prompt = (
-        f"The student is in {branch_name}. Provide a concise and educational description of the concept "
-        f"'{selected_concept_name}', pitched at the level of {branch_name} students, to help them understand it better. "
-        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
-    )
-
-    content_payload = {
-        'TopicID': st.session_state.topic_id,
-        'ConceptID': int(selected_concept_id)
-    }
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-    try:
-        with st.spinner("🔄 Fetching concept content..."):
-            content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-            content_response.raise_for_status()
-            content_data = content_response.json()
-
-            # Generate concept description from GPT
-            gpt_response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",  # or whichever GPT model
-                messages=[{"role": "system", "content": prompt}],
-                max_tokens=500
-            ).choices[0].message['content'].strip()
-
-            # Minor replacements if needed
-            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
-            gpt_response += "\n\nYou can check the resources below for more information."
-            st.session_state.generated_description = gpt_response
-
-            display_resources(content_data)
-
-    except requests.exceptions.RequestException as req_err:
-        st.error(f"Error fetching content: {req_err}")
-    except Exception as e:
-        st.error(f"Error generating concept description: {e}")
-
 
 # ================= MAIN SCREEN FUNCTION (POST-LOGIN) =================
 def main_screen():
@@ -989,8 +1090,8 @@ def main_screen():
                     handle_user_input(user_input)
 
         else:
-            # Non-English Student: Chat + Learning Path + Concepts
-            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 Concepts"])
+            # Non-English Student: Chat + Learning Path
+            tab1, tab2 = st.tabs(["💬 Chat", "🧠 Learning Path"])
             with tab1:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
@@ -1049,18 +1150,6 @@ def main_screen():
                                 concept_list,
                                 st.session_state.topic_id
                             )
-
-            with tab3:
-                concept_list = st.session_state.auth_data.get('ConceptList', [])
-                concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
-                for c_text, c_id in concept_options.items():
-                    if st.button(c_text, key=f"concept_{c_id}"):
-                        st.session_state.selected_concept_id = c_id
-
-                if st.session_state.selected_concept_id:
-                    load_concept_content()
-
-
 # ================= MAIN APP LOGIC =================
 def main():
     if st.session_state.is_authenticated:
