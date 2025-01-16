@@ -35,6 +35,7 @@ try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
+    st.stop()
 
 openai.api_key = OPENAI_API_KEY
 
@@ -43,7 +44,7 @@ API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topi
 API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
-RESOURCE_API_URL = "https://webapi.edubull.com/api/eProfessor/ConceptResources_ByName"  # Placeholder URL
+RESOURCE_API_URL = "https://webapi.edubull.com/api/eProfessor/ConceptResources_ByName"  # Replace with actual endpoint
 
 # Initialize session states if not present
 if "auth_data" not in st.session_state:
@@ -392,7 +393,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Ensure you have access to the correct model
+            model="gpt-4",  # Use the correct model name
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1500
         ).choices[0].message['content'].strip()
@@ -591,7 +592,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4",  # Ensure you have access to the correct model
+                            model="gpt-4",  # Use the correct model
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=5000
                         )
@@ -840,7 +841,7 @@ def get_gpt_response(user_input):
     try:
         with st.spinner("EeeBee is thinking..."):
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",  # Ensure you have access to the correct model
+                model="gpt-4",  # Use the correct model name
                 messages=conversation_history_formatted,
                 max_tokens=2000
             ).choices[0].message['content'].strip()
@@ -883,7 +884,7 @@ def load_concept_content():
 
             # Generate concept description from GPT
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",  # Ensure you have access to the correct model
+                model="gpt-4",  # Use the correct model
                 messages=[{"role": "system", "content": prompt}],
                 max_tokens=500
             ).choices[0].message['content'].strip()
@@ -1069,102 +1070,6 @@ def main_screen():
 
                 if st.session_state.selected_concept_id:
                     load_concept_content()
-
-
-# ================= LOGIN SCREEN FUNCTION =================
-def login_screen():
-    try:
-        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.image(image_url, width=160)
-        st.markdown("""<style>
-        @media only screen and (max-width: 600px) {
-            .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
-        }
-        @media only screen and (min-width: 601px) {
-            .title { font-size: 4em; font-weight: bold; margin-top: 90px; margin-left: -125px; text-align: left; }
-        }
-        </style>""", unsafe_allow_html=True)
-        with col2:
-            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Error loading image: {e}")
-
-    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
-
-    user_type = st.radio("Select User Type", ["Student", "Teacher"])
-    user_type_value = 2 if user_type == "Teacher" else None  # Set to None for students
-
-    org_code = st.text_input("🏫 School Code", key="org_code")
-    login_id = st.text_input("👤 Login ID", key="login_id")
-    password = st.text_input("🔒 Password", type="password", key="password")
-
-    query_params = st.experimental_get_query_params()
-    E_params = query_params.get("E", [None])
-    T_params = query_params.get("T", [None])
-
-    E_value = E_params[0]
-    T_value = T_params[0]
-
-    api_url = None
-    topic_id = None
-
-    # Determine mode based on E and T
-    if E_value is not None and T_value is not None:
-        st.warning("Please provide either E for English OR T for Non-English, not both.")
-    elif E_value is not None and T_value is None:
-        # English mode
-        st.session_state.is_english_mode = True
-        api_url = API_AUTH_URL_ENGLISH
-        topic_id = E_value
-    elif E_value is None and T_value is not None:
-        # Non-English mode
-        st.session_state.is_english_mode = False
-        api_url = API_AUTH_URL_MATH_SCIENCE
-        topic_id = T_value
-    else:
-        # Neither E nor T provided
-        st.warning("Please provide E for English mode or T for Non-English mode.")
-
-    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
-        if topic_id is None or api_url is None:
-            st.warning("Please ensure correct E or T parameter is provided.")
-            return
-
-        auth_payload = {
-            'OrgCode': org_code,
-            'TopicID': int(topic_id),
-            'LoginID': login_id,
-            'Password': password,
-        }
-
-        if user_type_value:
-            auth_payload['UserType'] = user_type_value  # Only add if user is Teacher
-
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        try:
-            with st.spinner("🔄 Authenticating..."):
-                auth_response = requests.post(api_url, json=auth_payload, headers=headers)
-                auth_response.raise_for_status()
-                auth_data = auth_response.json()
-                if auth_data.get("statusCode") == 1:
-                    st.session_state.auth_data = auth_data
-                    st.session_state.is_authenticated = True
-                    st.session_state.topic_id = int(topic_id)
-                    st.session_state.is_teacher = (user_type_value == 2)
-                    # If student, populate weak concepts
-                    if not st.session_state.is_teacher:
-                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-                    st.rerun()
-                else:
-                    st.error("🚫 Authentication failed. Please check your credentials.")
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error connecting to the authentication API: {e}")
 
 
 # ================= MAIN APP LOGIC =================
