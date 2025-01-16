@@ -35,7 +35,6 @@ try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
-    st.stop()
 
 openai.api_key = OPENAI_API_KEY
 
@@ -44,7 +43,6 @@ API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topi
 API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
-RESOURCE_API_URL = "https://webapi.edubull.com/api/eProfessor/ConceptResources_ByName"  # Replace with actual endpoint
 
 # Initialize session states if not present
 if "auth_data" not in st.session_state:
@@ -78,6 +76,8 @@ if "student_learning_paths" not in st.session_state:
     st.session_state.student_learning_paths = {}  # Dictionary to store multiple learning paths
 if "student_weak_concepts" not in st.session_state:
     st.session_state.student_weak_concepts = []
+if "branch_name" not in st.session_state:
+    st.session_state.branch_name = "their class"
 
 # Page config
 st.set_page_config(
@@ -119,7 +119,7 @@ def latex_to_image(latex_code, dpi=300):
 
 
 # ================= PDF GENERATION FUNCTIONS =================
-def generate_exam_questions_pdf(questions, concept_text, user_name):
+def generate_exam_questions_pdf(questions, concept_text, user_name, resources=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
                             rightMargin=72, leftMargin=72,
@@ -225,13 +225,55 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         story.append(ListFlowable(question_items, bulletType='1'))
         story.append(Spacer(1, 12))
 
+    # Add resources if available
+    if resources:
+        story.append(PageBreak())
+        story.append(Paragraph("📚 Additional Resources", title_style))
+        story.append(Spacer(1, 12))
+
+        # Videos
+        if resources.get("Video_List"):
+            story.append(Paragraph("🎥 Videos", section_title_style))
+            for video in resources["Video_List"]:
+                video_url = video.get('LectureLink')
+                video_title = video.get('LectureTitle', 'No Title')
+                if video_url:
+                    story.append(Paragraph(f"- <a href='{video_url}'>Video: {video_title}</a>", styles['Normal']))
+                else:
+                    story.append(Paragraph(f"- Video: {video_title} (Link not available)", styles['Normal']))
+            story.append(Spacer(1, 12))
+
+        # Notes
+        if resources.get("Notes_List"):
+            story.append(Paragraph("📄 Notes", section_title_style))
+            for note in resources["Notes_List"]:
+                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                note_title = note.get("NotesTitle", "No Title")
+                if note_url:
+                    story.append(Paragraph(f"- <a href='{note_url}'>Notes: {note_title}</a>", styles['Normal']))
+                else:
+                    story.append(Paragraph(f"- Notes: {note_title} (Link not available)", styles['Normal']))
+            story.append(Spacer(1, 12))
+
+        # Exercises
+        if resources.get("Exercise_List"):
+            story.append(Paragraph("📝 Exercises", section_title_style))
+            for exercise in resources["Exercise_List"]:
+                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                exercise_title = exercise.get("ExerciseTitle", "No Title")
+                if exercise_url:
+                    story.append(Paragraph(f"- <a href='{exercise_url}'>Exercise: {exercise_title}</a>", styles['Normal']))
+                else:
+                    story.append(Paragraph(f"- Exercise: {exercise_title} (Link not available)", styles['Normal']))
+            story.append(Spacer(1, 12))
+
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
 
 
-def generate_learning_path_pdf(learning_path, concept_text, user_name):
+def generate_learning_path_pdf(learning_path, concept_text, user_name, resources=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
                             rightMargin=72, leftMargin=72,
@@ -255,6 +297,14 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
         alignment=TA_CENTER,
         spaceAfter=12
     )
+    section_title_style = ParagraphStyle(
+        'SectionTitle',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=14,
+        alignment=TA_LEFT,
+        spaceAfter=8
+    )
     content_style = ParagraphStyle(
         'CustomNormal',
         parent=styles['Normal'],
@@ -264,20 +314,21 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
         spaceAfter=6
     )
 
+    # Add title and subtitle
     story.append(Paragraph("Personalized Learning Path", title_style))
     user_name_display = user_name if user_name else "Student"
     concept_text_display = concept_text if concept_text else "Selected Concept"
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    # Process each section in the learning path
+    # Add learning path content
     sections = re.split(r'\n\n', learning_path.strip())
     for section in sections:
         lines = [line.strip() for line in section.split('\n') if line.strip()]
         if not lines:
             continue
         # First line as section header
-        story.append(Paragraph(lines[0], styles['Heading3']))
+        story.append(Paragraph(lines[0], section_title_style))
         story.append(Spacer(1, 6))
 
         for line in lines[1:]:
@@ -325,50 +376,61 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
             story.append(Spacer(1, 6))
         story.append(Spacer(1, 12))
 
+    # Add resources if available
+    if resources:
+        story.append(PageBreak())
+        story.append(Paragraph("📚 Additional Resources", title_style))
+        story.append(Spacer(1, 12))
+
+        # Videos
+        if resources.get("Video_List"):
+            story.append(Paragraph("🎥 Videos", section_title_style))
+            for video in resources["Video_List"]:
+                video_url = video.get('LectureLink')
+                video_title = video.get('LectureTitle', 'No Title')
+                if video_url:
+                    story.append(Paragraph(f"- <a href='{video_url}'>Video: {video_title}</a>", styles['Normal']))
+                else:
+                    story.append(Paragraph(f"- Video: {video_title} (Link not available)", styles['Normal']))
+            story.append(Spacer(1, 12))
+
+        # Notes
+        if resources.get("Notes_List"):
+            story.append(Paragraph("📄 Notes", section_title_style))
+            for note in resources["Notes_List"]:
+                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                note_title = note.get("NotesTitle", "No Title")
+                if note_url:
+                    story.append(Paragraph(f"- <a href='{note_url}'>Notes: {note_title}</a>", styles['Normal']))
+                else:
+                    story.append(Paragraph(f"- Notes: {note_title} (Link not available)", styles['Normal']))
+            story.append(Spacer(1, 12))
+
+        # Exercises
+        if resources.get("Exercise_List"):
+            story.append(Paragraph("📝 Exercises", section_title_style))
+            for exercise in resources["Exercise_List"]:
+                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                exercise_title = exercise.get("ExerciseTitle", "No Title")
+                if exercise_url:
+                    story.append(Paragraph(f"- <a href='{exercise_url}'>Exercise: {exercise_title}</a>", styles['Normal']))
+                else:
+                    story.append(Paragraph(f"- Exercise: {exercise_title} (Link not available)", styles['Normal']))
+            story.append(Spacer(1, 12))
+
     doc.build(story)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
 
 
-# ================= FETCH RESOURCES FUNCTION =================
-def fetch_resources_by_concept_name(concept_name):
-    """
-    Fetch resources (videos, notes, exercises) for a given concept name.
-    """
-    try:
-        payload = {
-            "ConceptName": concept_name,
-            "TopicID": st.session_state.topic_id
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-
-        response = requests.post(RESOURCE_API_URL, json=payload, headers=headers)
-        response.raise_for_status()
-        resources = response.json()
-
-        # Validate the structure of the response
-        if not isinstance(resources, dict):
-            st.warning(f"Unexpected resource format for {concept_name}.")
-            return None
-
-        return resources
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching resources for {concept_name}: {e}")
-        return None
-
-
 # ================= LEARNING PATH GENERATION FUNCTION =================
 def generate_learning_path(concept_text):
     """
     Incorporate the class/grade (branch_name) into the prompt so the content
-    is pitched at the student's level. Additionally, fetch and include resources.
+    is pitched at the student's level.
     """
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    branch_name = st.session_state.branch_name
     prompt = (
         f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
         f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
@@ -385,7 +447,6 @@ def generate_learning_path(concept_text):
         f"5. **Practice Problems**: Recommend specific types of problems or exercises students can work on. "
         f"Vary the difficulty level, ensuring alignment with NCERT guidelines. "
         f"Encourage students to think critically and to practice regularly.\n\n"
-        f"6. **Resources**: Provide a list of supplementary resources including videos, notes, and exercises that can aid in understanding the concept better.\n\n"
         f"Throughout your explanation, ensure that **all mathematical expressions are enclosed within LaTeX delimiters** "
         f"(`$...$` for inline and `$$...$$` for display math). "
         f"Your goal is to provide a clear, engaging, and age-appropriate roadmap that helps the student gain confidence and proficiency in '{concept_text}'."
@@ -393,31 +454,10 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",  # Use the correct model name
+            model="gpt-4",  # Correct model name
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1500
         ).choices[0].message['content'].strip()
-
-        # Fetch resources by mapping concept name
-        resources = fetch_resources_by_concept_name(concept_text)
-        if resources:
-            gpt_response += "\n\n**Resources:**\n"
-            if resources.get("Video_List"):
-                for video in resources["Video_List"]:
-                    video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                    video_title = video.get("LectureTitle", "No Title")
-                    gpt_response += f"- [Video 🎥: {video_title}]({video_url})\n"
-            if resources.get("Notes_List"):
-                for note in resources["Notes_List"]:
-                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                    note_title = note.get("NoteTitle", "No Title")
-                    gpt_response += f"- [Notes 📄: {note_title}]({note_url})\n"
-            if resources.get("Exercise_List"):
-                for exercise in resources["Exercise_List"]:
-                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                    exercise_title = exercise.get("ExerciseTitle", "No Title")
-                    gpt_response += f"- [Exercise 📝: {exercise_title}]({exercise_url})\n"
-
         return gpt_response
     except Exception as e:
         st.error(f"Error generating learning path: {e}")
@@ -430,37 +470,16 @@ def display_learning_path(concept_text, learning_path, resources=None):
     Display the generated learning path with enhanced formatting for a single concept.
     Includes resources like videos, notes, and exercises.
     """
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    branch_name = st.session_state.branch_name
     with st.expander(f"📚 Learning Path for {concept_text} according to your learning gaps for {branch_name}", expanded=False):
         st.markdown(learning_path, unsafe_allow_html=True)
-
-        # If resources are provided, display them
-        if resources:
-            st.markdown("### 📚 Additional Resources")
-            if resources.get("Video_List"):
-                st.markdown("#### 🎥 Videos")
-                for video in resources["Video_List"]:
-                    video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                    video_title = video.get("LectureTitle", "No Title")
-                    st.markdown(f"- [Video: {video_title}]({video_url})")
-            if resources.get("Notes_List"):
-                st.markdown("#### 📄 Notes")
-                for note in resources["Notes_List"]:
-                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                    note_title = note.get("NoteTitle", "No Title")
-                    st.markdown(f"- [Notes: {note_title}]({note_url})")
-            if resources.get("Exercise_List"):
-                st.markdown("#### 📝 Exercises")
-                for exercise in resources["Exercise_List"]:
-                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                    exercise_title = exercise.get("ExerciseTitle", "No Title")
-                    st.markdown(f"- [Exercise: {exercise_title}]({exercise_url})")
 
         # Download Button for the specific learning path
         pdf_bytes = generate_learning_path_pdf(
             learning_path,
             concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
+            st.session_state.auth_data['UserInfo'][0]['FullName'],
+            resources  # Pass the resources here
         )
         st.download_button(
             label="📥 Download Learning Path as PDF",
@@ -468,6 +487,223 @@ def display_learning_path(concept_text, learning_path, resources=None):
             file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
             mime="application/pdf"
         )
+
+
+# ================= RESOURCES FETCHING FUNCTION =================
+def fetch_resources_by_concept_id(topic_id, concept_id):
+    """
+    Fetches resources for a given TopicID and ConceptID using the WeakConcept_Remedy_List_ByConceptID API.
+    Returns the resources as a dictionary.
+    """
+    url = API_CONTENT_URL
+    payload = {
+        "TopicID": topic_id,
+        "ConceptID": concept_id
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        content_data = response.json()
+        return content_data
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching resources for ConceptID {concept_id}: {e}")
+        return {}
+
+
+# ================= CHAT-RELATED FUNCTIONS =================
+def add_initial_greeting():
+    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data['TopicName']
+        greeting_message = (
+            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+            f"How can I help you with {topic_name} today?"
+        )
+        st.session_state.chat_history.append(("assistant", greeting_message))
+
+
+def handle_user_input(user_input):
+    if user_input:
+        st.session_state.chat_history.append(("user", user_input))
+        get_gpt_response(user_input)
+        st.experimental_rerun()  # Use experimental_rerun for immediate UI update
+
+
+def get_system_prompt():
+    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
+    branch_name = st.session_state.branch_name
+
+    if st.session_state.is_teacher:
+        # TEACHER MODE PROMPT
+        system_prompt = f"""
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+
+Teacher Mode Instructions:
+- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
+- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
+- Offer insights into common student difficulties and ways to address them.
+- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.
+- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
+- Keep all mathematical expressions within LaTeX delimiters:
+  - Use `$...$` for inline math
+  - Use `$$...$$` for display math
+- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.
+- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.
+- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.
+        """
+    else:
+        # STUDENT MODE PROMPT
+        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
+        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
+
+        system_prompt = f"""
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+
+Student Mode Instructions:
+- The student is in {branch_name}, following the NCERT curriculum.
+- The student's weak concepts include: {weak_concepts_text}.
+- Mention that you identified these weak concepts from the Edubull app, which are visible in the student's profile.
+- Always provide the weak concepts as a list: [{weak_concepts_text}].
+- Focus strictly on {topic_name} and avoid unrelated content.
+- Encourage the student to solve problems step-by-step and think critically.
+- Avoid giving direct, complete answers. Instead, ask guiding questions and offer hints that lead them to discover the solution.
+- Support the student's reasoning and help them build confidence in their problem-solving skills.
+- If the student asks for exam or practice questions, present them in a progressive manner aligned with {branch_name} NCERT guidelines.
+- All mathematical expressions must be enclosed in LaTeX delimiters:
+  - Use `$...$` for inline math
+  - Use `$$...$$` for display math
+- If the student insists on a direct solution, gently remind them that the goal is to practice problem-solving and reasoning.
+        """
+
+    return system_prompt
+
+
+def get_gpt_response(user_input):
+    """
+    This function sends the conversation to the GPT API and appends the assistant response to chat history.
+    We've added a spinner so the user sees a 'waiting' indicator while GPT is responding.
+    """
+    system_prompt = get_system_prompt()
+    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
+    conversation_history_formatted += [
+        {"role": role, "content": content}
+        for role, content in st.session_state.chat_history
+    ]
+
+    try:
+        with st.spinner("EeeBee is thinking..."):
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4",  # Correct model name
+                messages=conversation_history_formatted,
+                max_tokens=2000
+            ).choices[0].message['content'].strip()
+
+        st.session_state.chat_history.append(("assistant", gpt_response))
+    except Exception as e:
+        st.error(f"Error in GPT response generation: {e}")
+
+
+# ================= CONCEPT CONTENT LOADING FUNCTION =================
+def load_concept_content():
+    selected_concept_id = st.session_state.selected_concept_id
+    selected_concept_name = next(
+        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
+        "Unknown Concept"
+    )
+
+    # We'll also pass the student's class/grade level (branch_name) to the prompt
+    branch_name = st.session_state.branch_name
+    prompt = (
+        f"The student is in {branch_name}. Provide a concise and educational description of the concept "
+        f"'{selected_concept_name}', pitched at the level of {branch_name} students, to help them understand it better. "
+        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
+    )
+
+    content_payload = {
+        'TopicID': st.session_state.topic_id,
+        'ConceptID': int(selected_concept_id)
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        with st.spinner("🔄 Fetching concept content..."):
+            content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+            content_response.raise_for_status()
+            content_data = content_response.json()
+
+            # Generate concept description from GPT
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4",  # Correct model name
+                messages=[{"role": "system", "content": prompt}],
+                max_tokens=500
+            ).choices[0].message['content'].strip()
+
+            # Minor replacements if needed
+            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
+            gpt_response += "\n\nYou can check the resources below for more information."
+            st.session_state.generated_description = gpt_response
+
+            # Fetch resources
+            resources = fetch_resources_by_concept_id(
+                topic_id=st.session_state.topic_id,
+                concept_id=selected_concept_id
+            )
+
+            display_resources(content_data)
+
+    except requests.exceptions.RequestException as req_err:
+        st.error(f"Error fetching content: {req_err}")
+    except Exception as e:
+        st.error(f"Error generating concept description: {e}")
+
+
+# ================= RESOURCES DISPLAY FUNCTION =================
+def display_resources(content_data):
+    branch_name = st.session_state.branch_name
+    with st.expander("📚 Resources", expanded=True):
+        concept_description = st.session_state.get("generated_description", "No description available.")
+        st.markdown(f"### Concept Description for {branch_name}\n{concept_description}\n")
+        
+        # Display Videos
+        if content_data.get("Video_List"):
+            st.markdown("#### 🎥 Videos")
+            for video in content_data["Video_List"]:
+                video_url = video.get('LectureLink')
+                video_title = video.get('LectureTitle', 'No Title')
+                if video_url:
+                    st.markdown(f"- [Video: {video_title}]({video_url})")
+                else:
+                    st.write(f"- Video: {video_title} (Link not available)")
+
+        # Display Notes
+        if content_data.get("Notes_List"):
+            st.markdown("#### 📄 Notes")
+            for note in content_data["Notes_List"]:
+                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                note_title = note.get("NotesTitle", "No Title")
+                if note_url:
+                    st.markdown(f"- [Notes: {note_title}]({note_url})")
+                else:
+                    st.write(f"- Notes: {note_title} (Link not available)")
+
+        # Display Exercises
+        if content_data.get("Exercise_List"):
+            st.markdown("#### 📝 Exercises")
+            for exercise in content_data["Exercise_List"]:
+                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                exercise_title = exercise.get("ExerciseTitle", "No Title")
+                if exercise_url:
+                    st.markdown(f"- [Exercise: {exercise_title}]({exercise_url})")
+                else:
+                    st.write(f"- Exercise: {exercise_title} (Link not available)")
 
 
 # ================= TEACHER DASHBOARD FUNCTIONS =================
@@ -567,7 +803,7 @@ def teacher_dashboard():
             st.session_state.selected_teacher_concept_text = chosen_concept_text
 
             if st.button("Generate Exam Questions"):
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")
+                branch_name = st.session_state.branch_name
 
                 # Parse out the short code (L1, L2, etc.) from the selectbox choice
                 bloom_short = bloom_level.split()[0]  # E.g., "L4"
@@ -592,7 +828,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4",  # Use the correct model
+                            model="gpt-4",  # Correct model name
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=5000
                         )
@@ -602,14 +838,15 @@ def teacher_dashboard():
                         st.error(f"Error generating exam questions: {e}")
 
     if st.session_state.exam_questions:
-        branch_name = st.session_state.auth_data.get("BranchName", "their class")
+        branch_name = st.session_state.branch_name
         st.markdown(f"### 📝 Generated Exam Questions for {branch_name}")
         st.markdown(st.session_state.exam_questions)
 
         pdf_bytes = generate_exam_questions_pdf(
             st.session_state.exam_questions,
             st.session_state.selected_teacher_concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
+            st.session_state.auth_data['UserInfo'][0]['FullName'],
+            resources=None  # You can choose to include resources here if needed
         )
         st.download_button(
             label="📥 Download Exam Questions as PDF",
@@ -748,196 +985,28 @@ def login_screen():
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
+                    st.session_state.branch_name = st.text_input("📚 Branch Name", key="branch_name_input") or "their class"
                     # If student, populate weak concepts
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("🚫 Authentication failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
 
-# ================= CHAT-RELATED FUNCTIONS =================
-def add_initial_greeting():
-    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-        topic_name = st.session_state.auth_data['TopicName']
-        greeting_message = (
-            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-            f"How can I help you with {topic_name} today?"
-        )
-        st.session_state.chat_history.append(("assistant", greeting_message))
-
-
-def handle_user_input(user_input):
-    if user_input:
-        st.session_state.chat_history.append(("user", user_input))
-        get_gpt_response(user_input)
-        st.rerun()  # Rerun the app so chat updates immediately
-
-
-def get_system_prompt():
-    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-
-    if st.session_state.is_teacher:
-        # TEACHER MODE PROMPT
-        system_prompt = f"""
-You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
-
-Teacher Mode Instructions:
-- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
-- Offer insights into common student difficulties and ways to address them.
-- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.
-- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
-- Keep all mathematical expressions within LaTeX delimiters:
-  - Use `$...$` for inline math
-  - Use `$$...$$` for display math
-- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.
-- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.
-- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.
-        """
-    else:
-        # STUDENT MODE PROMPT
-        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
-        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
-
-        system_prompt = f"""
-You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
-
-Student Mode Instructions:
-- The student is in {branch_name}, following the NCERT curriculum.
-- The student's weak concepts include: {weak_concepts_text}.
-- Mention that you identified these weak concepts from the Edubull app, which are visible in the student's profile.
-- Always provide the weak concepts as a list: [{weak_concepts_text}].
-- Focus strictly on {topic_name} and avoid unrelated content.
-- Encourage the student to solve problems step-by-step and think critically.
-- Avoid giving direct, complete answers. Instead, ask guiding questions and offer hints that lead them to discover the solution.
-- Support the student's reasoning and help them build confidence in their problem-solving skills.
-- If asked for exam or practice questions, present them in a progressive manner aligned with {branch_name} NCERT guidelines.
-- All mathematical expressions must be enclosed in LaTeX delimiters:
-  - Use `$...$` for inline math
-  - Use `$$...$$` for display math
-- If the student insists on a direct solution, gently remind them that the goal is to practice problem-solving and reasoning.
-        """
-
-    return system_prompt
-
-
-def get_gpt_response(user_input):
-    """
-    This function sends the conversation to the GPT API and appends the assistant response to chat history.
-    We've added a spinner so the user sees a 'waiting' indicator while GPT is responding.
-    """
-    system_prompt = get_system_prompt()
-    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-    conversation_history_formatted += [
-        {"role": role, "content": content}
-        for role, content in st.session_state.chat_history
-    ]
-
-    try:
-        with st.spinner("EeeBee is thinking..."):
-            gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",  # Use the correct model name
-                messages=conversation_history_formatted,
-                max_tokens=2000
-            ).choices[0].message['content'].strip()
-
-        st.session_state.chat_history.append(("assistant", gpt_response))
-    except Exception as e:
-        st.error(f"Error in GPT response generation: {e}")
-
-
-# ================= CONCEPT CONTENT LOADING FUNCTION =================
-def load_concept_content():
-    selected_concept_id = st.session_state.selected_concept_id
-    selected_concept_name = next(
-        (concept['ConceptText'] for concept in st.session_state.auth_data['ConceptList'] if concept['ConceptID'] == selected_concept_id),
-        "Unknown Concept"
-    )
-
-    # We'll also pass the student's class/grade level (branch_name) to the prompt
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    prompt = (
-        f"The student is in {branch_name}. Provide a concise and educational description of the concept "
-        f"'{selected_concept_name}', pitched at the level of {branch_name} students, to help them understand it better. "
-        f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display)."
-    )
-
-    content_payload = {
-        'TopicID': st.session_state.topic_id,
-        'ConceptID': int(selected_concept_id)
-    }
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-    try:
-        with st.spinner("🔄 Fetching concept content..."):
-            content_response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-            content_response.raise_for_status()
-            content_data = content_response.json()
-
-            # Generate concept description from GPT
-            gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",  # Use the correct model
-                messages=[{"role": "system", "content": prompt}],
-                max_tokens=500
-            ).choices[0].message['content'].strip()
-
-            # Minor replacements if needed
-            gpt_response = gpt_response.replace("This concept", selected_concept_name).replace("this concept", selected_concept_name)
-            gpt_response += "\n\nYou can check the resources below for more information."
-            st.session_state.generated_description = gpt_response
-
-            display_resources(content_data)
-
-    except requests.exceptions.RequestException as req_err:
-        st.error(f"Error fetching content: {req_err}")
-    except Exception as e:
-        st.error(f"Error generating concept description: {e}")
-
-
-# ================= RESOURCES DISPLAY FUNCTION =================
-def display_resources(content_data):
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    with st.expander("📚 Resources", expanded=True):
-        concept_description = st.session_state.get("generated_description", "No description available.")
-        st.markdown(f"### Concept Description for {branch_name}\n{concept_description}\n")
-        if content_data.get("Video_List"):
-            st.markdown("#### 🎥 Videos")
-            for video in content_data["Video_List"]:
-                video_url = video.get("LectureLink", f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}")
-                video_title = video.get("LectureTitle", "No Title")
-                st.markdown(f"- [Video: {video_title}]({video_url})")
-        if content_data.get("Notes_List"):
-            st.markdown("#### 📄 Notes")
-            for note in content_data["Notes_List"]:
-                note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                note_title = note.get("NoteTitle", "No Title")
-                st.markdown(f"- [Notes: {note_title}]({note_url})")
-        if content_data.get("Exercise_List"):
-            st.markdown("#### 📝 Exercises")
-            for exercise in content_data["Exercise_List"]:
-                exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                exercise_title = exercise.get("ExerciseTitle", "No Title")
-                st.markdown(f"- [Exercise: {exercise_title}]({exercise_url})")
-
-
 # ================= MAIN SCREEN FUNCTION (POST-LOGIN) =================
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
+    branch_name = st.session_state.branch_name
 
     col1, col2 = st.columns([9, 1])
     with col2:
         if st.button("Logout"):
             st.session_state.clear()
-            st.rerun()
+            st.experimental_rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
@@ -951,23 +1020,7 @@ def main_screen():
         # Teacher Mode
         tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
         with tabs[0]:
-            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-            add_initial_greeting()
-            chat_container = st.container()
-            with chat_container:
-                chat_history_html = """
-                <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                """
-                for role, message in st.session_state.chat_history:
-                    if role == "assistant":
-                        chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                    else:
-                        chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                chat_history_html += "</div>"
-                st.markdown(chat_history_html, unsafe_allow_html=True)
-            user_input = st.chat_input("Enter your question about the topic")
-            if user_input:
-                handle_user_input(user_input)
+            display_chat()  # Utilize the streamlined chat function
 
         with tabs[1]:
             st.subheader("Teacher Dashboard")
@@ -979,45 +1032,12 @@ def main_screen():
             # English Student: only Chat
             tab1 = st.tabs(["💬 Chat"])[0]
             with tab1:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                chat_container = st.container()
-                with chat_container:
-                    chat_history_html = """
-                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                    """
-                    for role, message in st.session_state.chat_history:
-                        if role == "assistant":
-                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                        else:
-                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                    chat_history_html += "</div>"
-                    st.markdown(chat_history_html, unsafe_allow_html=True)
-                user_input = st.chat_input("Enter your question about the topic")
-                if user_input:
-                    handle_user_input(user_input)
-
+                display_chat()
         else:
             # Non-English Student: Chat + Learning Path + Concepts
             tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 Concepts"])
             with tab1:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                chat_container = st.container()
-                with chat_container:
-                    chat_history_html = """
-                    <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-                    """
-                    for role, message in st.session_state.chat_history:
-                        if role == "assistant":
-                            chat_history_html += f"<div style='text-align: left; color: #000; background-color: #e0e7ff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>EeeBee:</b> {message}</div>"
-                        else:
-                            chat_history_html += f"<div style='text-align: left; color: #fff; background-color: #2563eb; padding: 8px; border-radius: 8px; margin-bottom: 5px;'><b>{user_name}:</b> {message}</div>"
-                    chat_history_html += "</div>"
-                    st.markdown(chat_history_html, unsafe_allow_html=True)
-                user_input = st.chat_input("Enter your question about the topic")
-                if user_input:
-                    handle_user_input(user_input)
+                display_chat()
 
             with tab2:
                 weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
@@ -1039,7 +1059,10 @@ def main_screen():
                                     learning_path = generate_learning_path(concept_text)
                                     if learning_path:
                                         # Fetch resources for the concept
-                                        resources = fetch_resources_by_concept_name(concept_text)
+                                        resources = fetch_resources_by_concept_id(
+                                            topic_id=st.session_state.topic_id,
+                                            concept_id=concept_id
+                                        )
 
                                         st.session_state.student_learning_paths[concept_id] = {
                                             "concept_text": concept_text,
@@ -1064,12 +1087,124 @@ def main_screen():
             with tab3:
                 concept_list = st.session_state.auth_data.get('ConceptList', [])
                 concept_options = {concept['ConceptText']: concept['ConceptID'] for concept in concept_list}
-                for c_text, c_id in concept_options.items():
-                    if st.button(c_text, key=f"concept_{c_id}"):
-                        st.session_state.selected_concept_id = c_id
-
-                if st.session_state.selected_concept_id:
+                selected_concept = st.selectbox("Select a Concept to View Details:", list(concept_options.keys()))
+                if selected_concept:
+                    selected_concept_id = concept_options[selected_concept]
+                    st.session_state.selected_concept_id = selected_concept_id
                     load_concept_content()
+
+
+# ================= CHAT-RELATED FUNCTIONS =================
+def display_chat():
+    st.subheader("💬 Chat with your EeeBee AI buddy")
+    add_initial_greeting()
+    
+    for role, message in st.session_state.chat_history:
+        if role == "assistant":
+            st.chat_message("assistant").write(message)
+        else:
+            st.chat_message("user").write(message)
+    
+    user_input = st.chat_input("Enter your question about the topic")
+    if user_input:
+        handle_user_input(user_input)
+
+
+# ================= LOGIN SCREEN FUNCTION =================
+def login_screen():
+    try:
+        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(image_url, width=160)
+        st.markdown("""<style>
+        @media only screen and (max-width: 600px) {
+            .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
+        }
+        @media only screen and (min-width: 601px) {
+            .title { font-size: 4em; font-weight: bold; margin-top: 90px; margin-left: -125px; text-align: left; }
+        }
+        </style>""", unsafe_allow_html=True)
+        with col2:
+            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error loading image: {e}")
+
+    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
+
+    user_type = st.radio("Select User Type", ["Student", "Teacher"])
+    user_type_value = 2 if user_type == "Teacher" else None  # Set to None for students
+
+    org_code = st.text_input("🏫 School Code", key="org_code")
+    login_id = st.text_input("👤 Login ID", key="login_id")
+    password = st.text_input("🔒 Password", type="password", key="password")
+
+    query_params = st.experimental_get_query_params()
+    E_params = query_params.get("E", [None])
+    T_params = query_params.get("T", [None])
+
+    E_value = E_params[0]
+    T_value = T_params[0]
+
+    api_url = None
+    topic_id = None
+
+    # Determine mode based on E and T
+    if E_value is not None and T_value is not None:
+        st.warning("Please provide either E for English OR T for Non-English, not both.")
+    elif E_value is not None and T_value is None:
+        # English mode
+        st.session_state.is_english_mode = True
+        api_url = API_AUTH_URL_ENGLISH
+        topic_id = E_value
+    elif E_value is None and T_value is not None:
+        # Non-English mode
+        st.session_state.is_english_mode = False
+        api_url = API_AUTH_URL_MATH_SCIENCE
+        topic_id = T_value
+    else:
+        # Neither E nor T provided
+        st.warning("Please provide E for English mode or T for Non-English mode.")
+
+    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
+        if topic_id is None or api_url is None:
+            st.warning("Please ensure correct E or T parameter is provided.")
+            return
+
+        auth_payload = {
+            'OrgCode': org_code,
+            'TopicID': int(topic_id),
+            'LoginID': login_id,
+            'Password': password,
+        }
+
+        if user_type_value:
+            auth_payload['UserType'] = user_type_value  # Only add if user is Teacher
+
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        try:
+            with st.spinner("🔄 Authenticating..."):
+                auth_response = requests.post(api_url, json=auth_payload, headers=headers)
+                auth_response.raise_for_status()
+                auth_data = auth_response.json()
+                if auth_data.get("statusCode") == 1:
+                    st.session_state.auth_data = auth_data
+                    st.session_state.is_authenticated = True
+                    st.session_state.topic_id = int(topic_id)
+                    st.session_state.is_teacher = (user_type_value == 2)
+                    st.session_state.branch_name = st.text_input("📚 Branch Name", key="branch_name_input") or "their class"
+                    # If student, populate weak concepts
+                    if not st.session_state.is_teacher:
+                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+                    st.experimental_rerun()
+                else:
+                    st.error("🚫 Authentication failed. Please check your credentials.")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error connecting to the authentication API: {e}")
 
 
 # ================= MAIN APP LOGIC =================
