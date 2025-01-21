@@ -50,8 +50,6 @@ API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Basel
 # Initialize session state variables
 if "auth_data" not in st.session_state:
     st.session_state.auth_data = None
-if "user_info" not in st.session_state:
-    st.session_state.user_info = {}
 if "selected_concept_id" not in st.session_state:
     st.session_state.selected_concept_id = None
 if "conversation_history" not in st.session_state:
@@ -455,14 +453,15 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
         pdf_bytes = generate_learning_path_pdf(
             learning_path,
             concept_text,
-            st.session_state.user_info.get('FullName', 'User')
+            st.session_state.auth_data['UserInfo'][0]['FullName']
         )
         st.download_button(
             label="📥 Download Learning Path as PDF",
             data=pdf_bytes,
-            file_name=f"{st.session_state.user_info.get('FullName', 'User')}_Learning_Path_{concept_text}.pdf",
+            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
             mime="application/pdf"
         )
+
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
@@ -477,9 +476,9 @@ def baseline_testing_report():
     5. Bloom’s: No table, multi-color bar chart
     """
     if not st.session_state.baseline_data:
-        user_info = st.session_state.user_info
+        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
         user_id = user_info.get('UserID')
-        org_code = st.session_state.auth_data.get('OrgCode', '012')
+        org_code = user_info.get('OrgCode', '012')
         subject_id = st.session_state.get("subject_id", 21)
 
         payload = {
@@ -521,16 +520,16 @@ def baseline_testing_report():
         st.markdown("### Overall Performance Summary")
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Name", user_summary.get("FullName", "N/A"))
-        col2.metric("Subject", user_summary.get("SubjectName", "N/A"))
-        col3.metric("Batch", user_summary.get("BatchName", "N/A"))
-        col4.metric("Attempt Date", user_summary.get("AttendDate", "N/A"))
+        col1.metric("Name", user_summary.get("FullName"))
+        col2.metric("Subject", user_summary.get("SubjectName"))
+        col3.metric("Batch", user_summary.get("BatchName"))
+        col4.metric("Attempt Date", user_summary.get("AttendDate"))
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Marks (%)", f"{user_summary.get('MarksPercent', 0)}%")
-        col2.metric("Total Concepts", user_summary.get("TotalQuestion", 0))
-        col3.metric("Cleared Concepts", user_summary.get("CorrectQuestion", 0))
-        col4.metric("Weak Concepts", user_summary.get("WeakConceptCount", 0))
+        col2.metric("Total Concepts.", user_summary.get("TotalQuestion"))
+        col3.metric("Cleared Concepts.", user_summary.get("CorrectQuestion"))
+        col4.metric("Weak Concepts", user_summary.get("WeakConceptCount"))
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Difficult Ques. (%)", f"{user_summary.get('DiffQuesPercent', 0)}%")
@@ -672,12 +671,11 @@ def teacher_dashboard():
 
     if selected_batch_id and st.session_state.selected_batch_id != selected_batch_id:
         st.session_state.selected_batch_id = selected_batch_id
-        user_info = st.session_state.user_info
-        org_code = st.session_state.auth_data.get("OrgCode", '012')
-        topic_id = st.session_state.topic_id
+        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+        org_code = user_info.get('OrgCode', '012')
         params = {
             "BatchID": selected_batch_id,
-            "TopicID": topic_id,
+            "TopicID": st.session_state.topic_id,
             "OrgCode": org_code
         }
         headers = {
@@ -775,7 +773,7 @@ def teacher_dashboard():
         pdf_bytes = generate_exam_questions_pdf(
             st.session_state.exam_questions,
             st.session_state.selected_teacher_concept_text,
-            st.session_state.user_info.get('FullName', 'User')
+            st.session_state.auth_data['UserInfo'][0]['FullName']
         )
         st.download_button(
             label="📥 Download Exam Questions as PDF",
@@ -787,78 +785,6 @@ def teacher_dashboard():
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
 # ----------------------------------------------------------------------------
-def authenticate_user(org_code: str, topic_id: int, login_id: str, password: str, user_type: int, is_english: bool):
-    """
-    Authenticates a user against either the EnglishLab API or Math/Science eProfessor API.
-    Sets relevant session_state variables safely.
-    """
-    # Decide which API endpoint to use
-    api_url = API_AUTH_URL_ENGLISH if is_english else API_AUTH_URL_MATH_SCIENCE
-
-    # Build the payload
-    payload = {
-        "OrgCode": org_code,
-        "TopicID": topic_id,
-        "LoginID": login_id,
-        "Password": password
-    }
-    # For non-English, also send user_type
-    if not is_english:
-        payload["UserType"] = user_type
-
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-
-    try:
-        response = requests.post(api_url, json=payload, headers=headers)
-        response.raise_for_status()
-        auth_data = response.json()
-
-        if auth_data.get("statusCode") == 1:
-            # Store the entire response
-            st.session_state.auth_data = auth_data
-            st.session_state.is_authenticated = True
-            st.session_state.is_english_mode = is_english
-
-            # Safely extract user_info
-            user_info_list = auth_data.get("UserInfo", [])
-            if user_info_list:
-                # Typically an array with 1 item
-                st.session_state.user_info = user_info_list[0]
-            else:
-                st.session_state.user_info = {}  # fallback
-
-            st.session_state.topic_name = auth_data.get("TopicName", "Unknown Topic")
-
-            # For non-English, we might have extra fields
-            if not is_english:
-                st.session_state.subject_id = auth_data.get("SubjectID", 21)
-                st.session_state.subject_name = auth_data.get("SubjectName", "")
-                st.session_state.branch_name = auth_data.get("BranchName", "")
-
-                st.session_state.concept_list = auth_data.get("ConceptList", [])
-                st.session_state.weak_concept_list = auth_data.get("WeakConceptList", [])
-                st.session_state.batch_list = auth_data.get("BatchList", [])
-            else:
-                # English mode has simpler structure
-                st.session_state.course_title = auth_data.get("CourseTitle", "")
-                # No concept list or weak concept list by default
-                st.session_state.concept_list = []
-                st.session_state.weak_concept_list = []
-                st.session_state.batch_list = []
-
-            st.success("✅ Authentication successful!")
-        else:
-            st.error("❌ Authentication failed. Check your credentials.")
-            st.session_state.is_authenticated = False
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Error connecting to the API: {e}")
-        st.session_state.is_authenticated = False
-
 def login_screen():
     try:
         image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
@@ -918,27 +844,51 @@ def login_screen():
             st.warning("Please ensure correct E or T parameter is provided.")
             return
 
-        # Authenticate the user
-        authenticate_user(
-            org_code=org_code,
-            topic_id=int(topic_id),
-            login_id=login_id,
-            password=password,
-            user_type=user_type_value,
-            is_english=st.session_state.is_english_mode
-        )
+        auth_payload = {
+            'OrgCode': org_code,
+            'TopicID': int(topic_id),
+            'LoginID': login_id,
+            'Password': password,
+        }
+        if not st.session_state.is_english_mode:
+            auth_payload['UserType'] = user_type_value
 
-        # Rerun the app to update the UI after authentication
-        if st.session_state.is_authenticated:
-            st.rerun()
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        try:
+            with st.spinner("🔄 Authenticating..."):
+                auth_response = requests.post(api_url, json=auth_payload, headers=headers)
+                auth_response.raise_for_status()
+                auth_data = auth_response.json()
+                if auth_data.get("statusCode") == 1:
+                    st.session_state.auth_data = auth_data
+                    st.session_state.is_authenticated = True
+                    st.session_state.topic_id = int(topic_id)
+                    st.session_state.is_teacher = (user_type_value == 2)
+
+                    # Capture SubjectID if present
+                    st.session_state.subject_id = auth_data.get("SubjectID", 21)
+
+                    if not st.session_state.is_teacher:
+                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+
+                    st.rerun()
+                else:
+                    st.error("🚫 Authentication failed. Check credentials.")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error connecting to the authentication API: {e}")
+
 
 def add_initial_greeting():
-    if len(st.session_state.chat_history) == 0 and st.session_state.is_authenticated:
-        user_name = st.session_state.user_info.get('FullName', 'User')
-        topic_name = st.session_state.topic_name
+    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
-        concept_list = st.session_state.concept_list
-        weak_concepts = st.session_state.weak_concept_list
+        concept_list = st.session_state.auth_data.get('ConceptList', [])
+        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
 
         concept_options = "\n\n**📚 Available Concepts:**\n"
         for concept in concept_list:
@@ -974,7 +924,7 @@ def handle_user_input(user_input):
         st.rerun()
 
 def get_system_prompt():
-    topic_name = st.session_state.topic_name
+    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     if st.session_state.is_teacher:
         system_prompt = f"""
@@ -987,7 +937,7 @@ Teacher Mode Instructions:
 - Use LaTeX for math.
 """
     else:
-        weak_concepts = [wc['ConceptText'] for wc in st.session_state.weak_concept_list]
+        weak_concepts = [wc['ConceptText'] for wc in st.session_state.student_weak_concepts]
         weak_concepts_str = ", ".join(weak_concepts) if weak_concepts else "none"
 
         system_prompt = f"""
@@ -1010,7 +960,7 @@ def get_gpt_response(user_input):
     ]
     try:
         with st.spinner("EeeBee is thinking..."):
-            concept_list = st.session_state.concept_list
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
             mentioned_concept = None
             for concept in concept_list:
                 if concept['ConceptText'].lower() in user_input.lower():
@@ -1067,8 +1017,8 @@ def display_chat(user_name: str):
         handle_user_input(user_input)
 
 def display_learning_path_tab():
-    weak_concepts = st.session_state.weak_concept_list
-    concept_list = st.session_state.concept_list
+    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+    concept_list = st.session_state.auth_data.get('ConceptList', [])
 
     if not weak_concepts:
         st.warning("No weak concepts found.")
@@ -1108,8 +1058,8 @@ def display_learning_path_tab():
 # 6) MAIN SCREEN
 # ----------------------------------------------------------------------------
 def main_screen():
-    user_name = st.session_state.user_info.get('FullName', 'User')
-    topic_name = st.session_state.topic_name
+    user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+    topic_name = st.session_state.auth_data['TopicName']
 
     col1, col2 = st.columns([9, 1])
     with col2:
