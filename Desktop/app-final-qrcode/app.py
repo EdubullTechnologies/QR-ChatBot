@@ -27,7 +27,8 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from datetime import datetime, timedelta
 import extra_streamlit_components as stx
-
+from streamlit_cookies_manager import EncryptedCookieManager
+import secrets 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
 # ----------------------------------------------------------------------------
@@ -118,32 +119,39 @@ try:
 except KeyError:
     st.error("Cookie encryption password not found in secrets. Please set cookies_manager.password in secrets.")
 
-def get_cookie_manager():
-    return stx.CookieManager(key="eeebee_cookies", secret_key=COOKIE_SECRET_KEY)
+# Initialize encrypted cookie manager
+cookies = EncryptedCookieManager(
+    prefix="eeebee_ai_buddy",  # Prefix to avoid cookie name collisions
+    password=COOKIE_SECRET_KEY
+)
+
+
 
 def initialize_cookie_state():
-    cookie_manager = get_cookie_manager()
-    if "cookie_manager" not in st.session_state:
-        st.session_state.cookie_manager = cookie_manager
+    # Initialize cookies
+    if not cookies.ready():
+        st.stop()
         
-    # Check for existing authentication cookie
-    auth_cookie = cookie_manager.get("auth_data")
-    if auth_cookie and not st.session_state.get("is_authenticated"):
-        try:
-            auth_data = json.loads(auth_cookie)
-            # Verify cookie expiration
-            if datetime.fromisoformat(auth_data.get("expires", "")) > datetime.now():
-                st.session_state.auth_data = auth_data.get("data")
-                st.session_state.is_authenticated = True
-                st.session_state.is_teacher = auth_data.get("is_teacher", False)
-                st.session_state.topic_id = auth_data.get("topic_id")
-                st.session_state.is_english_mode = auth_data.get("is_english_mode", False)
-        except Exception as e:
-            print(f"Error loading auth cookie: {e}")
-            cookie_manager.delete("auth_data")
+    if not st.session_state.get("is_authenticated"):
+        # Check for existing authentication cookie
+        auth_cookie = cookies.get("auth_data")
+        if auth_cookie:
+            try:
+                auth_data = json.loads(auth_cookie)
+                if datetime.fromisoformat(auth_data.get("expires", "")) > datetime.now():
+                    st.session_state.auth_data = auth_data.get("data")
+                    st.session_state.is_authenticated = True
+                    st.session_state.is_teacher = auth_data.get("is_teacher", False)
+                    st.session_state.topic_id = auth_data.get("topic_id")
+                    st.session_state.is_english_mode = auth_data.get("is_english_mode", False)
+            except Exception as e:
+                print(f"Error loading auth cookie: {e}")
+                cookies.delete("auth_data")
+                
+    # Save cookies
+    cookies.save()
 
 def set_auth_cookie(auth_data, is_teacher, topic_id, is_english_mode):
-    cookie_manager = st.session_state.cookie_manager
     cookie_data = {
         "data": auth_data,
         "is_teacher": is_teacher,
@@ -151,16 +159,13 @@ def set_auth_cookie(auth_data, is_teacher, topic_id, is_english_mode):
         "is_english_mode": is_english_mode,
         "expires": (datetime.now() + timedelta(days=7)).isoformat()
     }
-    expires_at = int((datetime.now() + timedelta(days=7)).timestamp())  # Convert to Unix timestamp
-    cookie_manager.set(
-        key="auth_data",  # Changed from cookie to key
-        value=json.dumps(cookie_data),
-        expires_at=expires_at
-    )
+    # Set cookie with 7 day expiration
+    cookies.set("auth_data", json.dumps(cookie_data))
+    cookies.save()
 
 def clear_auth_cookie():
-    if "cookie_manager" in st.session_state:
-        st.session_state.cookie_manager.delete("auth_data")
+    cookies.delete("auth_data")
+    cookies.save()
 
 class APIConfig:
     # Base URL
