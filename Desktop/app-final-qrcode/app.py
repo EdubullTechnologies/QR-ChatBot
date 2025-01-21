@@ -115,7 +115,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # ----------------------------------------------------------------------------
 def get_cookie_manager():
     return stx.CookieManager(
-        prefix="eeebee_",  # prefix for cookies to avoid conflicts
+        key="eeebee_",  # prefix for cookies to avoid conflicts
         password=st.secrets.get("cookies_manager", {}).get("password", "default-secure-key")
     )
 
@@ -149,7 +149,12 @@ def set_auth_cookie(auth_data, is_teacher, topic_id, is_english_mode):
         "is_english_mode": is_english_mode,
         "expires": (datetime.now() + timedelta(days=7)).isoformat()
     }
-    cookie_manager.set("auth_data", json.dumps(cookie_data), expires_at=datetime.now() + timedelta(days=7))
+    expires_at = int((datetime.now() + timedelta(days=7)).timestamp())  # Convert to Unix timestamp
+    cookie_manager.set(
+        key="auth_data",  # Changed from cookie to key
+        value=json.dumps(cookie_data),
+        expires_at=expires_at
+    )
 
 def clear_auth_cookie():
     if "cookie_manager" in st.session_state:
