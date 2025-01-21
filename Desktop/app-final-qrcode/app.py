@@ -33,10 +33,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
 # If you have your OpenAI key in Streamlit secrets, you can fetch it:
-#   try:
-#       OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-#   except KeyError:
-#       st.error("API key for OpenAI not found in secrets.")
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except KeyError:
+    st.error("API key for OpenAI not found in secrets.")
 
 # If you prefer, you can hardcode or environment-variable your API key:
 # openai.api_key = "YOUR_OPENAI_KEY"
