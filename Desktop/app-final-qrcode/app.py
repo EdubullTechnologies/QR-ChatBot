@@ -570,22 +570,19 @@ def baseline_testing_report():
     st.markdown("### Concept-wise Performance")
     if concept_wise_data:
         df_concepts = pd.DataFrame(concept_wise_data).copy()
-
         # Create S.No
         df_concepts["S.No."] = range(1, len(df_concepts) + 1)
-
         # Concept Status => Cleared if RightAnswerPercent == 100, else Not Cleared
         df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
             lambda x: "✅" if x == 100.0 else "❌"
         )
-
         # Keep only 4 columns: S.No., Concept Status, Concept Name => ConceptText, Class => BranchName
         df_concepts.rename(columns={"ConceptText": "Concept Name", 
-                                    "BranchName": "Class"}, inplace=True, index=False)
+                                    "BranchName": "Class"}, inplace=True)
         # Final columns
         df_display = df_concepts[["S.No.", "Concept Name","Concept Status", "Class"]]
-
-        st.dataframe(df_display, index=False)
+        # Use hide_index=True for Streamlit dataframe to hide the index
+        st.dataframe(df_display, hide_index=True)
     else:
         st.info("No concept-wise data available.")
 
