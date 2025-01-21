@@ -113,11 +113,13 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # ----------------------------------------------------------------------------
 # COOKIE MANAGEMENT
 # ----------------------------------------------------------------------------
+try:
+    COOKIE_SECRET_KEY = st.secrets["cookies_manager"]["password"]
+except KeyError:
+    st.error("Cookie encryption password not found in secrets. Please set cookies_manager.password in secrets.")
+
 def get_cookie_manager():
-    return stx.CookieManager(
-        key="eeebee_",  # prefix for cookies to avoid conflicts
-        password=st.secrets.get("cookies_manager", {}).get("password", "default-secure-key")
-    )
+    return stx.CookieManager(key="eeebee_cookies", secret_key=COOKIE_SECRET_KEY)
 
 def initialize_cookie_state():
     cookie_manager = get_cookie_manager()
