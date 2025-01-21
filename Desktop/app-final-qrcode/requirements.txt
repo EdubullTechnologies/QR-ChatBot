@@ -68,3 +68,4 @@ reportlab
 matplotlib
 streamlit-webrtc
 speechrecognition
+extra-streamlit-components
