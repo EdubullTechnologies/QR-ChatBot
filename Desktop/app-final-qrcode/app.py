@@ -1086,7 +1086,7 @@ def display_learning_path_tab():
 # ------------------------------------------------------------------------
 def main_screen():
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-    topic_name = st.session_state.auth_data.get('TopicName', "Subject")
+    topic_name = st.session_state.auth_data['TopicName']
 
     col1, col2 = st.columns([9, 1])
     with col2:
@@ -1097,8 +1097,7 @@ def main_screen():
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
         f"""
-        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> 
-        EeeBee AI buddy is here to help you with :blue[{topic_name}]
+        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
         """,
         unsafe_allow_html=True,
     )
