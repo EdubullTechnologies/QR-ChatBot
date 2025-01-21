@@ -25,10 +25,7 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
-from datetime import datetime, timedelta
-import extra_streamlit_components as stx
-from streamlit_cookies_manager import EncryptedCookieManager
-import secrets 
+
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
 # ----------------------------------------------------------------------------
@@ -111,114 +108,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # ----------------------------------------------------------------------------
 # 2) HELPER FUNCTIONS
 # ----------------------------------------------------------------------------
-# ----------------------------------------------------------------------------
-# COOKIE MANAGEMENT
-# ----------------------------------------------------------------------------
-try:
-    COOKIE_SECRET_KEY = st.secrets["cookies_manager"]["password"]
-except KeyError:
-    st.error("Cookie encryption password not found in secrets. Please set cookies_manager.password in secrets.")
 
-# Initialize encrypted cookie manager
-cookies = EncryptedCookieManager(
-    prefix="eeebee_ai_buddy",  # Prefix to avoid cookie name collisions
-    password=COOKIE_SECRET_KEY
-)
-
-
-
-def initialize_cookie_state():
-    # Initialize cookies
-    if not cookies.ready():
-        st.stop()
-        
-    if not st.session_state.get("is_authenticated"):
-        # Check for existing authentication cookie
-        auth_cookie = cookies.get("auth_data")
-        if auth_cookie:
-            try:
-                auth_data = json.loads(auth_cookie)
-                if datetime.fromisoformat(auth_data.get("expires", "")) > datetime.now():
-                    st.session_state.auth_data = auth_data.get("data")
-                    st.session_state.is_authenticated = True
-                    st.session_state.is_teacher = auth_data.get("is_teacher", False)
-                    st.session_state.topic_id = auth_data.get("topic_id")
-                    st.session_state.is_english_mode = auth_data.get("is_english_mode", False)
-            except Exception as e:
-                print(f"Error loading auth cookie: {e}")
-                cookies.delete("auth_data")
-                
-    # Save cookies
-    cookies.save()
-
-def set_auth_cookie(auth_data, is_teacher, topic_id, is_english_mode):
-    cookie_data = {
-        "data": auth_data,
-        "is_teacher": is_teacher,
-        "topic_id": topic_id,
-        "is_english_mode": is_english_mode,
-        "expires": (datetime.now() + timedelta(days=7)).isoformat()
-    }
-    # Set cookie with 7 day expiration
-    cookies.set("auth_data", json.dumps(cookie_data))
-    cookies.save()
-
-def clear_auth_cookie():
-    cookies.delete("auth_data")
-    cookies.save()
-
-class APIConfig:
-    # Base URL
-    BASE_URL = "https://webapi.edubull.com/api"
-    
-    # API Endpoints
-    ENDPOINTS = {
-        "english_auth": f"{BASE_URL}/EnglishLab/Auth_with_topic_for_chatbot",
-        "math_science_auth": f"{BASE_URL}/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot",
-        "weak_concepts": f"{BASE_URL}/eProfessor/WeakConcept_Remedy_List_ByConceptID",
-        "teacher_concepts": f"{BASE_URL}/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts",
-        "baseline_report": f"{BASE_URL}/eProfessor/eProf_Org_Baseline_Report_Single_Student"
-    }
-    
-    @staticmethod
-    def get_headers():
-        return {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-    
-    @staticmethod
-    def get_auth_payload(org_code, topic_id, login_id, password, user_type=None):
-        payload = {
-            'OrgCode': org_code,
-            'TopicID': int(topic_id),
-            'LoginID': login_id,
-            'Password': password,
-        }
-        if user_type is not None:
-            payload['UserType'] = user_type
-        return payload
-
-def authenticate_user(org_code, login_id, password, topic_id, is_english_mode, user_type=None):
-    """Unified authentication function"""
-    api_url = APIConfig.ENDPOINTS['english_auth'] if is_english_mode else APIConfig.ENDPOINTS['math_science_auth']
-    payload = APIConfig.get_auth_payload(org_code, topic_id, login_id, password, user_type)
-    
-    try:
-        response = requests.post(api_url, json=payload, headers=APIConfig.get_headers())
-        response.raise_for_status()
-        auth_data = response.json()
-        
-        if auth_data.get("statusCode") == 1:
-            # Set authentication cookie
-            is_teacher = user_type == 2 if user_type is not None else False
-            set_auth_cookie(auth_data, is_teacher, topic_id, is_english_mode)
-            return auth_data, None
-        else:
-            return None, "Authentication failed. Please check your credentials."
-    except Exception as e:
-        return None, f"Error during authentication: {str(e)}"
 # ------------------- 2A) LATEX TO IMAGE -------------------
 def latex_to_image(latex_code, dpi=300):
     """
@@ -896,14 +786,6 @@ def teacher_dashboard():
 # 5) LOGIN SCREEN & MAIN ROUTING
 # ----------------------------------------------------------------------------
 def login_screen():
-    # Initialize cookie state
-    initialize_cookie_state()
-    
-    # If already authenticated via cookie, skip login
-    if st.session_state.get("is_authenticated"):
-        return
-
-    # Display login form
     try:
         image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
         col1, col2 = st.columns([1, 2])
@@ -986,11 +868,9 @@ def login_screen():
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
-                    st.session_state.subject_id = auth_data.get("SubjectID", 21)
 
-                    # Set authentication cookie
-                    set_auth_cookie(auth_data, st.session_state.is_teacher, 
-                                 st.session_state.topic_id, st.session_state.is_english_mode)
+                    # Capture SubjectID if present
+                    st.session_state.subject_id = auth_data.get("SubjectID", 21)
 
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
@@ -1000,6 +880,7 @@ def login_screen():
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+
 
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
@@ -1172,10 +1053,7 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
-def logout_user():
-    clear_auth_cookie()
-    st.session_state.clear()
-    st.rerun()
+
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
 # ----------------------------------------------------------------------------
@@ -1186,7 +1064,8 @@ def main_screen():
     col1, col2 = st.columns([9, 1])
     with col2:
         if st.button("Logout"):
-           logout_user()
+            st.session_state.clear()
+            st.rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
