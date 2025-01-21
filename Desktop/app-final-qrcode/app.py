@@ -25,6 +25,8 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from streamlit_cookies_manager import EncryptedCookieManager
+import secrets  # For generating a secure secret key
 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
@@ -104,10 +106,22 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-
 # ----------------------------------------------------------------------------
 # 2) HELPER FUNCTIONS
 # ----------------------------------------------------------------------------
+
+# Initialize the Cookies Manager
+# Retrieve the password from Streamlit secrets
+COOKIE_SECRET_KEY = st.secrets["cookies_manager"]["password"]  # Securely stored in secrets.toml
+
+cookies = EncryptedCookieManager(
+    prefix="eeebee_ai_buddy",  # Unique prefix to avoid collisions
+    password=COOKIE_SECRET_KEY  # Encryption key for all cookies
+)
+
+# Wait for the cookies to load
+if not cookies.ready():
+    st.stop()
 
 # ------------------- 2A) LATEX TO IMAGE -------------------
 def latex_to_image(latex_code, dpi=300):
@@ -453,15 +467,14 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
         pdf_bytes = generate_learning_path_pdf(
             learning_path,
             concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
+            st.session_state.auth_data['FullName']
         )
         st.download_button(
             label="📥 Download Learning Path as PDF",
             data=pdf_bytes,
-            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
+            file_name=f"{st.session_state.auth_data['FullName']}_Learning_Path_{concept_text}.pdf",
             mime="application/pdf"
         )
-
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
@@ -476,9 +489,9 @@ def baseline_testing_report():
     5. Bloom’s: No table, multi-color bar chart
     """
     if not st.session_state.baseline_data:
-        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+        user_info = st.session_state.auth_data
         user_id = user_info.get('UserID')
-        org_code = user_info.get('OrgCode', '012')
+        org_code = st.session_state.auth_data.get('OrgCode', '012')
         subject_id = st.session_state.get("subject_id", 21)
 
         payload = {
@@ -546,8 +559,7 @@ def baseline_testing_report():
     if s_skills:
         df_skills = pd.DataFrame(s_skills)
 
-        # Instead of table, just the bar chart
-        # X-axis => RightAnswerPercent, Y-axis => SubjectSkillName
+        # Horizontal Bar Chart: X-axis => RightAnswerPercent, Y-axis => SubjectSkillName
         skill_chart = alt.Chart(df_skills).mark_bar().encode(
             x=alt.X('RightAnswerPercent:Q', title='Correct %', scale=alt.Scale(domain=[0, 100])),
             y=alt.Y('SubjectSkillName:N', sort='-x'),
@@ -563,24 +575,33 @@ def baseline_testing_report():
         st.info("No skill-wise data available.")
 
     # ----------------------------------------------------------------
-    # C) Concept-wise Data: S.No, Concept Status (Cleared/Not Cleared),
-    #    Concept Name, Class. No chart.
+    # C) Concept-wise Data: S.No, Concept Status, Concept Name, Class
     # ----------------------------------------------------------------
     st.markdown("---")
     st.markdown("### Concept-wise Performance")
     if concept_wise_data:
         df_concepts = pd.DataFrame(concept_wise_data).copy()
+
         # Create S.No
         df_concepts["S.No."] = range(1, len(df_concepts) + 1)
+
         # Concept Status => Cleared if RightAnswerPercent == 100, else Not Cleared
         df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
             lambda x: "✅" if x == 100.0 else "❌"
         )
-        # Keep only 4 columns: S.No., Concept Status, Concept Name => ConceptText, Class => BranchName
-        df_concepts.rename(columns={"ConceptText": "Concept Name", 
-                                    "BranchName": "Class"}, inplace=True)
-        # Final columns
+
+        # Rename columns
+        df_concepts.rename(
+            columns={
+                "ConceptText": "Concept Name", 
+                "BranchName": "Class"
+            }, 
+            inplace=True
+        )
+
+        # Final columns: S.No., Concept Status, Concept Name, Class
         df_display = df_concepts[["S.No.", "Concept Name","Concept Status", "Class"]]
+
         # Use hide_index=True for Streamlit dataframe to hide the index
         st.dataframe(df_display, hide_index=True)
     else:
@@ -594,13 +615,13 @@ def baseline_testing_report():
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
-        # We remove the table display -> Just show the chart
-        # Different color for each Bloom => color='TaxonomyText'
+        # Bar Chart with Different Colors for Each Bloom's Level
         tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
             x=alt.X('PercentObt:Q', title='Percent Correct', scale=alt.Scale(domain=[0, 100])),
-            y=alt.Y('TaxonomyText:N', sort='-x', title='Bloom\'s Level'),
-            color='TaxonomyText:N',  # different color per Bloom's
-            tooltip=['TaxonomyText:N', 'TotalQuestion:Q', 'CorrectAnswer:Q', 'PercentObt:Q']
+            y=alt.Y('TaxonomyText:N', sort='-x', title="Bloom's Level"),
+            color=alt.Color('TaxonomyText:N', legend=alt.Legend(title="Bloom's Level")),
+            tooltip=['TaxonomyText:N', 'TotalQuestion:Q', 
+                     'CorrectAnswer:Q', 'PercentObt:Q']
         ).properties(
             width=700,
             height=300,
@@ -609,7 +630,6 @@ def baseline_testing_report():
         st.altair_chart(tax_chart, use_container_width=True)
     else:
         st.info("No taxonomy data available.")
-
 
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
@@ -671,7 +691,7 @@ def teacher_dashboard():
 
     if selected_batch_id and st.session_state.selected_batch_id != selected_batch_id:
         st.session_state.selected_batch_id = selected_batch_id
-        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+        user_info = st.session_state.auth_data
         org_code = user_info.get('OrgCode', '012')
         params = {
             "BatchID": selected_batch_id,
@@ -763,24 +783,26 @@ def teacher_dashboard():
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
+
+                        # Optionally, display the questions
+                        st.markdown("### Generated Exam Questions")
+                        st.text_area("Exam Questions", questions, height=300)
+                        
+                        # Optionally, provide a download button
+                        pdf_bytes = generate_exam_questions_pdf(
+                            questions,
+                            chosen_concept_text,
+                            st.session_state.auth_data['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"{st.session_state.auth_data['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
+
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
-
-    if st.session_state.exam_questions:
-        st.markdown(f"### 📝 Generated Exam Questions")
-        st.markdown(st.session_state.exam_questions)
-
-        pdf_bytes = generate_exam_questions_pdf(
-            st.session_state.exam_questions,
-            st.session_state.selected_teacher_concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="📥 Download Exam Questions as PDF",
-            data=pdf_bytes,
-            file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
-            mime="application/pdf"
-        )
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -864,7 +886,33 @@ def login_screen():
                 auth_response.raise_for_status()
                 auth_data = auth_response.json()
                 if auth_data.get("statusCode") == 1:
-                    st.session_state.auth_data = auth_data
+                    # Store essential user data in cookies (excluding sensitive data like password)
+                    # We'll serialize the auth_data and store it as JSON string
+                    # Note: Ensure that no sensitive data is stored
+                    user_info = auth_data.get("UserInfo", [{}])[0]
+                    user_data = {
+                        "UserID": user_info.get("UserID"),
+                        "FullName": user_info.get("FullName"),
+                        "Email": user_info.get("Email"),
+                        "Mobile": user_info.get("Mobile"),
+                        "ActiveStatus": user_info.get("ActiveStatus"),
+                        "ProfileImgURL": user_info.get("ProfileImgURL"),
+                        "SubjectID": auth_data.get("SubjectID", 21),
+                        "TopicName": auth_data.get("TopicName", "Unknown Topic"),
+                        "SubjectName": auth_data.get("SubjectName", "Unknown Subject"),
+                        "BranchName": auth_data.get("BranchName", "Unknown Branch"),
+                        "ConceptList": auth_data.get("ConceptList", []),
+                        "WeakConceptList": auth_data.get("WeakConceptList", []),
+                        "BatchList": auth_data.get("BatchList", [])
+                    }
+                    # Serialize user_data to JSON
+                    user_data_json = json.dumps(user_data)
+                    cookies["user_data"] = user_data_json
+                    # Optionally, set cookie expiration (e.g., 7 days)
+                    cookies["user_data"]["max_age"] = 7 * 24 * 60 * 60  # 7 days in seconds
+
+                    # Also store in session state
+                    st.session_state.auth_data = user_data
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
@@ -881,10 +929,74 @@ def login_screen():
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
+# ----------------------------------------------------------------------------
+# 6) MAIN SCREEN
+# ----------------------------------------------------------------------------
+def main_screen():
+    user_info = st.session_state.auth_data
+    user_name = user_info.get('FullName', 'User')
+    topic_name = user_info.get('TopicName', 'Subject')
 
+    col1, col2 = st.columns([9, 1])
+    with col2:
+        if st.button("Logout"):
+            # Clear session state
+            st.session_state.clear()
+            # Remove the user_data cookie
+            del cookies["user_data"]
+            st.success("You have been logged out.")
+            st.rerun()
+
+    icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
+    st.markdown(
+        f"""
+        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.is_teacher:
+        # Teacher => Chat + Dashboard
+        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
+        with tabs[0]:
+            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+            add_initial_greeting()
+            display_chat(user_name)
+        with tabs[1]:
+            st.subheader("Teacher Dashboard")
+            teacher_dashboard()
+    else:
+        # Student => possibly multiple tabs
+        if st.session_state.is_english_mode:
+            # English => only Chat
+            tab = st.tabs(["💬 Chat"])[0]
+            with tab:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                display_chat(user_name)
+        else:
+            # Non-English => Chat + Learning Path + Baseline Testing
+            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing"])
+
+            with tab1:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                display_chat(user_name)
+
+            with tab2:
+                st.subheader("Your Personalized Learning Path")
+                display_learning_path_tab()
+
+            with tab3:
+                st.subheader("Baseline Testing Report")
+                baseline_testing_report()
+
+# ----------------------------------------------------------------------------
+# 7) ADDITIONAL FUNCTIONS
+# ----------------------------------------------------------------------------
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        user_name = st.session_state.auth_data['FullName']
         topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
         concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1055,74 +1167,42 @@ def display_learning_path_tab():
                 )
 
 # ----------------------------------------------------------------------------
-# 6) MAIN SCREEN
-# ----------------------------------------------------------------------------
-def main_screen():
-    user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-    topic_name = st.session_state.auth_data['TopicName']
-
-    col1, col2 = st.columns([9, 1])
-    with col2:
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-
-    icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
-    st.markdown(
-        f"""
-        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    if st.session_state.is_teacher:
-        # Teacher => Chat + Dashboard
-        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
-        with tabs[0]:
-            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-            add_initial_greeting()
-            display_chat(user_name)
-        with tabs[1]:
-            st.subheader("Teacher Dashboard")
-            teacher_dashboard()
-    else:
-        # Student => possibly multiple tabs
-        if st.session_state.is_english_mode:
-            # English => only Chat
-            tab = st.tabs(["💬 Chat"])[0]
-            with tab:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-        else:
-            # Non-English => Chat + Learning Path + Baseline Testing
-            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing"])
-
-            with tab1:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-
-            with tab2:
-                st.subheader("Your Personalized Learning Path")
-                display_learning_path_tab()
-
-            with tab3:
-                st.subheader("Baseline Testing Report")
-                baseline_testing_report()
-
-# ----------------------------------------------------------------------------
-# 7) LAUNCH
+# 8) MAIN APP FUNCTION
 # ----------------------------------------------------------------------------
 def main():
     if st.session_state.is_authenticated:
         main_screen()
         st.stop()
     else:
-        placeholder = st.empty()
-        with placeholder.container():
-            login_screen()
+        # Check if user_data cookie exists
+        user_data_json = cookies.get("user_data")
+        if user_data_json:
+            try:
+                # Deserialize user data
+                user_data = json.loads(user_data_json)
+                # Populate session state
+                st.session_state.auth_data = user_data
+                st.session_state.is_authenticated = True
+                st.session_state.topic_id = user_data.get("TopicID", st.session_state.topic_id)
+                st.session_state.is_teacher = False  # Default to Student
+
+                # Determine if user is Teacher based on available data
+                # For example, if BatchList is present and not empty, assume Teacher
+                if user_data.get("BatchList"):
+                    st.session_state.is_teacher = True
+
+                if not st.session_state.is_teacher:
+                    st.session_state.student_weak_concepts = user_data.get("WeakConceptList", [])
+
+                st.rerun()
+            except json.JSONDecodeError:
+                st.warning("Invalid session data. Please log in again.")
+                del cookies["user_data"]
+        else:
+            # No user_data cookie, show login screen
+            placeholder = st.empty()
+            with placeholder.container():
+                login_screen()
 
 if __name__ == "__main__":
     main()
