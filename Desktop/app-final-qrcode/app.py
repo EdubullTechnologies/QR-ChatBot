@@ -527,8 +527,8 @@ def baseline_testing_report():
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Marks (%)", f"{user_summary.get('MarksPercent', 0)}%")
-        col2.metric("Total Ques.", user_summary.get("TotalQuestion"))
-        col3.metric("Correct Ques.", user_summary.get("CorrectQuestion"))
+        col2.metric("Total Concepts.", user_summary.get("TotalQuestion"))
+        col3.metric("Cleared Concepts.", user_summary.get("CorrectQuestion"))
         col4.metric("Weak Concepts", user_summary.get("WeakConceptCount"))
 
         col1, col2, col3 = st.columns(3)
@@ -576,16 +576,16 @@ def baseline_testing_report():
 
         # Concept Status => Cleared if RightAnswerPercent == 100, else Not Cleared
         df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
-            lambda x: "Cleared" if x == 100.0 else "Not Cleared"
+            lambda x: "✅" if x == 100.0 else "❌"
         )
 
         # Keep only 4 columns: S.No., Concept Status, Concept Name => ConceptText, Class => BranchName
         df_concepts.rename(columns={"ConceptText": "Concept Name", 
-                                    "BranchName": "Class"}, inplace=True)
+                                    "BranchName": "Class"}, inplace=True, index=False)
         # Final columns
-        df_display = df_concepts[["S.No.", "Concept Status", "Concept Name", "Class"]]
+        df_display = df_concepts[["S.No.", "Concept Name","Concept Status", "Class"]]
 
-        st.dataframe(df_display)
+        st.dataframe(df_display, index=False)
     else:
         st.info("No concept-wise data available.")
 
