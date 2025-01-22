@@ -1332,7 +1332,7 @@ def display_tabs_parallel():
     Display tabs with parallel data loading
     """
     # Create placeholder containers for each tab
-    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 All Concepts", "📝 Baseline Testing"])
+    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
     
     # Create a placeholder for each tab's content
     chat_placeholder = tab_containers[0].empty()
@@ -1356,7 +1356,7 @@ def display_tabs_parallel():
         display_learning_path_tab()
     
     with tab_containers[2]:
-        all_concepts_placeholder.markdown("### 📚 All Concepts")
+        all_concepts_placeholder.markdown("###Gap Analyzer™")
         display_all_concepts_tab()
     
     with tab_containers[3]:
