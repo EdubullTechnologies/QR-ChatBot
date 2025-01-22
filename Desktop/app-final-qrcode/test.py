@@ -25,6 +25,7 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from streamlit_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
@@ -467,7 +468,6 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
             mime="application/pdf"
         )
 
-
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
     payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
@@ -570,6 +570,136 @@ def generate_all_concepts_pdf(concepts, user_name):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+# ------------------- 2G) ALL CONCEPTS TAB -------------------
+def display_all_concepts_tab():
+    st.markdown("### 📚 All Concepts")
+
+    # Fetch all concepts from session state
+    all_concepts = st.session_state.all_concepts
+    if not all_concepts:
+        st.warning("No concepts found.")
+        return
+
+    # Convert to DataFrame
+    df_all_concepts = pd.DataFrame(all_concepts)
+
+    # Add Status Indicator
+    def status_indicator(status):
+        if status == "Weak":
+            color = "red"
+            icon = "🔴"
+        elif status == "Cleared":
+            color = "green"
+            icon = "🟢"
+        elif status == "Not-Attended":
+            color = "orange"
+            icon = "🟠"
+        else:
+            color = "grey"
+            icon = "⚪"
+        return f"{icon} {status}"
+
+    df_all_concepts['Status Indicator'] = df_all_concepts['ConceptStatus'].apply(status_indicator)
+
+    # Prepare Data for AgGrid
+    grid_df = df_all_concepts.copy()
+    grid_df['Remedial'] = 'Remedial'
+    grid_df['Previous Learning GAP'] = 'Previous GAP'
+
+    # Define Grid Options
+    gb = GridOptionsBuilder.from_dataframe(grid_df)
+    gb.configure_column("Remedial", header_name="Remedial", cellRenderer=JsCode("""
+        function(params) {
+            return '<button style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Remedial</button>';
+        }
+    """), editable=False, sortable=False, filter=False)
+
+    gb.configure_column("Previous Learning GAP", header_name="Previous Learning GAP", cellRenderer=JsCode("""
+        function(params) {
+            return '<button style="background-color:#f44336;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Previous GAP</button>';
+        }
+    """), editable=False, sortable=False, filter=False)
+
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    grid_options = gb.build()
+
+    # Display AgGrid
+    grid_response = AgGrid(
+        grid_df,
+        gridOptions=grid_options,
+        enable_enterprise_modules=False,
+        update_mode=GridUpdateMode.NO_UPDATE,
+        allow_unsafe_jscode=True,  # Set to True to allow JS in cellRenderer
+        height=600,
+        width='100%',
+    )
+
+    # Handle Button Clicks
+    selected_row = grid_response['selected_rows']
+    if grid_response['selected_rows']:
+        selected = grid_response['selected_rows'][0]
+        concept_id = selected['ConceptID']
+        concept_text = selected['ConceptText']
+        topic_id = selected['TopicID']
+        status = selected['ConceptStatus']
+
+        # Identify which button was clicked
+        # Since AgGrid doesn't directly return which button was clicked,
+        # we can use Streamlit's session state or hidden inputs.
+        # Alternatively, use JavaScript to communicate button clicks.
+
+        # As a workaround, we can add separate buttons below the table.
+        # However, for simplicity, let's add buttons in a separate area.
+
+    # Alternative Approach: Iterate through DataFrame and create buttons
+    # to handle remedial actions.
+
+    st.markdown("---")
+    st.markdown("#### Remedial Actions")
+
+    for idx, row in df_all_concepts.iterrows():
+        concept_id = row['ConceptID']
+        concept_text = row['ConceptText']
+        topic_id = row['TopicID']
+        status = row['ConceptStatus']
+
+        if status in ["Weak", "Not-Attended"]:
+            col1, col2 = st.columns([3,1])
+            with col1:
+                st.markdown(f"**{concept_text}**")
+            with col2:
+                remedial_button = st.button("Remedial", key=f"remedial_{concept_id}")
+                gap_button = st.button("Previous GAP", key=f"gap_{concept_id}")
+
+            if remedial_button:
+                # Fetch resources for the concept
+                resources = get_resources_for_concept(
+                    concept_text=concept_text,
+                    concept_list=st.session_state.auth_data.get('ConceptList', []),
+                    topic_id=topic_id
+                )
+                if resources:
+                    remedial_message = format_resources_message(resources)
+                    st.success(f"**Remedial Resources for {concept_text}:**\n\n{remedial_message}")
+                else:
+                    st.error(f"Failed to fetch remedial resources for {concept_text}.")
+
+            if gap_button:
+                st.info("Previous Learning GAP is under maintenance.")
+
+    # Optional: Provide a download option for all concepts
+    if st.button("📥 Download All Concepts as PDF"):
+        pdf_bytes = generate_all_concepts_pdf(
+            st.session_state.all_concepts,
+            st.session_state.auth_data['UserInfo'][0]['FullName']
+        )
+        st.download_button(
+            label="Download PDF",
+            data=pdf_bytes,
+            file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
+            mime="application/pdf"
+        )
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
@@ -1143,177 +1273,8 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
-def display_learning_path_tab():
-    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-    concept_list = st.session_state.auth_data.get('ConceptList', [])
-
-    if not weak_concepts:
-        st.warning("No weak concepts found.")
-    else:
-        for idx, concept in enumerate(weak_concepts):
-            concept_text = concept.get("ConceptText", f"Concept {idx+1}")
-            concept_id = concept.get("ConceptID", f"id_{idx+1}")
-
-            st.markdown(f"#### **Weak Concept {idx+1}:** {concept_text}")
-
-            button_key = f"generate_lp_{concept_id}"
-            if st.button("🧠 Generate Learning Path", key=button_key):
-                if concept_id not in st.session_state.student_learning_paths:
-                    with st.spinner(f"Generating learning path for {concept_text}..."):
-                        learning_path = generate_learning_path(concept_text)
-                        if learning_path:
-                            st.session_state.student_learning_paths[concept_id] = {
-                                "concept_text": concept_text,
-                                "learning_path": learning_path
-                            }
-                            st.success(f"Learning path generated for {concept_text}!")
-                        else:
-                            st.error(f"Failed to generate learning path for {concept_text}.")
-                else:
-                    st.info(f"Learning path for {concept_text} is already generated.")
-
-            if concept_id in st.session_state.student_learning_paths:
-                lp_data = st.session_state.student_learning_paths[concept_id]
-                display_learning_path_with_resources(
-                    lp_data["concept_text"],
-                    lp_data["learning_path"],
-                    concept_list,
-                    st.session_state.topic_id
-                )
-
-# ------------------- 2G) ALL CONCEPTS TAB -------------------
-def display_all_concepts_tab():
-    st.markdown("### 📚 All Concepts")
-
-    # Fetch all concepts from session state
-    all_concepts = st.session_state.all_concepts
-    if not all_concepts:
-        st.warning("No concepts found.")
-        return
-
-    # Convert to DataFrame
-    df_all_concepts = pd.DataFrame(all_concepts)
-
-    # Add Status Indicator
-    def status_indicator(status):
-        if status == "Weak":
-            color = "red"
-            icon = "🔴"
-        elif status == "Cleared":
-            color = "green"
-            icon = "🟢"
-        elif status == "Not-Attended":
-            color = "orange"
-            icon = "🟠"
-        else:
-            color = "grey"
-            icon = "⚪"
-        return f"<span style='color:{color};'>{icon} {status}</span>"
-
-    df_all_concepts['Status Indicator'] = df_all_concepts['ConceptStatus'].apply(status_indicator)
-
-    # Display the DataFrame with HTML formatting
-    def make_clickable(val, row):
-        return val
-
-    st.markdown(
-        f"""
-        <style>
-        .concept-table {{
-            border-collapse: collapse;
-            width: 100%;
-        }}
-        .concept-table th, .concept-table td {{
-            border: 1px solid #ddd;
-            padding: 8px;
-        }}
-        .concept-table tr:nth-child(even){{background-color: #f2f2f2;}}
-        .concept-table tr:hover {{background-color: #ddd;}}
-        .concept-table th {{
-            padding-top: 12px;
-            padding-bottom: 12px;
-            text-align: left;
-            background-color: #4CAF50;
-            color: white;
-        }}
-        </style>
-        <table class="concept-table">
-            <tr>
-                <th>Concept ID</th>
-                <th>Concept Text</th>
-                <th>Topic ID</th>
-                <th>Status</th>
-                <th>Remedial</th>
-                <th>Previous Learning GAP</th>
-            </tr>
-        """,
-        unsafe_allow_html=True
-    )
-
-    for idx, row in df_all_concepts.iterrows():
-        concept_id = row['ConceptID']
-        concept_text = row['ConceptText']
-        topic_id = row['TopicID']
-        status = row['ConceptStatus']
-        status_html = row['Status Indicator']
-
-        # Remedial Option
-        remedial_html = ""
-        if status in ["Weak", "Not-Attended"]:
-            remedial_html = f"""
-            <button onclick="window.open('','_self').alert('Fetching remedial resources for {concept_text}');" style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Remedial</button>
-            """
-
-        # Previous Learning GAP Button
-        learning_gap_html = f"""
-        <button onclick="window.open('','_self').alert('Previous Learning GAP is under maintenance.');" style="background-color:#f44336;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Previous GAP</button>
-        """
-
-        # Display the row
-        st.markdown(
-            f"""
-            <tr>
-                <td>{concept_id}</td>
-                <td>{concept_text}</td>
-                <td>{topic_id}</td>
-                <td>{status_html}</td>
-                <td>{remedial_html}</td>
-                <td>{learning_gap_html}</td>
-            </tr>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("</table>", unsafe_allow_html=True)
-
-    # Handle Remedial Button Clicks
-    # Since Streamlit cannot detect button clicks inside HTML, we need an alternative approach.
-    # One approach is to list concepts and provide buttons below the table.
-
-    st.markdown("---")
-    st.markdown("**Note:** Remedial resources are being fetched based on the concept's status.")
-
-    # Create a sidebar or separate area for remedial actions
-    st.markdown("#### Remedial Actions")
-    for idx, row in df_all_concepts.iterrows():
-        concept_id = row['ConceptID']
-        concept_text = row['ConceptText']
-        status = row['ConceptStatus']
-
-        if status in ["Weak", "Not-Attended"]:
-            remedial_button = st.button(f"Remedial for {concept_text}", key=f"remedial_{concept_id}")
-            if remedial_button:
-                # Fetch resources for the concept
-                resources = get_resources_for_concept(
-                    concept_text=concept_text,
-                    concept_list=st.session_state.auth_data.get('ConceptList', []),
-                    topic_id=st.session_state.topic_id
-                )
-                if resources:
-                    remedial_message = format_resources_message(resources)
-                    st.markdown(f"**Remedial Resources for {concept_text}:**\n\n{remedial_message}")
-                else:
-                    st.error(f"Failed to fetch remedial resources for {concept_text}.")
+# ------------------- 2H) FETCH ALL CONCEPTS -------------------
+# (Already included above as fetch_all_concepts)
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
