@@ -460,10 +460,15 @@ def fetch_all_concepts(org_code: str, subject_id: int, user_id: int):
     try:
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
-        return response.json()
+        concepts = response.json()
+        if isinstance(concepts, list):
+            return concepts
+        else:
+            st.error("Unexpected API response format for All Concepts.")
+            return []
     except Exception as e:
         st.error(f"Error fetching concepts data: {e}")
-        return None
+        return []
 
 # ------------------- 2F) ALL CONCEPTS TAB -------------------
 def all_concepts_tab():
@@ -491,41 +496,41 @@ def all_concepts_tab():
         st.warning("No concepts data available.")
         return
 
-    # Create a DataFrame from concepts
-    df_concepts = pd.DataFrame(concepts)
+    # Display the raw data for debugging
+    st.markdown("### 🔍 Concepts Data (For Debugging)")
+    st.json(concepts)
 
-    # Define status colors
-    status_color = {
-        "Weak": "orange",
-        "Cleared": "green",
-        "Not-Attended": "red"
-    }
+    # Prepare data for display
+    display_data = []
+    for concept in concepts:
+        concept_id = concept.get('ConceptID')
+        concept_text = concept.get('ConceptText')
+        topic_id = concept.get('TopicID')
+        concept_status = concept.get('ConceptStatus', 'Unknown')
 
-    # Add Status Indicator
-    df_concepts['Status'] = df_concepts['ConceptStatus'].apply(
-        lambda x: f"<span style='color:{status_color.get(x, 'black')}; font-weight:bold;'>{x}</span>"
-    )
+        # Map ConceptStatus to display terms if needed
+        status_display = concept_status
 
-    # Add Remedial Option Column
-    def remedial_button(concept_id, concept_text):
-        return f"""<a href="javascript:void(0)" onclick="window.open('/?concept_id={concept_id}', '_self')"><button>Remedial</button></a>"""
+        # Determine if remedial option should be available
+        remedial_available = status_display in ["Weak", "Not-Attended"]
 
-    df_concepts['Remedial'] = df_concepts.apply(
-        lambda row: remedial_button(row['ConceptID'], row['ConceptText']) if row['ConceptStatus'] in ["Weak", "Not-Attended"] else "",
-        axis=1
-    )
+        # Create remedial button HTML
+        remedial_button_html = ""
+        if remedial_available:
+            remedial_button_html = f"""<a href="javascript:void(0)" onclick="window.open('/?concept_id={concept_id}', '_self')"><button>Remedial</button></a>"""
 
-    # Select relevant columns
-    df_display = df_concepts[['ConceptID', 'ConceptText', 'TopicID', 'Status', 'Remedial']]
-    df_display.rename(columns={
-        "ConceptID": "Concept ID",
-        "ConceptText": "Concept Name",
-        "TopicID": "Topic ID",
-        "Status": "Status",
-        "Remedial": "Remedial Option"
-    }, inplace=True)
+        display_data.append({
+            "Concept ID": concept_id,
+            "Concept Name": concept_text,
+            "Topic ID": topic_id,
+            "Status": f"<span style='color:{'orange' if status_display == 'Weak' else 'red' if status_display == 'Not-Attended' else 'green'}; font-weight:bold;'>{status_display}</span>",
+            "Remedial Option": remedial_button_html
+        })
+
+    df_display = pd.DataFrame(display_data)
 
     # Render the DataFrame with HTML for indicators and buttons
+    st.markdown("### 📖 All Concepts")
     st.markdown(
         df_display.to_html(escape=False, index=False),
         unsafe_allow_html=True
@@ -878,6 +883,25 @@ def teacher_dashboard():
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
+                        st.success("✅ Exam questions generated successfully!")
+
+                        # Optionally, display or download the questions
+                        st.markdown("### 📄 Generated Exam Questions")
+                        st.text(questions)
+
+                        # Provide a download button for the PDF
+                        pdf_bytes = generate_exam_questions_pdf(
+                            questions,
+                            chosen_concept_text,
+                            st.session_state.auth_data['UserInfo'][0]['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
+
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
