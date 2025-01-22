@@ -467,25 +467,23 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
 # 3) BASELINE TESTING REPORT (MODIFIED)
 # ----------------------------------------------------------------------------
 def baseline_testing_report():
-    """
-    Modified per requirements:
-    1. No skill-wise table
-    2. X-axis => %, Y-axis => skill name
-    3. Concept table with S.No, Concept Status, Concept Name, Class
-    4. No concept-wise bar chart
-    5. Bloom’s: No table, multi-color bar chart
-    """
     if not st.session_state.baseline_data:
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
         user_id = user_info.get('UserID')
         org_code = user_info.get('OrgCode', '012')
-        subject_id = st.session_state.get("subject_id")
+        
+        # Get subject_id from session state
+        subject_id = st.session_state.subject_id
+        if not subject_id:
+            st.error("Subject ID not available")
+            return
 
         payload = {
             "UserID": user_id,
             "SubjectID": subject_id,
             "OrgCode": org_code
         }
+        
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0",
@@ -870,9 +868,13 @@ def login_screen():
                     st.session_state.is_teacher = (user_type_value == 2)
 
                     # Capture SubjectID if present
-                    st.session_state.subject_id = auth_data.get("SubjectID", 21)
-
-                    if not st.session_state.is_teacher:
+                    # Get SubjectID from auth response
+                st.session_state.subject_id = auth_data.get("SubjectID")
+                if not st.session_state.subject_id:
+                    st.error("Subject ID not found in authentication response")
+                    return
+                    
+                if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
 
                     st.rerun()
