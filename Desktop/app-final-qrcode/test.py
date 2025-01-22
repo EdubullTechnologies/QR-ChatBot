@@ -689,16 +689,16 @@ def baseline_testing_report():
         st.markdown("### Overall Performance Summary")
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Name", user_summary.get("FullName"))
-        col2.metric("Subject", user_summary.get("SubjectName"))
-        col3.metric("Batch", user_summary.get("BatchName"))
-        col4.metric("Attempt Date", user_summary.get("AttendDate"))
+        col1.metric("Name", user_summary.get("FullName", "N/A"))
+        col2.metric("Subject", user_summary.get("SubjectName", "N/A"))
+        col3.metric("Batch", user_summary.get("BatchName", "N/A"))
+        col4.metric("Attempt Date", user_summary.get("AttendDate", "N/A"))
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Marks (%)", f"{user_summary.get('MarksPercent', 0)}%")
-        col2.metric("Total Concepts", user_summary.get("TotalQuestion"))
-        col3.metric("Cleared Concepts", user_summary.get("CorrectQuestion"))
-        col4.metric("Weak Concepts", user_summary.get("WeakConceptCount"))
+        col2.metric("Total Concepts", user_summary.get("TotalQuestion", 0))
+        col3.metric("Cleared Concepts", user_summary.get("CorrectQuestion", 0))
+        col4.metric("Weak Concepts", user_summary.get("WeakConceptCount", 0))
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Difficult Ques. (%)", f"{user_summary.get('DiffQuesPercent', 0)}%")
@@ -715,18 +715,21 @@ def baseline_testing_report():
     if s_skills:
         df_skills = pd.DataFrame(s_skills)
 
-        # X-axis => RightAnswerPercent, Y-axis => SubjectSkillName
-        skill_chart = alt.Chart(df_skills).mark_bar().encode(
-            x=alt.X('RightAnswerPercent:Q', title='Correct %', scale=alt.Scale(domain=[0, 100])),
-            y=alt.Y('SubjectSkillName:N', sort='-x'),
-            tooltip=['SubjectSkillName:N', 'TotalQuestion:Q', 
-                     'RightAnswerCount:Q', 'RightAnswerPercent:Q']
-        ).properties(
-            width=700,
-            height=400,
-            title="Skill-wise Correct Percentage"
-        )
-        st.altair_chart(skill_chart, use_container_width=True)
+        if not df_skills.empty:
+            # X-axis => RightAnswerPercent, Y-axis => SubjectSkillName
+            skill_chart = alt.Chart(df_skills).mark_bar().encode(
+                x=alt.X('RightAnswerPercent:Q', title='Correct %', scale=alt.Scale(domain=[0, 100])),
+                y=alt.Y('SubjectSkillName:N', sort='-x'),
+                tooltip=['SubjectSkillName:N', 'TotalQuestion:Q', 
+                         'RightAnswerCount:Q', 'RightAnswerPercent:Q']
+            ).properties(
+                width=700,
+                height=400,
+                title="Skill-wise Correct Percentage"
+            )
+            st.altair_chart(skill_chart, use_container_width=True)
+        else:
+            st.info("No skill-wise data available.")
     else:
         st.info("No skill-wise data available.")
 
@@ -738,19 +741,22 @@ def baseline_testing_report():
     st.markdown("### Concept-wise Performance")
     if concept_wise_data:
         df_concepts = pd.DataFrame(concept_wise_data).copy()
-        # Create S.No
-        df_concepts["S.No."] = range(1, len(df_concepts) + 1)
-        # Concept Status => Cleared if RightAnswerPercent == 100, else Not Cleared
-        df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
-            lambda x: "✅" if x == 100.0 else "❌"
-        )
-        # Keep only 4 columns: S.No., Concept Status, Concept Name => ConceptText, Class => BranchName
-        df_concepts.rename(columns={"ConceptText": "Concept Name", 
-                                    "BranchName": "Class"}, inplace=True)
-        # Final columns
-        df_display = df_concepts[["S.No.", "Concept Name","Concept Status", "Class"]]
-        # Use hide_index=True for Streamlit dataframe to hide the index
-        st.dataframe(df_display, hide_index=True)
+        if not df_concepts.empty:
+            # Create S.No
+            df_concepts["S.No."] = range(1, len(df_concepts) + 1)
+            # Concept Status => Cleared if RightAnswerPercent == 100, else Not Cleared
+            df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
+                lambda x: "✅" if x == 100.0 else "❌"
+            )
+            # Keep only 4 columns: S.No., Concept Status, Concept Name => ConceptText, Class => BranchName
+            df_concepts.rename(columns={"ConceptText": "Concept Name", 
+                                        "BranchName": "Class"}, inplace=True)
+            # Final columns
+            df_display = df_concepts[["S.No.", "Concept Name","Concept Status", "Class"]]
+            # Use hide_index=True for Streamlit dataframe to hide the index
+            st.dataframe(df_display, hide_index=True)
+        else:
+            st.info("No concept-wise data available.")
     else:
         st.info("No concept-wise data available.")
 
@@ -762,18 +768,21 @@ def baseline_testing_report():
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
-        # Different color for each Bloom => color='TaxonomyText'
-        tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
-            x=alt.X('PercentObt:Q', title='Percent Correct', scale=alt.Scale(domain=[0, 100])),
-            y=alt.Y('TaxonomyText:N', sort='-x', title='Bloom\'s Level'),
-            color='TaxonomyText:N',  # different color per Bloom's
-            tooltip=['TaxonomyText:N', 'TotalQuestion:Q', 'CorrectAnswer:Q', 'PercentObt:Q']
-        ).properties(
-            width=700,
-            height=300,
-            title="Performance by Bloom's Taxonomy Level"
-        )
-        st.altair_chart(tax_chart, use_container_width=True)
+        if not df_taxonomy.empty:
+            # Different color for each Bloom => color='TaxonomyText'
+            tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
+                x=alt.X('PercentObt:Q', title='Percent Correct', scale=alt.Scale(domain=[0, 100])),
+                y=alt.Y('TaxonomyText:N', sort='-x', title='Bloom\'s Level'),
+                color='TaxonomyText:N',  # different color per Bloom's
+                tooltip=['TaxonomyText:N', 'TotalQuestion:Q', 'CorrectAnswer:Q', 'PercentObt:Q']
+            ).properties(
+                width=700,
+                height=300,
+                title="Performance by Bloom's Taxonomy Level"
+            )
+            st.altair_chart(tax_chart, use_container_width=True)
+        else:
+            st.info("No taxonomy data available.")
     else:
         st.info("No taxonomy data available.")
 
@@ -782,6 +791,10 @@ def baseline_testing_report():
 # ----------------------------------------------------------------------------
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
+    if df.empty:
+        st.info("No additional graphs to display.")
+        return
+
     total_attended = df["AttendedStudentCount"].sum()
     total_cleared = df["ClearedStudentCount"].sum()
     total_not_cleared = total_attended - total_cleared
@@ -832,8 +845,12 @@ def teacher_dashboard():
     batch_options = {b['BatchName']: b for b in batches}
     selected_batch_name = st.selectbox("Select a Batch:", list(batch_options.keys()))
     selected_batch = batch_options.get(selected_batch_name)
-    selected_batch_id = selected_batch["BatchID"]
-    total_students = selected_batch.get("StudentCount", 0)
+    selected_batch_id = selected_batch.get("BatchID")
+    total_students = selected_batch.get("StudentCount", 0) if selected_batch else 0
+
+    if not selected_batch_id:
+        st.error("Selected batch does not have a BatchID.")
+        return
 
     if selected_batch_id and st.session_state.selected_batch_id != selected_batch_id:
         st.session_state.selected_batch_id = selected_batch_id
@@ -854,7 +871,11 @@ def teacher_dashboard():
                 response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
                 response.raise_for_status()
                 weak_concepts = response.json()
-                st.session_state.teacher_weak_concepts = weak_concepts
+                if isinstance(weak_concepts, list):
+                    st.session_state.teacher_weak_concepts = weak_concepts
+                else:
+                    st.error("Unexpected response format for weak concepts.")
+                    st.session_state.teacher_weak_concepts = []
             except Exception as e:
                 st.error(f"Error fetching weak concepts: {e}")
                 st.session_state.teacher_weak_concepts = []
@@ -863,167 +884,186 @@ def teacher_dashboard():
         df = []
         for wc in st.session_state.teacher_weak_concepts:
             df.append({
-                "Concept": wc["ConceptText"],
-                "Attended": wc["AttendedStudentCount"],
-                "Cleared": wc["ClearedStudentCount"]
+                "Concept": wc.get("ConceptText", "N/A"),
+                "Attended": wc.get("AttendedStudentCount", 0),
+                "Cleared": wc.get("ClearedStudentCount", 0)
             })
         df = pd.DataFrame(df)
 
-        # Bar chart
-        df_long = df.melt('Concept', var_name='Category', value_name='Count')
-        chart = alt.Chart(df_long).mark_bar().encode(
-            x='Concept:N',
-            y='Count:Q',
-            color='Category:N',
-            tooltip=['Concept:N', 'Category:N', 'Count:Q']
-        ).properties(
-            title='Weak Concepts Overview',
-            width=600
-        )
+        if not df.empty:
+            # Bar chart
+            df_long = df.melt('Concept', var_name='Category', value_name='Count')
+            chart = alt.Chart(df_long).mark_bar().encode(
+                x='Concept:N',
+                y='Count:Q',
+                color='Category:N',
+                tooltip=['Concept:N', 'Category:N', 'Count:Q']
+            ).properties(
+                title='Weak Concepts Overview',
+                width=600
+            )
 
-        rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(
-            color='red', strokeDash=[4, 4]
-        ).encode(y='y:Q')
-        text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
-            align='left', dx=5, dy=-5, color='red'
-        ).encode(y='y:Q', text=alt.value(f'Total Students: {total_students}'))
+            rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(
+                color='red', strokeDash=[4, 4]
+            ).encode(y='y:Q')
+            text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
+                align='left', dx=5, dy=-5, color='red'
+            ).encode(y='y:Q', text=alt.value(f'Total Students: {total_students}'))
 
-        final_chart = (chart + rule + text).interactive()
-        st.altair_chart(final_chart, use_container_width=True)
+            final_chart = (chart + rule + text).interactive()
+            st.altair_chart(final_chart, use_container_width=True)
 
-        display_additional_graphs(st.session_state.teacher_weak_concepts)
+            display_additional_graphs(st.session_state.teacher_weak_concepts)
 
-        bloom_level = st.radio(
-            "Select Bloom's Taxonomy Level for the Questions",
-            ["L1 (Remember)", "L2 (Understand)", "L3 (Apply)", "L4 (Analyze)", "L5 (Evaluate)"],
-            index=3
-        )
+            bloom_level = st.radio(
+                "Select Bloom's Taxonomy Level for the Questions",
+                ["L1 (Remember)", "L2 (Understand)", "L3 (Apply)", "L4 (Analyze)", "L5 (Evaluate)"],
+                index=3
+            )
 
-        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
+            concept_list = {wc.get("ConceptText", "N/A"): wc.get("ConceptID") for wc in st.session_state.teacher_weak_concepts}
+            if not any(concept_list.values()):
+                st.error("No valid ConceptIDs found in weak concepts.")
+                return
 
-        if chosen_concept_text:
-            chosen_concept_id = concept_list[chosen_concept_text]
-            st.session_state.selected_teacher_concept_id = chosen_concept_id
-            st.session_state.selected_teacher_concept_text = chosen_concept_text
+            chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
 
-            if st.button("Generate Exam Questions"):
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                bloom_short = bloom_level.split()[0]
+            if chosen_concept_text:
+                chosen_concept_id = concept_list.get(chosen_concept_text)
+                if chosen_concept_id is None:
+                    st.error("Selected concept does not have a valid ConceptID.")
+                else:
+                    st.session_state.selected_teacher_concept_id = chosen_concept_id
+                    st.session_state.selected_teacher_concept_text = chosen_concept_text
 
-                prompt = (
-                    f"You are an educational AI assistant helping a teacher. The teacher wants to create "
-                    f"exam questions for the concept '{chosen_concept_text}'.\n"
-                    f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
-                    f"Generate a set of 20 challenging and thought-provoking exam questions.\n"
-                    f"No answers, only questions. Provide them in LaTeX format as needed.\n"
-                    f"Focus on Bloom's Level {bloom_short}.\n"
-                )
+                    if st.button("Generate Exam Questions"):
+                        branch_name = st.session_state.auth_data.get("BranchName", "their class")
+                        bloom_short = bloom_level.split()[0]
 
-                with st.spinner("Generating exam questions... Please wait."):
+                        prompt = (
+                            f"You are an educational AI assistant helping a teacher. The teacher wants to create "
+                            f"exam questions for the concept '{chosen_concept_text}'.\n"
+                            f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
+                            f"Generate a set of 20 challenging and thought-provoking exam questions.\n"
+                            f"No answers, only questions. Provide them in LaTeX format as needed.\n"
+                            f"Focus on Bloom's Level {bloom_short}.\n"
+                        )
+
+                        with st.spinner("Generating exam questions... Please wait."):
+                            try:
+                                response = openai.ChatCompletion.create(
+                                    model="gpt-4",
+                                    messages=[{"role": "system", "content": prompt}],
+                                    max_tokens=4000
+                                )
+                                if response and response.choices:
+                                    questions = response.choices[0].message.get('content', '').strip()
+                                    if questions:
+                                        st.session_state.exam_questions = questions
+                                        st.success("Exam questions generated successfully!")
+
+                                        # Optionally, display or provide a download link for the PDF
+                                        pdf_bytes = generate_exam_questions_pdf(
+                                            questions,
+                                            chosen_concept_text,
+                                            st.session_state.auth_data['UserInfo'][0].get('FullName', 'Teacher')
+                                        )
+                                        st.download_button(
+                                            label="📥 Download Exam Questions as PDF",
+                                            data=pdf_bytes,
+                                            file_name=f"Exam_Questions_{chosen_concept_text}.pdf",
+                                            mime="application/pdf"
+                                        )
+                                    else:
+                                        st.error("No content received from GPT-4.")
+                                else:
+                                    st.error("Invalid response from GPT-4.")
+                            except Exception as e:
+                                st.error(f"Error generating exam questions: {e}")
+    # ------------------- 2I) ALL CONCEPTS TAB -------------------
+    def display_all_concepts_tab():
+        st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
+
+        # Fetch all concepts from session state
+        all_concepts = st.session_state.all_concepts
+        remedial_info = st.session_state.get('remedial_info', {})
+        if not all_concepts:
+            st.warning("No concepts found.")
+            return
+
+        # Define column widths for the new table structure
+        col_widths = [3, 1, 1.5, 1.5]
+
+        # Header
+        headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
+        header_columns = st.columns(col_widths)
+        for idx, header in enumerate(headers):
+            header_columns[idx].markdown(f"**{header}**")
+
+        # Rows
+        for concept in all_concepts:
+            concept_id = concept.get('ConceptID')
+            concept_text = concept.get('ConceptText', 'N/A')
+            status = concept.get('ConceptStatus', 'N/A')
+            status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
+            status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
+            status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
+
+            # Initialize columns for the row
+            row_columns = st.columns(col_widths)
+
+            # Fill columns
+            row_columns[0].markdown(concept_text)
+            row_columns[1].markdown(status_html, unsafe_allow_html=True)
+
+            # Remedial column with Expander
+            with row_columns[2]:
+                if status in ["Weak", "Not-Attended"]:
+                    with st.expander("🧠 Remedial Resources"):
+                        resources = remedial_info.get(concept_id, {})
+                        if resources:
+                            formatted_resources = format_remedial_resources(resources)
+                            st.markdown(formatted_resources)
+                        else:
+                            st.markdown("No remedial resources available.")
+                else:
+                    st.markdown("-")
+
+            # Previous Learning GAP column
+            with row_columns[3]:
+                if status in ["Weak", "Not-Attended"]:
+                    # Option 1: Disable the button (Requires Streamlit >= 1.21)
                     try:
-                        response = openai.ChatCompletion.create(
-                            model="gpt-4",
-                            messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000
-                        )
-                        questions = response.choices[0].message['content'].strip()
-                        st.session_state.exam_questions = questions
-                        st.success("Exam questions generated successfully!")
+                        st.button("Previous GAP", key=f"gap_{concept_id}", disabled=True)
+                    except TypeError:
+                        # Option 2: Replace with static text if 'disabled' is not supported
+                        st.markdown("**Previous GAP** (Unavailable)")
+                else:
+                    st.markdown("-")
 
-                        # Optionally, display or provide a download link for the PDF
-                        pdf_bytes = generate_exam_questions_pdf(
-                            questions,
-                            chosen_concept_text,
-                            st.session_state.auth_data['UserInfo'][0]['FullName']
-                        )
-                        st.download_button(
-                            label="📥 Download Exam Questions as PDF",
-                            data=pdf_bytes,
-                            file_name=f"Exam_Questions_{chosen_concept_text}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error generating exam questions: {e}")
+        # Heading below the table
+        st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
 
-# ------------------- 2I) ALL CONCEPTS TAB -------------------
-def display_all_concepts_tab():
-    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
-
-    # Fetch all concepts from session state
-    all_concepts = st.session_state.all_concepts
-    remedial_info = st.session_state.get('remedial_info', {})
-    if not all_concepts:
-        st.warning("No concepts found.")
-        return
-
-    # Define column widths for the new table structure
-    col_widths = [3, 1, 1.5, 1.5]
-
-    # Header
-    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
-    header_columns = st.columns(col_widths)
-    for idx, header in enumerate(headers):
-        header_columns[idx].markdown(f"**{header}**")
-
-    # Rows
-    for concept in all_concepts:
-        concept_id = concept['ConceptID']      # Still needed internally
-        concept_text = concept['ConceptText']
-        status = concept['ConceptStatus']
-        status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
-        status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
-        status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
-
-        # Initialize columns for the row
-        row_columns = st.columns(col_widths)
-
-        # Fill columns
-        row_columns[0].markdown(concept_text)
-        row_columns[1].markdown(status_html, unsafe_allow_html=True)
-
-        # Remedial column with Expander
-        with row_columns[2]:
-            if status in ["Weak", "Not-Attended"]:
-                with st.expander("🧠 Remedial Resources"):
-                    resources = remedial_info.get(concept_id, {})
-                    formatted_resources = format_remedial_resources(resources)
-                    st.markdown(formatted_resources)
+        # Optionally, provide a PDF download of all concepts
+        if st.button("📥 Download All Concepts as PDF"):
+            if all_concepts and st.session_state.auth_data:
+                pdf_bytes = generate_all_concepts_pdf(
+                    all_concepts,
+                    st.session_state.auth_data['UserInfo'][0].get('FullName', 'User')
+                )
+                st.download_button(
+                    label="Download All Concepts as PDF",
+                    data=pdf_bytes,
+                    file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0].get('FullName', 'User')}.pdf",
+                    mime="application/pdf"
+                )
             else:
-                st.markdown("-")
+                st.error("Cannot generate PDF. Missing concepts or user information.")
 
-        # Previous Learning GAP column
-        with row_columns[3]:
-            if status in ["Weak", "Not-Attended"]:
-                # Option 1: Disable the button (Requires Streamlit >= 1.21)
-                try:
-                    st.button("Previous GAP", key=f"gap_{concept_id}", disabled=True)
-                except TypeError:
-                    # Option 2: Replace with static text if 'disabled' is not supported
-                    st.markdown("**Previous GAP** (Unavailable)")
-            else:
-                st.markdown("-")
-
-    # Heading below the table
-    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
-
-    # Optionally, provide a PDF download of all concepts
-    if st.button("📥 Download All Concepts as PDF"):
-        pdf_bytes = generate_all_concepts_pdf(
-            st.session_state.all_concepts,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="Download All Concepts as PDF",
-            data=pdf_bytes,
-            file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
-            mime="application/pdf"
-        )
-
-    # Display Gap Message if button was clicked (No longer necessary if buttons do nothing)
-    if st.session_state.show_gap_message:
-        st.warning("Previous Learning GAP is under maintenance.")
-        st.session_state.show_gap_message = False
+        # Display Gap Message if button was clicked (No longer necessary if buttons do nothing)
+        if st.session_state.show_gap_message:
+            st.warning("Previous Learning GAP is under maintenance.")
+            st.session_state.show_gap_message = False
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1120,10 +1160,13 @@ def login_screen():
 
                     # **Store UserID in session state**
                     user_info = auth_data.get("UserInfo")
-                    if user_info and len(user_info) > 0:
+                    if user_info and isinstance(user_info, list) and len(user_info) > 0:
                         st.session_state.user_id = user_info[0].get("UserID")
+                        if not st.session_state.user_id:
+                            st.error("UserID not found in UserInfo")
+                            return
                     else:
-                        st.error("UserInfo not found in authentication response")
+                        st.error("UserInfo not found or invalid in authentication response")
                         return
 
                     if not st.session_state.is_teacher:
@@ -1135,7 +1178,7 @@ def login_screen():
                             subject_id=st.session_state.subject_id,
                             user_id=st.session_state.user_id
                         )
-                        if all_concepts:
+                        if all_concepts and isinstance(all_concepts, list):
                             st.session_state.all_concepts = all_concepts
 
                             # Pre-fetch remedial resources for all Weak concepts
@@ -1146,8 +1189,11 @@ def login_screen():
                                     if status in ["Weak", "Not-Attended"]:
                                         concept_id = concept.get("ConceptID")
                                         topic_id = concept.get("TopicID")
-                                        resources = fetch_remedial_resources(topic_id, concept_id)
-                                        remedial_info[concept_id] = resources
+                                        if concept_id and topic_id:
+                                            resources = fetch_remedial_resources(topic_id, concept_id)
+                                            remedial_info[concept_id] = resources
+                                        else:
+                                            remedial_info[concept_id] = {}
                             st.session_state.remedial_info = remedial_info
                         else:
                             st.session_state.all_concepts = []
@@ -1158,10 +1204,13 @@ def login_screen():
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+        except ValueError as ve:
+            st.error(f"Invalid response format: {ve}")
 
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+        user_name = user_info.get('FullName', 'Student')
         topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
         concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1169,16 +1218,16 @@ def add_initial_greeting():
 
         concept_options = "\n\n**📚 Available Concepts:**\n"
         for concept in concept_list:
-            concept_options += f"- {concept['ConceptText']}\n"
+            concept_options += f"- {concept.get('ConceptText', 'N/A')}\n"
 
         weak_concepts_text = ""
         if weak_concepts:
             weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
             for concept in weak_concepts:
-                weak_concepts_text += f"- {concept['ConceptText']}\n"
+                weak_concepts_text += f"- {concept.get('ConceptText', 'N/A')}\n"
 
         st.session_state.available_concepts = {
-            concept['ConceptText']: concept['ConceptID'] for concept in concept_list
+            concept.get('ConceptText', 'N/A'): concept.get('ConceptID') for concept in concept_list
         }
 
         greeting_message = (
@@ -1214,7 +1263,7 @@ Teacher Mode Instructions:
 - Use LaTeX for math.
 """
     else:
-        weak_concepts = [wc['ConceptText'] for wc in st.session_state.student_weak_concepts]
+        weak_concepts = [wc.get('ConceptText', '') for wc in st.session_state.student_weak_concepts]
         weak_concepts_str = ", ".join(weak_concepts) if weak_concepts else "none"
 
         system_prompt = f"""
@@ -1240,17 +1289,20 @@ def get_gpt_response(user_input):
             concept_list = st.session_state.auth_data.get('ConceptList', [])
             mentioned_concept = None
             for concept in concept_list:
-                if concept['ConceptText'].lower() in user_input.lower():
-                    mentioned_concept = concept['ConceptText']
+                if concept.get('ConceptText', '').lower() in user_input.lower():
+                    mentioned_concept = concept.get('ConceptText')
                     break
 
             gpt_response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=conversation_history_formatted,
                 max_tokens=2000
-            ).choices[0].message['content'].strip()
+            ).choices[0].message.get('content', '').strip()
 
-            st.session_state.chat_history.append(("assistant", gpt_response))
+            if gpt_response:
+                st.session_state.chat_history.append(("assistant", gpt_response))
+            else:
+                st.error("Received empty response from GPT-4.")
 
             # If user specifically requests resources for a concept
             if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
@@ -1262,7 +1314,8 @@ def get_gpt_response(user_input):
                 if resources:
                     resource_message = format_resources_message(resources)
                     st.session_state.chat_history.append(("assistant", resource_message))
-
+                else:
+                    st.session_state.chat_history.append(("assistant", "No additional resources found for this concept."))
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
 
@@ -1336,9 +1389,9 @@ def display_learning_path_tab():
 # 6) MAIN SCREEN
 # ----------------------------------------------------------------------------
 def main_screen():
-    user_info = st.session_state.auth_data['UserInfo'][0]
-    user_name = user_info['FullName']
-    topic_name = st.session_state.auth_data['TopicName']
+    user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+    user_name = user_info.get('FullName', 'Student')
+    topic_name = st.session_state.auth_data.get('TopicName', 'Topic')
 
     col1, col2 = st.columns([9, 1])
     with col2:
