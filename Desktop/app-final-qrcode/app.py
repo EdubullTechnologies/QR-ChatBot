@@ -344,7 +344,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="GPT-4o-mini",
+            model="gpt-4",
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1500
         ).choices[0].message['content'].strip()
@@ -1003,7 +1003,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="GPT-4o-mini",
+                            model="gpt-4",
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=4000
                         )
@@ -1240,7 +1240,7 @@ def get_gpt_response(user_input):
                     break
 
             gpt_response = openai.ChatCompletion.create(
-                model="GPT-4o-mini",
+                model="gpt-4",
                 messages=conversation_history_formatted,
                 max_tokens=2000
             ).choices[0].message['content'].strip()
