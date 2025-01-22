@@ -27,6 +27,7 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from concurrent.futures import ThreadPoolExecutor, as_completed  # For parallel API calls
 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
@@ -631,6 +632,27 @@ def format_remedial_resources(resources):
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
 # ----------------------------------------------------------------------------
+def fetch_baseline_data(org_code, subject_id, user_id):
+    payload = {
+        "UserID": user_id,
+        "SubjectID": subject_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+
+    try:
+        with st.spinner("Fetching Baseline Report..."):
+            response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        st.error(f"Error fetching baseline data: {e}")
+        return None
+
 def baseline_testing_report():
     if not st.session_state.baseline_data:
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
@@ -643,27 +665,13 @@ def baseline_testing_report():
             st.error("Subject ID not available")
             return
 
-        payload = {
-            "UserID": user_id,
-            "SubjectID": subject_id,
-            "OrgCode": org_code
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-
-        try:
-            with st.spinner("Fetching Baseline Report..."):
-                response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
-                response.raise_for_status()
-                st.session_state.baseline_data = response.json()
-        except Exception as e:
-            st.error(f"Error fetching baseline data: {e}")
-            return
-
+        # Fetch Baseline Data Early (Moved from the login)
+        st.session_state.baseline_data = fetch_baseline_data(
+            org_code=org_code,
+            subject_id=subject_id,
+            user_id=user_id
+        )
+    
     baseline_data = st.session_state.baseline_data
     if not baseline_data:
         st.warning("No baseline data available.")
@@ -770,6 +778,87 @@ def baseline_testing_report():
         st.altair_chart(tax_chart, use_container_width=True)
     else:
         st.info("No taxonomy data available.")
+
+# ------------------- 2I) ALL CONCEPTS TAB -------------------
+def display_all_concepts_tab():
+    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
+    
+    # Fetch all concepts from session state
+    all_concepts = st.session_state.all_concepts
+    if not all_concepts:
+        st.warning("No concepts found.")
+        return
+    
+    # Define column widths for the new table structure
+    # Updated to remove Concept ID and Topic ID from display columns
+    col_widths = [3, 1, 1.5, 1.5]
+    
+    # Header
+    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
+    header_columns = st.columns(col_widths)
+    for idx, header in enumerate(headers):
+        header_columns[idx].markdown(f"**{header}**")
+    
+    # Prepare Concept Data
+    concepts_to_fetch = [
+        {
+            "concept_id": concept['ConceptID'],
+            "concept_text": concept['ConceptText'],
+            "topic_id": concept['TopicID'],
+            "status": concept['ConceptStatus']
+        }
+        for concept in all_concepts
+    ]
+    
+    # Function to fetch remedial resources for a single concept
+    @st.cache_data(show_spinner=False)
+    def cached_fetch_remedial_resources(topic_id, concept_id):
+        return fetch_remedial_resources(topic_id, concept_id)
+    
+    def fetch_resources(concept):
+        if concept['status'] in ["Weak", "Not-Attended"]:
+            resources = cached_fetch_remedial_resources(concept['topic_id'], concept['concept_id'])
+            formatted_resources = format_remedial_resources(resources)
+        else:
+            formatted_resources = "-"
+        return (concept, formatted_resources)
+    
+    # Use ThreadPoolExecutor to parallelize API calls
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_concept = {executor.submit(fetch_resources, concept): concept for concept in concepts_to_fetch}
+        for future in as_completed(future_to_concept):
+            concept, remedial = future.result()
+            
+            concept_text = concept['concept_text']
+            status = concept['status']
+            status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
+            status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
+            status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
+            
+            # Initialize columns for the row
+            row_columns = st.columns(col_widths)
+            
+            # Fill columns
+            row_columns[0].markdown(concept_text)
+            row_columns[1].markdown(status_html, unsafe_allow_html=True)
+            
+            # Remedial column with Expander or "-"
+            with row_columns[2]:
+                if remedial != "-":
+                    with st.expander("🧠 Remedial Resources"):
+                        st.markdown(remedial)
+                else:
+                    st.markdown("-")
+            
+            # Previous Learning GAP column
+            with row_columns[3]:
+                if status in ["Weak", "Not-Attended"]:
+                    st.button("Previous GAP", key=f"gap_{concept['concept_id']}", on_click=show_gap_message)
+                else:
+                    st.markdown("-")
+
+# ------------------- 2I) ALL CONCEPTS TAB (Original) -------------------
+# The original display_all_concepts_tab function was replaced above to include optimized API calls.
 
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
@@ -926,60 +1015,6 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-    # ------------------- 2I) ALL CONCEPTS TAB -------------------
-    def display_all_concepts_tab():
-        
-
-        # Fetch all concepts from session state
-        all_concepts = st.session_state.all_concepts
-        if not all_concepts:
-            st.warning("No concepts found.")
-            return
-
-        # Define column widths
-        col_widths = [1.2, 3, 1.2, 1, 1.5, 1.5]
-
-        # Header
-        headers = ["Concept ID", "Concept Text", "Topic ID", "Status", "Remedial", "Previous Learning GAP"]
-        header_columns = st.columns(col_widths)
-        for idx, header in enumerate(headers):
-            header_columns[idx].markdown(f"**{header}**")
-
-        # Rows
-        for concept in all_concepts:
-            concept_id = concept['ConceptID']
-            concept_text = concept['ConceptText']
-            topic_id = concept['TopicID']
-            status = concept['ConceptStatus']
-            status_html = f"<span style='color:{'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'};'>{'🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'} {status}</span>"
-
-            # Initialize columns for the row
-            row_columns = st.columns(col_widths)
-
-            # Fill columns
-            row_columns[0].markdown(str(concept_id))
-            row_columns[1].markdown(concept_text)
-            row_columns[2].markdown(str(topic_id))
-            row_columns[3].markdown(status_html, unsafe_allow_html=True)
-
-            # Remedial column with Expander
-            with row_columns[4]:
-                if status in ["Weak", "Not-Attended"]:
-                    with st.expander("🧠 Remedial Resources"):
-                        resources = fetch_remedial_resources(topic_id, concept_id)
-                        formatted_resources = format_remedial_resources(resources)
-                        st.markdown(formatted_resources)
-                else:
-                    st.markdown("-")
-
-            # Previous Learning GAP column
-            with row_columns[5]:
-                if status in ["Weak", "Not-Attended"]:
-                    st.button("Previous GAP", key=f"gap_{concept_id}", on_click=show_gap_message)
-                else:
-                    st.markdown("-")
-
-      
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
 # ----------------------------------------------------------------------------
@@ -1067,7 +1102,7 @@ def login_screen():
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
 
-                    # Capture SubjectID if present
+                    # Capture SubjectID and UserID
                     st.session_state.subject_id = auth_data.get("SubjectID")
                     if not st.session_state.subject_id:
                         st.error("Subject ID not found in authentication response")
@@ -1084,16 +1119,19 @@ def login_screen():
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
 
-                        # Fetch All Concepts
-                        all_concepts = fetch_all_concepts(
+                        # Fetch Baseline Data Early
+                        st.session_state.baseline_data = fetch_baseline_data(
                             org_code=org_code,
                             subject_id=st.session_state.subject_id,
                             user_id=st.session_state.user_id
                         )
-                        if all_concepts:
-                            st.session_state.all_concepts = all_concepts
-                        else:
-                            st.session_state.all_concepts = []
+
+                        # Fetch All Concepts After Baseline
+                        st.session_state.all_concepts = fetch_all_concepts(
+                            org_code=org_code,
+                            subject_id=st.session_state.subject_id,
+                            user_id=st.session_state.user_id
+                        ) or []
 
                         st.rerun()
                 else:
@@ -1235,103 +1273,8 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
-def display_learning_path_tab():
-    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
-    concept_list = st.session_state.auth_data.get('ConceptList', [])
-
-    if not weak_concepts:
-        st.warning("No weak concepts found.")
-    else:
-        for idx, concept in enumerate(weak_concepts):
-            concept_text = concept.get("ConceptText", f"Concept {idx+1}")
-            concept_id = concept.get("ConceptID", f"id_{idx+1}")
-
-            st.markdown(f"#### **Weak Concept {idx+1}:** {concept_text}")
-
-            button_key = f"generate_lp_{concept_id}"
-            if st.button("🧠 Generate Learning Path", key=button_key):
-                if concept_id not in st.session_state.student_learning_paths:
-                    with st.spinner(f"Generating learning path for {concept_text}..."):
-                        learning_path = generate_learning_path(concept_text)
-                        if learning_path:
-                            st.session_state.student_learning_paths[concept_id] = {
-                                "concept_text": concept_text,
-                                "learning_path": learning_path
-                            }
-                            st.success(f"Learning path generated for {concept_text}!")
-                        else:
-                            st.error(f"Failed to generate learning path for {concept_text}.")
-                else:
-                    st.info(f"Learning path for {concept_text} is already generated.")
-
-            if concept_id in st.session_state.student_learning_paths:
-                lp_data = st.session_state.student_learning_paths[concept_id]
-                display_learning_path_with_resources(
-                    lp_data["concept_text"],
-                    lp_data["learning_path"],
-                    concept_list,
-                    st.session_state.topic_id
-                )
-
-# ------------------- 2I) ALL CONCEPTS TAB -------------------
-def display_all_concepts_tab():
-    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
-    
-    # Fetch all concepts from session state
-    all_concepts = st.session_state.all_concepts
-    if not all_concepts:
-        st.warning("No concepts found.")
-        return
-    
-    # Define column widths for the new table structure
-    # Removed Concept ID and Topic ID, so updated widths accordingly
-    col_widths = [3, 1, 1.5, 1.5]
-    
-    # Header
-    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
-    header_columns = st.columns(col_widths)
-    for idx, header in enumerate(headers):
-        header_columns[idx].markdown(f"**{header}**")
-    
-    # Rows
-    for concept in all_concepts:
-        concept_id = concept['ConceptID']      # Still needed internally
-        concept_text = concept['ConceptText']
-        topic_id = concept['TopicID']          # Still needed internally
-        status = concept['ConceptStatus']
-        status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
-        status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
-        status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
-    
-        # Initialize columns for the row
-        row_columns = st.columns(col_widths)
-    
-        # Fill columns
-        row_columns[0].markdown(concept_text)
-        row_columns[1].markdown(status_html, unsafe_allow_html=True)
-    
-        # Remedial column with Expander
-        with row_columns[2]:
-            if status in ["Weak", "Not-Attended"]:
-                with st.expander("🧠 Remedial Resources"):
-                    resources = fetch_remedial_resources(topic_id, concept_id)
-                    formatted_resources = format_remedial_resources(resources)
-                    st.markdown(formatted_resources)
-            else:
-                st.markdown("-")
-    
-        # Previous Learning GAP column
-        with row_columns[3]:
-            if status in ["Weak", "Not-Attended"]:
-                # Option 1: Disable the button (Requires Streamlit >= 1.21)
-                try:
-                    st.button("Previous GAP", key=f"gap_{concept_id}", disabled=True)
-                except TypeError:
-                    # Option 2: Replace with static text if 'disabled' is not supported
-                    st.markdown("**Previous GAP** (Unavailable)")
-            else:
-                st.markdown("-")
-    
+# ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
+# Already integrated in display_all_concepts_tab function above
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
@@ -1392,6 +1335,44 @@ def main_screen():
             with tabs[3]:
                 st.subheader("Baseline Testing Report")
                 baseline_testing_report()
+
+def display_learning_path_tab():
+    weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
+    concept_list = st.session_state.auth_data.get('ConceptList', [])
+
+    if not weak_concepts:
+        st.warning("No weak concepts found.")
+    else:
+        for idx, concept in enumerate(weak_concepts):
+            concept_text = concept.get("ConceptText", f"Concept {idx+1}")
+            concept_id = concept.get("ConceptID", f"id_{idx+1}")
+
+            st.markdown(f"#### **Weak Concept {idx+1}:** {concept_text}")
+
+            button_key = f"generate_lp_{concept_id}"
+            if st.button("🧠 Generate Learning Path", key=button_key):
+                if concept_id not in st.session_state.student_learning_paths:
+                    with st.spinner(f"Generating learning path for {concept_text}..."):
+                        learning_path = generate_learning_path(concept_text)
+                        if learning_path:
+                            st.session_state.student_learning_paths[concept_id] = {
+                                "concept_text": concept_text,
+                                "learning_path": learning_path
+                            }
+                            st.success(f"Learning path generated for {concept_text}!")
+                        else:
+                            st.error(f"Failed to generate learning path for {concept_text}.")
+                else:
+                    st.info(f"Learning path for {concept_text} is already generated.")
+
+            if concept_id in st.session_state.student_learning_paths:
+                lp_data = st.session_state.student_learning_paths[concept_id]
+                display_learning_path_with_resources(
+                    lp_data["concept_text"],
+                    lp_data["learning_path"],
+                    concept_list,
+                    st.session_state.topic_id
+                )
 
 # ----------------------------------------------------------------------------
 # 7) LAUNCH
