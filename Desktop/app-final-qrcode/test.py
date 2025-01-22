@@ -1295,42 +1295,43 @@ def display_learning_path_tab():
 
 # ------------------- 2I) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
-    st.markdown("### 📚 All Concepts")
-
+    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
+    
     # Fetch all concepts from session state
     all_concepts = st.session_state.all_concepts
     if not all_concepts:
         st.warning("No concepts found.")
         return
-
-    # Define column widths
-    col_widths = [1.2, 3, 1.2, 1, 1.5, 1.5]
-
+    
+    # Define column widths for the new table structure
+    # Removed Concept ID and Topic ID, so updated widths accordingly
+    col_widths = [3, 1, 1.5, 1.5]
+    
     # Header
-    headers = ["Concept ID", "Concept Text", "Topic ID", "Status", "Remedial", "Previous Learning GAP"]
+    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
     header_columns = st.columns(col_widths)
     for idx, header in enumerate(headers):
         header_columns[idx].markdown(f"**{header}**")
-
+    
     # Rows
     for concept in all_concepts:
-        concept_id = concept['ConceptID']
+        concept_id = concept['ConceptID']      # Still needed internally
         concept_text = concept['ConceptText']
-        topic_id = concept['TopicID']
+        topic_id = concept['TopicID']          # Still needed internally
         status = concept['ConceptStatus']
-        status_html = f"<span style='color:{'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'};'>{'🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'} {status}</span>"
-
+        status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
+        status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
+        status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
+    
         # Initialize columns for the row
         row_columns = st.columns(col_widths)
-
+    
         # Fill columns
-        row_columns[0].markdown(str(concept_id))
-        row_columns[1].markdown(concept_text)
-        row_columns[2].markdown(str(topic_id))
-        row_columns[3].markdown(status_html, unsafe_allow_html=True)
-
+        row_columns[0].markdown(concept_text)
+        row_columns[1].markdown(status_html, unsafe_allow_html=True)
+    
         # Remedial column with Expander
-        with row_columns[4]:
+        with row_columns[2]:
             if status in ["Weak", "Not-Attended"]:
                 with st.expander("🧠 Remedial Resources"):
                     resources = fetch_remedial_resources(topic_id, concept_id)
@@ -1338,34 +1339,19 @@ def display_all_concepts_tab():
                     st.markdown(formatted_resources)
             else:
                 st.markdown("-")
-
+    
         # Previous Learning GAP column
-        with row_columns[5]:
+        with row_columns[3]:
             if status in ["Weak", "Not-Attended"]:
-                st.button("Previous GAP", key=f"gap_{concept_id}", on_click=show_gap_message)
+                # Option 1: Disable the button (Requires Streamlit >= 1.21)
+                try:
+                    st.button("Previous GAP", key=f"gap_{concept_id}", disabled=True)
+                except TypeError:
+                    # Option 2: Replace with static text if 'disabled' is not supported
+                    st.markdown("**Previous GAP** (Unavailable)")
             else:
                 st.markdown("-")
-
-    # Heading below the table
-    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
-
-    # Optionally, provide a PDF download of all concepts
-    if st.button("📥 Download All Concepts as PDF"):
-        pdf_bytes = generate_all_concepts_pdf(
-            st.session_state.all_concepts,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="Download All Concepts as PDF",
-            data=pdf_bytes,
-            file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
-            mime="application/pdf"
-        )
-
-    # Display Gap Message if button was clicked
-    if st.session_state.show_gap_message:
-        st.warning("Previous Learning GAP is under maintenance.")
-        st.session_state.show_gap_message = False
+    
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
