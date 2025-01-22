@@ -94,6 +94,12 @@ if "all_concepts" not in st.session_state:
     st.session_state.all_concepts = []  # Initialize All Concepts
 if "remedial_info" not in st.session_state:
     st.session_state.remedial_info = None
+if 'show_gap_message' not in st.session_state:
+    st.session_state.show_gap_message = False
+
+# Define the show_gap_message function globally
+def show_gap_message():
+    st.session_state.show_gap_message = True
 
 # Streamlit page config
 st.set_page_config(
@@ -919,12 +925,6 @@ def teacher_dashboard():
                         st.session_state.exam_questions = questions
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
-
-    if 'show_gap_message' not in st.session_state:
-        st.session_state.show_gap_message = False
-
-    def show_gap_message():
-        st.session_state.show_gap_message = True
 
     # ------------------- 2I) ALL CONCEPTS TAB -------------------
     def display_all_concepts_tab():
