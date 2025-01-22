@@ -46,6 +46,7 @@ API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
+API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"  # New API Endpoint for All Concepts
 
 # Initialize session state variables
 if "auth_data" not in st.session_state:
@@ -87,6 +88,8 @@ if "subject_id" not in st.session_state:
     st.session_state.subject_id = None  # Default if unknown
 if "user_id" not in st.session_state:
     st.session_state.user_id = None  # Initialize UserID
+if "all_concepts" not in st.session_state:
+    st.session_state.all_concepts = []  # Initialize All Concepts
 
 # Streamlit page config
 st.set_page_config(
@@ -464,6 +467,109 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
             mime="application/pdf"
         )
 
+
+# ------------------- 2E) FETCH ALL CONCEPTS -------------------
+def fetch_all_concepts(org_code, subject_id, user_id):
+    payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_ALL_CONCEPTS_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching all concepts: {e}")
+        return None
+
+# ------------------- 2F) PDF GENERATION FOR ALL CONCEPTS -------------------
+def generate_all_concepts_pdf(concepts, user_name):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+                            rightMargin=72, leftMargin=72,
+                            topMargin=72, bottomMargin=18)
+    story = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=16,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Heading2'],
+        fontName='Helvetica',
+        fontSize=12,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    table_header_style = ParagraphStyle(
+        'TableHeader',
+        parent=styles['Heading4'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        alignment=TA_LEFT,
+        spaceAfter=6
+    )
+    table_cell_style = ParagraphStyle(
+        'TableCell',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        alignment=TA_LEFT,
+        spaceAfter=6
+    )
+
+    # Title
+    story.append(Paragraph("All Concepts", title_style))
+    user_name_display = user_name if user_name else "User"
+    story.append(Paragraph(f"User: {user_name_display}", subtitle_style))
+    story.append(Spacer(1, 12))
+
+    # Table Headers
+    headers = ["Concept ID", "Concept Text", "Topic ID", "Status"]
+    table_data = [headers]
+
+    # Table Rows
+    for concept in concepts:
+        row = [
+            str(concept.get("ConceptID", "")),
+            concept.get("ConceptText", ""),
+            str(concept.get("TopicID", "")),
+            concept.get("ConceptStatus", "")
+        ]
+        table_data.append(row)
+
+    # Create Table
+    from reportlab.platypus import Table, TableStyle
+    from reportlab.lib import colors
+
+    table = Table(table_data, repeatRows=1)
+    table_style = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 12),
+        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+    ])
+    table.setStyle(table_style)
+
+    story.append(table)
+    story.append(Spacer(1, 12))
+
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
@@ -885,12 +991,23 @@ def login_screen():
 
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+
+                        # Fetch All Concepts
+                        all_concepts = fetch_all_concepts(
+                            org_code=org_code,
+                            subject_id=st.session_state.subject_id,
+                            user_id=st.session_state.user_id
+                        )
+                        if all_concepts:
+                            st.session_state.all_concepts = all_concepts
+                        else:
+                            st.session_state.all_concepts = []
+
                         st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
-
 
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
@@ -1064,6 +1181,140 @@ def display_learning_path_tab():
                     st.session_state.topic_id
                 )
 
+# ------------------- 2G) ALL CONCEPTS TAB -------------------
+def display_all_concepts_tab():
+    st.markdown("### 📚 All Concepts")
+
+    # Fetch all concepts from session state
+    all_concepts = st.session_state.all_concepts
+    if not all_concepts:
+        st.warning("No concepts found.")
+        return
+
+    # Convert to DataFrame
+    df_all_concepts = pd.DataFrame(all_concepts)
+
+    # Add Status Indicator
+    def status_indicator(status):
+        if status == "Weak":
+            color = "red"
+            icon = "🔴"
+        elif status == "Cleared":
+            color = "green"
+            icon = "🟢"
+        elif status == "Not-Attended":
+            color = "orange"
+            icon = "🟠"
+        else:
+            color = "grey"
+            icon = "⚪"
+        return f"<span style='color:{color};'>{icon} {status}</span>"
+
+    df_all_concepts['Status Indicator'] = df_all_concepts['ConceptStatus'].apply(status_indicator)
+
+    # Display the DataFrame with HTML formatting
+    def make_clickable(val, row):
+        return val
+
+    st.markdown(
+        f"""
+        <style>
+        .concept-table {{
+            border-collapse: collapse;
+            width: 100%;
+        }}
+        .concept-table th, .concept-table td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+        }}
+        .concept-table tr:nth-child(even){{background-color: #f2f2f2;}}
+        .concept-table tr:hover {{background-color: #ddd;}}
+        .concept-table th {{
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #4CAF50;
+            color: white;
+        }}
+        </style>
+        <table class="concept-table">
+            <tr>
+                <th>Concept ID</th>
+                <th>Concept Text</th>
+                <th>Topic ID</th>
+                <th>Status</th>
+                <th>Remedial</th>
+                <th>Previous Learning GAP</th>
+            </tr>
+        """,
+        unsafe_allow_html=True
+    )
+
+    for idx, row in df_all_concepts.iterrows():
+        concept_id = row['ConceptID']
+        concept_text = row['ConceptText']
+        topic_id = row['TopicID']
+        status = row['ConceptStatus']
+        status_html = row['Status Indicator']
+
+        # Remedial Option
+        remedial_html = ""
+        if status in ["Weak", "Not-Attended"]:
+            remedial_html = f"""
+            <button onclick="window.open('','_self').alert('Fetching remedial resources for {concept_text}');" style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Remedial</button>
+            """
+
+        # Previous Learning GAP Button
+        learning_gap_html = f"""
+        <button onclick="window.open('','_self').alert('Previous Learning GAP is under maintenance.');" style="background-color:#f44336;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Previous GAP</button>
+        """
+
+        # Display the row
+        st.markdown(
+            f"""
+            <tr>
+                <td>{concept_id}</td>
+                <td>{concept_text}</td>
+                <td>{topic_id}</td>
+                <td>{status_html}</td>
+                <td>{remedial_html}</td>
+                <td>{learning_gap_html}</td>
+            </tr>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown("</table>", unsafe_allow_html=True)
+
+    # Handle Remedial Button Clicks
+    # Since Streamlit cannot detect button clicks inside HTML, we need an alternative approach.
+    # One approach is to list concepts and provide buttons below the table.
+
+    st.markdown("---")
+    st.markdown("**Note:** Remedial resources are being fetched based on the concept's status.")
+
+    # Create a sidebar or separate area for remedial actions
+    st.markdown("#### Remedial Actions")
+    for idx, row in df_all_concepts.iterrows():
+        concept_id = row['ConceptID']
+        concept_text = row['ConceptText']
+        status = row['ConceptStatus']
+
+        if status in ["Weak", "Not-Attended"]:
+            remedial_button = st.button(f"Remedial for {concept_text}", key=f"remedial_{concept_id}")
+            if remedial_button:
+                # Fetch resources for the concept
+                resources = get_resources_for_concept(
+                    concept_text=concept_text,
+                    concept_list=st.session_state.auth_data.get('ConceptList', []),
+                    topic_id=st.session_state.topic_id
+                )
+                if resources:
+                    remedial_message = format_resources_message(resources)
+                    st.markdown(f"**Remedial Resources for {concept_text}:**\n\n{remedial_message}")
+                else:
+                    st.error(f"Failed to fetch remedial resources for {concept_text}.")
+
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
 # ----------------------------------------------------------------------------
@@ -1086,7 +1337,6 @@ def main_screen():
         unsafe_allow_html=True,
     )
 
-
     if st.session_state.is_teacher:
         # Teacher => Chat + Dashboard
         tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
@@ -1107,19 +1357,22 @@ def main_screen():
                 add_initial_greeting()
                 display_chat(user_name)
         else:
-            # Non-English => Chat + Learning Path + Baseline Testing
-            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing"])
-
-            with tab1:
+            # Non-English => Chat + Learning Path + Baseline Testing + All Concepts
+            tabs = st.tabs(["💬 Chat", "🧠 Learning Path", "📜 All Concepts", "📝 Baseline Testing"])
+            with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
                 display_chat(user_name)
 
-            with tab2:
+            with tabs[1]:
                 st.subheader("Your Personalized Learning Path")
                 display_learning_path_tab()
 
-            with tab3:
+            with tabs[2]:
+                st.subheader("All Concepts")
+                display_all_concepts_tab()
+
+            with tabs[3]:
                 st.subheader("Baseline Testing Report")
                 baseline_testing_report()
 
