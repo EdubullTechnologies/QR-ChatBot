@@ -32,6 +32,21 @@ from matplotlib import rcParams
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
+# Import the Cookie Manager
+from streamlit_cookies_manager import EncryptedCookieManager
+
+# Initialize the Cookie Manager with the password from secrets
+cookies = EncryptedCookieManager(
+    # Set the names of the cookies you want to manage
+    cookie_keys=["auth_token"],
+    prefix="",  # No prefix
+    password=st.secrets["cookies_manager"]["password"]  # Use the password from secrets
+)
+
+# Wait until the cookie manager is ready
+if not cookies.ready():
+    st.stop()
+
 # Load OpenAI API Key (from Streamlit secrets)
 try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -463,9 +478,7 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
         )
 
 
-# ----------------------------------------------------------------------------
-# 3) BASELINE TESTING REPORT (MODIFIED)
-# ----------------------------------------------------------------------------
+# ------------------- 2E) BASELINE TESTING REPORT (MODIFIED) -------------------
 def baseline_testing_report():
     """
     Modified per requirements:
@@ -610,9 +623,8 @@ def baseline_testing_report():
     else:
         st.info("No taxonomy data available.")
 
-
 # ----------------------------------------------------------------------------
-# 4) TEACHER DASHBOARD
+# 3) TEACHER DASHBOARD
 # ----------------------------------------------------------------------------
 def display_additional_graphs(weak_concepts):
     df = pd.DataFrame(weak_concepts)
@@ -783,7 +795,7 @@ def teacher_dashboard():
         )
 
 # ----------------------------------------------------------------------------
-# 5) LOGIN SCREEN & MAIN ROUTING
+# 4) LOGIN SCREEN & MAIN ROUTING
 # ----------------------------------------------------------------------------
 def login_screen():
     try:
@@ -864,6 +876,7 @@ def login_screen():
                 auth_response.raise_for_status()
                 auth_data = auth_response.json()
                 if auth_data.get("statusCode") == 1:
+                    # Update session state
                     st.session_state.auth_data = auth_data
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
@@ -875,13 +888,27 @@ def login_screen():
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
 
+                    # **Set the authentication cookie**
+                    auth_token = json.dumps({
+                        "auth_data": st.session_state.auth_data,
+                        "is_authenticated": st.session_state.is_authenticated,
+                        "topic_id": st.session_state.topic_id,
+                        "is_teacher": st.session_state.is_teacher,
+                        "subject_id": st.session_state.subject_id
+                    })
+                    cookies["auth_token"] = auth_token
+                    cookies.save()
+
+                    st.success("✅ Authentication successful!")
                     st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
-
+# ----------------------------------------------------------------------------
+# 5) CHAT FUNCTIONS
+# ----------------------------------------------------------------------------
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
@@ -968,7 +995,7 @@ def get_gpt_response(user_input):
                     break
 
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=conversation_history_formatted,
                 max_tokens=2000
             ).choices[0].message['content'].strip()
@@ -1016,6 +1043,68 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
+# ----------------------------------------------------------------------------
+# 6) MAIN SCREEN
+# ----------------------------------------------------------------------------
+def main_screen():
+    user_info = st.session_state.auth_data['UserInfo'][0]
+    user_name = user_info['FullName']
+    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
+
+    col1, col2 = st.columns([9, 1])
+    with col2:
+        if st.button("Logout"):
+            # **Clear the authentication cookie**
+            cookies.delete("auth_token")
+            cookies.save()
+            # **Clear session state**
+            st.session_state.clear()
+            st.rerun()
+
+    icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
+    st.markdown(
+        f"""
+        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.is_teacher:
+        # Teacher => Chat + Dashboard
+        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
+        with tabs[0]:
+            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+            add_initial_greeting()
+            display_chat(user_name)
+        with tabs[1]:
+            st.subheader("Teacher Dashboard")
+            teacher_dashboard()
+    else:
+        # Student => possibly multiple tabs
+        if st.session_state.is_english_mode:
+            # English => only Chat
+            tab = st.tabs(["💬 Chat"])[0]
+            with tab:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                display_chat(user_name)
+        else:
+            # Non-English => Chat + Learning Path + Baseline Testing
+            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing"])
+
+            with tab1:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                display_chat(user_name)
+
+            with tab2:
+                st.subheader("Your Personalized Learning Path")
+                display_learning_path_tab()
+
+            with tab3:
+                st.subheader("Baseline Testing Report")
+                baseline_testing_report()
+
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
     concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1055,67 +1144,23 @@ def display_learning_path_tab():
                 )
 
 # ----------------------------------------------------------------------------
-# 6) MAIN SCREEN
-# ----------------------------------------------------------------------------
-def main_screen():
-    user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-    topic_name = st.session_state.auth_data['TopicName']
-
-    col1, col2 = st.columns([9, 1])
-    with col2:
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-
-    icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
-    st.markdown(
-        f"""
-        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-    if st.session_state.is_teacher:
-        # Teacher => Chat + Dashboard
-        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
-        with tabs[0]:
-            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-            add_initial_greeting()
-            display_chat(user_name)
-        with tabs[1]:
-            st.subheader("Teacher Dashboard")
-            teacher_dashboard()
-    else:
-        # Student => possibly multiple tabs
-        if st.session_state.is_english_mode:
-            # English => only Chat
-            tab = st.tabs(["💬 Chat"])[0]
-            with tab:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-        else:
-            # Non-English => Chat + Learning Path + Baseline Testing
-            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing"])
-
-            with tab1:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-
-            with tab2:
-                st.subheader("Your Personalized Learning Path")
-                display_learning_path_tab()
-
-            with tab3:
-                st.subheader("Baseline Testing Report")
-                baseline_testing_report()
-
-# ----------------------------------------------------------------------------
 # 7) LAUNCH
 # ----------------------------------------------------------------------------
 def main():
+    if cookies.get("auth_token"):
+        try:
+            # **Load authentication data from the cookie**
+            auth_token = cookies.get("auth_token")
+            auth_data_dict = json.loads(auth_token)
+            st.session_state.auth_data = auth_data_dict["auth_data"]
+            st.session_state.is_authenticated = auth_data_dict["is_authenticated"]
+            st.session_state.topic_id = auth_data_dict["topic_id"]
+            st.session_state.is_teacher = auth_data_dict["is_teacher"]
+            st.session_state.subject_id = auth_data_dict["subject_id"]
+        except Exception as e:
+            st.error(f"Error reading authentication cookie: {e}")
+            st.session_state.is_authenticated = False
+
     if st.session_state.is_authenticated:
         main_screen()
         st.stop()
