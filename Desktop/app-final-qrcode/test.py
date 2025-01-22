@@ -920,21 +920,85 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-    if st.session_state.exam_questions:
-        st.markdown(f"### 📝 Generated Exam Questions")
-        st.markdown(st.session_state.exam_questions)
+    if 'show_gap_message' not in st.session_state:
+        st.session_state.show_gap_message = False
 
-        pdf_bytes = generate_exam_questions_pdf(
-            st.session_state.exam_questions,
-            st.session_state.selected_teacher_concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="📥 Download Exam Questions as PDF",
-            data=pdf_bytes,
-            file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
-            mime="application/pdf"
-        )
+    def show_gap_message():
+        st.session_state.show_gap_message = True
+
+    # ------------------- 2I) ALL CONCEPTS TAB -------------------
+    def display_all_concepts_tab():
+        st.markdown("### 📚 All Concepts")
+
+        # Fetch all concepts from session state
+        all_concepts = st.session_state.all_concepts
+        if not all_concepts:
+            st.warning("No concepts found.")
+            return
+
+        # Define column widths
+        col_widths = [1.2, 3, 1.2, 1, 1.5, 1.5]
+
+        # Header
+        headers = ["Concept ID", "Concept Text", "Topic ID", "Status", "Remedial", "Previous Learning GAP"]
+        header_columns = st.columns(col_widths)
+        for idx, header in enumerate(headers):
+            header_columns[idx].markdown(f"**{header}**")
+
+        # Rows
+        for concept in all_concepts:
+            concept_id = concept['ConceptID']
+            concept_text = concept['ConceptText']
+            topic_id = concept['TopicID']
+            status = concept['ConceptStatus']
+            status_html = f"<span style='color:{'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'};'>{'🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'} {status}</span>"
+
+            # Initialize columns for the row
+            row_columns = st.columns(col_widths)
+
+            # Fill columns
+            row_columns[0].markdown(str(concept_id))
+            row_columns[1].markdown(concept_text)
+            row_columns[2].markdown(str(topic_id))
+            row_columns[3].markdown(status_html, unsafe_allow_html=True)
+
+            # Remedial column with Expander
+            with row_columns[4]:
+                if status in ["Weak", "Not-Attended"]:
+                    with st.expander("🧠 Remedial Resources"):
+                        resources = fetch_remedial_resources(topic_id, concept_id)
+                        formatted_resources = format_remedial_resources(resources)
+                        st.markdown(formatted_resources)
+                else:
+                    st.markdown("-")
+
+            # Previous Learning GAP column
+            with row_columns[5]:
+                if status in ["Weak", "Not-Attended"]:
+                    st.button("Previous GAP", key=f"gap_{concept_id}", on_click=show_gap_message)
+                else:
+                    st.markdown("-")
+
+        # Heading below the table
+        st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
+
+        # Optionally, provide a PDF download of all concepts
+        if st.button("📥 Download All Concepts as PDF"):
+            pdf_bytes = generate_all_concepts_pdf(
+                st.session_state.all_concepts,
+                st.session_state.auth_data['UserInfo'][0]['FullName']
+            )
+            st.download_button(
+                label="Download All Concepts as PDF",
+                data=pdf_bytes,
+                file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
+                mime="application/pdf"
+            )
+
+        # Display Gap Message if button was clicked
+        if st.session_state.show_gap_message:
+            st.warning("Previous Learning GAP is under maintenance.")
+            st.session_state.show_gap_message = False
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1239,124 +1303,51 @@ def display_all_concepts_tab():
         st.warning("No concepts found.")
         return
 
-    # Convert to DataFrame
-    df_all_concepts = pd.DataFrame(all_concepts)
+    # Define column widths
+    col_widths = [1.2, 3, 1.2, 1, 1.5, 1.5]
 
-    # Add Status Indicator
-    def status_indicator(status):
-        if status == "Weak":
-            color = "red"
-            icon = "🔴"
-        elif status == "Cleared":
-            color = "green"
-            icon = "🟢"
-        elif status == "Not-Attended":
-            color = "orange"
-            icon = "🟠"
-        else:
-            color = "grey"
-            icon = "⚪"
-        return f"<span style='color:{color};'>{icon} {status}</span>"
+    # Header
+    headers = ["Concept ID", "Concept Text", "Topic ID", "Status", "Remedial", "Previous Learning GAP"]
+    header_columns = st.columns(col_widths)
+    for idx, header in enumerate(headers):
+        header_columns[idx].markdown(f"**{header}**")
 
-    df_all_concepts['Status Indicator'] = df_all_concepts['ConceptStatus'].apply(status_indicator)
-
-    # Display the DataFrame with HTML formatting
-    st.markdown(
-        f"""
-        <style>
-        .concept-table {{
-            border-collapse: collapse;
-            width: 100%;
-        }}
-        .concept-table th, .concept-table td {{
-            border: 1px solid #ddd;
-            padding: 8px;
-            vertical-align: top;
-            text-align: left;
-        }}
-        .concept-table tr:nth-child(even){{background-color: #f2f2f2;}}
-        .concept-table tr:hover {{background-color: #ddd;}}
-        .concept-table th {{
-            padding-top: 12px;
-            padding-bottom: 12px;
-            text-align: left;
-            background-color: #4CAF50;
-            color: white;
-        }}
-        </style>
-        <table class="concept-table">
-            <tr>
-                <th>Concept ID</th>
-                <th>Concept Text</th>
-                <th>Topic ID</th>
-                <th>Status</th>
-                <th>Remedial</th>
-                <th>Previous Learning GAP</th>
-            </tr>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # Iterate through all concepts and display each row with a Remedial button
-    for idx, row in df_all_concepts.iterrows():
-        concept_id = row['ConceptID']
-        concept_text = row['ConceptText']
-        topic_id = row['TopicID']
-        status = row['ConceptStatus']
-        status_html = row['Status Indicator']
-
-        # Remedial Button
-        remedial_button = ""
-        if status in ["Weak", "Not-Attended"]:
-            remedial_button = f"""
-            <button 
-                onclick="window.location.href='#remedial_{concept_id}';" 
-                style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;
-                       text-align:center;text-decoration:none;display:inline-block;
-                       font-size:12px;border-radius:4px; cursor:pointer;">
-                🧠 Remedial
-            </button>
-            """
-
-        # Previous Learning GAP Button
-        learning_gap_html = f"""
-        <button onclick="window.open('','_self').alert('Previous Learning GAP is under maintenance.');" 
-                style="background-color:#f44336;color:white;border:none;padding:5px 10px;
-                       text-align:center;text-decoration:none;display:inline-block;
-                       font-size:12px;border-radius:4px; cursor:pointer;">
-            Previous GAP
-        </button>
-        """
-
-        # Display the row
-        st.markdown(
-            f"""
-            <tr>
-                <td>{concept_id}</td>
-                <td>{concept_text}</td>
-                <td>{topic_id}</td>
-                <td>{status_html}</td>
-                <td>{remedial_button}</td>
-                <td>{learning_gap_html}</td>
-            </tr>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("</table>", unsafe_allow_html=True)
-
-    # Separator
-    st.markdown("---")
-
-    # Iterate through all concepts and add expander for remedial resources
+    # Rows
     for concept in all_concepts:
-        if concept['ConceptStatus'] in ["Weak", "Not-Attended"]:
-            remedial_anchor = f"remedial_{concept['ConceptID']}"
-            st.markdown(f"<a id='{remedial_anchor}'></a>", unsafe_allow_html=True)
-            with st.expander(f"📌 Remedial Resources for {concept['ConceptText']}"):
-                resources = fetch_remedial_resources(concept['TopicID'], concept['ConceptID'])
-                formatted_resources = format_remedial_resources(resources)
-                st.markdown(formatted_resources)
+        concept_id = concept['ConceptID']
+        concept_text = concept['ConceptText']
+        topic_id = concept['TopicID']
+        status = concept['ConceptStatus']
+        status_html = f"<span style='color:{'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'};'>{'🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'} {status}</span>"
+
+        # Initialize columns for the row
+        row_columns = st.columns(col_widths)
+
+        # Fill columns
+        row_columns[0].markdown(str(concept_id))
+        row_columns[1].markdown(concept_text)
+        row_columns[2].markdown(str(topic_id))
+        row_columns[3].markdown(status_html, unsafe_allow_html=True)
+
+        # Remedial column with Expander
+        with row_columns[4]:
+            if status in ["Weak", "Not-Attended"]:
+                with st.expander("🧠 Remedial Resources"):
+                    resources = fetch_remedial_resources(topic_id, concept_id)
+                    formatted_resources = format_remedial_resources(resources)
+                    st.markdown(formatted_resources)
+            else:
+                st.markdown("-")
+
+        # Previous Learning GAP column
+        with row_columns[5]:
+            if status in ["Weak", "Not-Attended"]:
+                st.button("Previous GAP", key=f"gap_{concept_id}", on_click=show_gap_message)
+            else:
+                st.markdown("-")
+
+    # Heading below the table
+    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
 
     # Optionally, provide a PDF download of all concepts
     if st.button("📥 Download All Concepts as PDF"):
@@ -1370,6 +1361,11 @@ def display_all_concepts_tab():
             file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
             mime="application/pdf"
         )
+
+    # Display Gap Message if button was clicked
+    if st.session_state.show_gap_message:
+        st.warning("Previous Learning GAP is under maintenance.")
+        st.session_state.show_gap_message = False
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
