@@ -4,7 +4,7 @@ import re
 import io
 import json
 import streamlit as st
-import openai
+from openai import OpenAI
 import requests
 from PIL import Image
 from io import BytesIO
@@ -41,7 +41,11 @@ try:
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
 
-openai.api_key = OPENAI_API_KEY
+# Initialize OpenAI client with DeepSeek configuration
+client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    base_url="https://api.deepseek.com"
+)
 
 # API Endpoints
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
@@ -343,12 +347,13 @@ def generate_learning_path(concept_text):
     )
 
     try:
-        gpt_response = openai.ChatCompletion.create(
-            model="gpt-4",
+        # Updated API call using DeepSeek
+        response = client.chat.completions.create(
+            model="deepseek-chat",
             messages=[{"role": "system", "content": prompt}],
-            max_tokens=1500
-        ).choices[0].message['content'].strip()
-        return gpt_response
+            stream=False
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error generating learning path: {e}")
         return None
@@ -757,10 +762,10 @@ def baseline_testing_report():
         st.info("No concept-wise data available.")
 
     # ----------------------------------------------------------------
-    # D) Bloom’s Taxonomy Performance (NO TABLE, MULTI-COLOR)
+    # D) Bloom's Taxonomy Performance (NO TABLE, MULTI-COLOR)
     # ----------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Bloom’s Taxonomy Performance")
+    st.markdown("### Bloom's Taxonomy Performance")
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
@@ -1002,12 +1007,12 @@ def teacher_dashboard():
 
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
-                        response = openai.ChatCompletion.create(
-                            model="gpt-4",
+                        response = client.chat.completions.create(
+                            model="deepseek-chat",
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000
+                            stream=False
                         )
-                        questions = response.choices[0].message['content'].strip()
+                        questions = response.choices[0].message.content.strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
                         st.markdown("### Generated Exam Questions")
@@ -1239,11 +1244,13 @@ def get_gpt_response(user_input):
                     mentioned_concept = concept['ConceptText']
                     break
 
-            gpt_response = openai.ChatCompletion.create(
-                model="gpt-4",
+            # Updated API call using DeepSeek
+            response = client.chat.completions.create(
+                model="deepseek-chat",
                 messages=conversation_history_formatted,
-                max_tokens=2000
-            ).choices[0].message['content'].strip()
+                stream=False
+            )
+            gpt_response = response.choices[0].message.content.strip()
 
             st.session_state.chat_history.append(("assistant", gpt_response))
 
