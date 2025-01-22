@@ -25,6 +25,7 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+import time
 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
@@ -39,39 +40,42 @@ from streamlit_cookies_manager import EncryptedCookieManager
 if "cookies_initialized" not in st.session_state:
     st.session_state.cookies_initialized = False
 
-# Initialize the Cookie Manager with the password from secrets
+# Initialize the Cookie Manager
 cookies = EncryptedCookieManager(
-    cookie_keys=["auth_token"],
-    prefix="",
-    password=st.secrets["cookies_manager"]["password"]
+    prefix="eeebee_",  # Add a prefix to avoid conflicts
+    password=st.secrets["cookies_manager"]["password"],
+    cookie_keys=["auth_token"]
 )
 
-# Wait until the cookie manager is ready
+# Wait for cookie manager to be ready
 if not cookies.ready():
     st.stop()
 
-# Check if cookies need to be loaded (only do this once)
+# Check for existing auth cookie on startup
 if not st.session_state.cookies_initialized:
-    if cookies.get("auth_token"):
+    auth_token = cookies.get("auth_token")
+    if auth_token:
         try:
-            auth_token = cookies.get("auth_token")
+            # Parse the stored auth data
             auth_data_dict = json.loads(auth_token)
             
-            # Update session state with cookie data
+            # Restore session state from cookie
             st.session_state.auth_data = auth_data_dict["auth_data"]
             st.session_state.is_authenticated = auth_data_dict["is_authenticated"]
             st.session_state.topic_id = auth_data_dict["topic_id"]
             st.session_state.is_teacher = auth_data_dict["is_teacher"]
             st.session_state.subject_id = auth_data_dict["subject_id"]
+            st.session_state.is_english_mode = auth_data_dict.get("is_english_mode", False)
             
-            # Mark cookies as initialized
+            # Initialize other required session states
+            if not st.session_state.is_teacher:
+                st.session_state.student_weak_concepts = auth_data_dict["auth_data"].get("WeakConceptList", [])
+            
             st.session_state.cookies_initialized = True
-            
-            # Force a rerun to ensure the main screen shows
             st.rerun()
         except Exception as e:
             st.error(f"Error reading authentication cookie: {e}")
-            st.session_state.is_authenticated = False
+            cookies.delete("auth_token")
     st.session_state.cookies_initialized = True
 
 # Load OpenAI API Key (from Streamlit secrets)
@@ -115,8 +119,6 @@ if "learning_path_generated" not in st.session_state:
     st.session_state.learning_path = None
 if "generated_description" not in st.session_state:
     st.session_state.generated_description = ""
-if "is_english_mode" not in st.session_state:
-    st.session_state.is_english_mode = False
 if "student_learning_paths" not in st.session_state:
     st.session_state.student_learning_paths = {}
 if "student_weak_concepts" not in st.session_state:
@@ -125,8 +127,6 @@ if "available_concepts" not in st.session_state:
     st.session_state.available_concepts = {}
 if "baseline_data" not in st.session_state:
     st.session_state.baseline_data = None
-if "subject_id" not in st.session_state:
-    st.session_state.subject_id = 21  # Default if unknown
 
 # Streamlit page config
 st.set_page_config(
@@ -887,29 +887,30 @@ def teacher_dashboard():
                     auth_response.raise_for_status()
                     auth_data = auth_response.json()
                     if auth_data.get("statusCode") == 1:
-                        # Update session state
+                        # Store auth data in session state
                         st.session_state.auth_data = auth_data
                         st.session_state.is_authenticated = True
                         st.session_state.topic_id = int(topic_id)
                         st.session_state.is_teacher = (user_type_value == 2)
-
-                        # Capture SubjectID if present
                         st.session_state.subject_id = auth_data.get("SubjectID", 21)
-
+                        st.session_state.is_english_mode = (E_value is not None)
+                        
                         if not st.session_state.is_teacher:
                             st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-
-                        # **Set the authentication cookie**
+                        
+                        # Store authentication data in cookie
                         auth_token = json.dumps({
                             "auth_data": st.session_state.auth_data,
-                            "is_authenticated": st.session_state.is_authenticated,
+                            "is_authenticated": True,
                             "topic_id": st.session_state.topic_id,
                             "is_teacher": st.session_state.is_teacher,
-                            "subject_id": st.session_state.subject_id
+                            "subject_id": st.session_state.subject_id,
+                            "is_english_mode": st.session_state.is_english_mode
                         })
-                        cookies["auth_token"] = auth_token
-                        cookies.save()
-
+                        
+                        # Set cookie with expiration
+                        cookies.set("auth_token", auth_token, expires_at=time.time() + 86400)  # 24 hour expiration
+                        
                         st.success("✅ Authentication successful!")
                         st.rerun()
                     else:
@@ -1066,10 +1067,9 @@ def main_screen():
     col1, col2 = st.columns([9, 1])
     with col2:
         if st.button("Logout"):
-            # **Clear the authentication cookie**
+            # Clear cookies
             cookies.delete("auth_token")
-            cookies.save()
-            # **Clear session state**
+            # Clear session state
             st.session_state.clear()
             st.rerun()
 
