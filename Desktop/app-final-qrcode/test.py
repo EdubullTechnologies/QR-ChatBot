@@ -337,7 +337,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[{"role": "system", "content": prompt}],
             max_tokens=1500
         ).choices[0].message['content'].strip()
@@ -433,29 +433,6 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     return pdf_bytes
 
 # ------------------- 2D) LEARNING PATH GENERATION -------------------
-def generate_learning_path(concept_text):
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    prompt = (
-        f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
-        f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
-        f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
-        f"ensuring clarity, engagement, and curriculum alignment.\n\n"
-        f"Sections:\n1. **Introduction**\n2. **Step-by-Step Learning**\n3. **Engagement**\n"
-        f"4. **Real-World Applications**\n5. **Practice Problems**\n\n"
-        f"All math expressions must be in LaTeX."
-    )
-
-    try:
-        gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": prompt}],
-            max_tokens=1500
-        ).choices[0].message['content'].strip()
-        return gpt_response
-    except Exception as e:
-        st.error(f"Error generating learning path: {e}")
-        return None
-
 def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
@@ -572,7 +549,7 @@ def generate_all_concepts_pdf(concepts, user_name):
         table_data.append(row)
 
     # Create Table
-    table = Table(table_data, repeatRows=1)
+    table = Table(table_data, repeatRows=1, colWidths=[1.2*inch, 3*inch, 1.2*inch, 1*inch])
     table_style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), '#4CAF50'),
         ('TEXTCOLOR', (0,0), (-1,0), '#FFFFFF'),
@@ -707,8 +684,8 @@ def baseline_testing_report():
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Marks (%)", f"{user_summary.get('MarksPercent', 0)}%")
-        col2.metric("Total Concepts.", user_summary.get("TotalQuestion"))
-        col3.metric("Cleared Concepts.", user_summary.get("CorrectQuestion"))
+        col2.metric("Total Concepts", user_summary.get("TotalQuestion"))
+        col3.metric("Cleared Concepts", user_summary.get("CorrectQuestion"))
         col4.metric("Weak Concepts", user_summary.get("WeakConceptCount"))
 
         col1, col2, col3 = st.columns(3)
@@ -934,7 +911,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4o",
+                            model="gpt-4",
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=4000
                         )
@@ -1166,7 +1143,7 @@ def get_gpt_response(user_input):
                     break
 
             gpt_response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
+                model="gpt-4",
                 messages=conversation_history_formatted,
                 max_tokens=2000
             ).choices[0].message['content'].strip()
@@ -1294,6 +1271,8 @@ def display_all_concepts_tab():
         .concept-table th, .concept-table td {{
             border: 1px solid #ddd;
             padding: 8px;
+            vertical-align: top;
+            text-align: left;
         }}
         .concept-table tr:nth-child(even){{background-color: #f2f2f2;}}
         .concept-table tr:hover {{background-color: #ddd;}}
@@ -1318,6 +1297,7 @@ def display_all_concepts_tab():
         unsafe_allow_html=True
     )
 
+    # Iterate through all concepts and display each row with a Remedial button
     for idx, row in df_all_concepts.iterrows():
         concept_id = row['ConceptID']
         concept_text = row['ConceptText']
@@ -1325,14 +1305,27 @@ def display_all_concepts_tab():
         status = row['ConceptStatus']
         status_html = row['Status Indicator']
 
-        # Remedial Option using expander
-        remedial_html = ""
+        # Remedial Button
+        remedial_button = ""
         if status in ["Weak", "Not-Attended"]:
-            remedial_html = f"🧠"  # Placeholder icon
+            remedial_button = f"""
+            <button 
+                onclick="window.location.href='#remedial_{concept_id}';" 
+                style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;
+                       text-align:center;text-decoration:none;display:inline-block;
+                       font-size:12px;border-radius:4px; cursor:pointer;">
+                🧠 Remedial
+            </button>
+            """
 
         # Previous Learning GAP Button
         learning_gap_html = f"""
-        <button onclick="window.open('','_self').alert('Previous Learning GAP is under maintenance.');" style="background-color:#f44336;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Previous GAP</button>
+        <button onclick="window.open('','_self').alert('Previous Learning GAP is under maintenance.');" 
+                style="background-color:#f44336;color:white;border:none;padding:5px 10px;
+                       text-align:center;text-decoration:none;display:inline-block;
+                       font-size:12px;border-radius:4px; cursor:pointer;">
+            Previous GAP
+        </button>
         """
 
         # Display the row
@@ -1343,7 +1336,7 @@ def display_all_concepts_tab():
                 <td>{concept_text}</td>
                 <td>{topic_id}</td>
                 <td>{status_html}</td>
-                <td>{remedial_html}</td>
+                <td>{remedial_button}</td>
                 <td>{learning_gap_html}</td>
             </tr>
             """,
@@ -1352,9 +1345,14 @@ def display_all_concepts_tab():
 
     st.markdown("</table>", unsafe_allow_html=True)
 
+    # Separator
+    st.markdown("---")
+
     # Iterate through all concepts and add expander for remedial resources
     for concept in all_concepts:
         if concept['ConceptStatus'] in ["Weak", "Not-Attended"]:
+            remedial_anchor = f"remedial_{concept['ConceptID']}"
+            st.markdown(f"<a id='{remedial_anchor}'></a>", unsafe_allow_html=True)
             with st.expander(f"📌 Remedial Resources for {concept['ConceptText']}"):
                 resources = fetch_remedial_resources(concept['TopicID'], concept['ConceptID'])
                 formatted_resources = format_remedial_resources(resources)
