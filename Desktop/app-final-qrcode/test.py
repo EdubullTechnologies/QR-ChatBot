@@ -542,7 +542,7 @@ def generate_all_concepts_pdf(concepts, user_name):
     story.append(Spacer(1, 12))
 
     # Table Headers
-    headers = ["Concept ID", "Concept Text", "Topic ID", "Status"]
+    headers = ["Concept ID", "Concept", "Topic ID", "Status"]
     table_data = [headers]
 
     # Table Rows
