@@ -1356,7 +1356,7 @@ def display_tabs_parallel():
         display_learning_path_tab()
     
     with tab_containers[2]:
-        all_concepts_placeholder.markdown("###Gap Analyzer™")
+        all_concepts_placeholder.subheader("Gap Analyzer™")
         display_all_concepts_tab()
     
     with tab_containers[3]:
