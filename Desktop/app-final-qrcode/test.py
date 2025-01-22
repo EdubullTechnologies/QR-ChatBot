@@ -645,7 +645,7 @@ def fetch_baseline_data(org_code, subject_id, user_id):
     }
 
     try:
-        with st.spinner("Fetching Baseline Report..."):
+        with st.spinner("EeeBee is waking up..."):
             response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
             response.raise_for_status()
             return response.json()
@@ -929,7 +929,7 @@ def teacher_dashboard():
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json"
         }
-        with st.spinner("🔄 Fetching weak concepts..."):
+        with st.spinner("EeeBee is waking up..."):
             try:
                 response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
                 response.raise_for_status()
