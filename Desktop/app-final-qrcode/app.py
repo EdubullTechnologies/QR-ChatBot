@@ -49,21 +49,21 @@ cookies = EncryptedCookieManager(
 
 # Wait for cookie manager to be ready
 if not cookies.ready():
-    st.write("Cookie manager not ready")
+    st.info("🍪 Cookie manager not ready")
     st.stop()
 
 # Check for existing auth cookie on startup
 if not st.session_state.cookies_initialized:
-    st.write("Checking cookies...")  # Debug print
+    st.info("🔍 Checking cookies...")  # Debug print
     auth_token = cookies.get("auth_token")
     if auth_token:
-        st.write("Found auth token:", auth_token)  # Debug print
+        st.info(f"🎯 Found auth token: {auth_token}")  # Debug print
         try:
             # Parse the stored auth data
             auth_data_dict = json.loads(auth_token)
             
             # Debug prints
-            st.write("Auth data loaded:", auth_data_dict.keys())
+            st.info(f"📝 Auth data loaded: {list(auth_data_dict.keys())}")
             
             # Restore session state from cookie
             st.session_state.auth_data = auth_data_dict["auth_data"]
@@ -77,15 +77,15 @@ if not st.session_state.cookies_initialized:
             if not st.session_state.is_teacher:
                 st.session_state.student_weak_concepts = auth_data_dict["auth_data"].get("WeakConceptList", [])
             
-            st.write("Session state updated")  # Debug print
+            st.info("✅ Session state updated")  # Debug print
             st.session_state.cookies_initialized = True
             st.rerun()
         except Exception as e:
-            st.error(f"Error reading authentication cookie: {e}")
-            st.write("Cookie error details:", str(e))  # Debug print
+            st.error(f"❌ Error reading authentication cookie: {e}")
+            st.error(f"🔍 Cookie error details: {str(e)}")  # Debug print
             cookies.delete("auth_token")
     else:
-        st.write("No auth token found")  # Debug print
+        st.info("❌ No auth token found")  # Debug print
     st.session_state.cookies_initialized = True
 
 # Load OpenAI API Key (from Streamlit secrets)
@@ -897,7 +897,7 @@ def teacher_dashboard():
                     auth_response.raise_for_status()
                     auth_data = auth_response.json()
                     if auth_data.get("statusCode") == 1:
-                        st.write("Login successful, setting cookie...")  # Debug print
+                        st.info("🔐 Login successful, setting cookie...")  # Debug print
                         
                         # Store auth data in session state
                         st.session_state.auth_data = auth_data
@@ -923,7 +923,7 @@ def teacher_dashboard():
                         # Set cookie with expiration
                         cookies.set("auth_token", auth_token, expires_at=time.time() + 86400)  # 24 hour expiration
                         
-                        st.write("Cookie set:", cookies.get("auth_token"))  # Debug print
+                        st.info(f"🍪 Cookie set: {cookies.get('auth_token')}")  # Debug print
                         
                         st.success("✅ Authentication successful!")
                         st.rerun()
