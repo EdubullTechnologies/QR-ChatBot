@@ -928,7 +928,7 @@ def teacher_dashboard():
 
     # ------------------- 2I) ALL CONCEPTS TAB -------------------
     def display_all_concepts_tab():
-        st.markdown("### 📚 All Concepts")
+        
 
         # Fetch all concepts from session state
         all_concepts = st.session_state.all_concepts
@@ -979,27 +979,7 @@ def teacher_dashboard():
                 else:
                     st.markdown("-")
 
-        # Heading below the table
-        st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
-
-        # Optionally, provide a PDF download of all concepts
-        if st.button("📥 Download All Concepts as PDF"):
-            pdf_bytes = generate_all_concepts_pdf(
-                st.session_state.all_concepts,
-                st.session_state.auth_data['UserInfo'][0]['FullName']
-            )
-            st.download_button(
-                label="Download All Concepts as PDF",
-                data=pdf_bytes,
-                file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
-                mime="application/pdf"
-            )
-
-        # Display Gap Message if button was clicked
-        if st.session_state.show_gap_message:
-            st.warning("Previous Learning GAP is under maintenance.")
-            st.session_state.show_gap_message = False
-
+      
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
 # ----------------------------------------------------------------------------
@@ -1407,7 +1387,6 @@ def main_screen():
                 display_learning_path_tab()
 
             with tabs[2]:
-                st.subheader("All Concepts")
                 display_all_concepts_tab()
 
             with tabs[3]:
