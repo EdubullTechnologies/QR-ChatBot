@@ -923,6 +923,10 @@ def login_screen():
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
+st.write("Subject ID:", st.session_state.subject_id)
+st.write("User ID:", st.session_state.user_id)
+st.write("Org Code:", st.session_state.org_code)
+st.write("All Concepts:", st.session_state.all_concepts)
 
 
 def add_initial_greeting():
