@@ -16,7 +16,9 @@ from reportlab.platypus import (
     ListFlowable,
     ListItem,
     Image as RLImage,
-    PageBreak
+    PageBreak,
+    Table,
+    TableStyle
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
@@ -90,6 +92,8 @@ if "user_id" not in st.session_state:
     st.session_state.user_id = None  # Initialize UserID
 if "all_concepts" not in st.session_state:
     st.session_state.all_concepts = []  # Initialize All Concepts
+if "remedial_info" not in st.session_state:
+    st.session_state.remedial_info = None
 
 # Streamlit page config
 st.set_page_config(
@@ -319,6 +323,28 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer.close()
     return pdf_bytes
 
+def generate_learning_path(concept_text):
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    prompt = (
+        f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
+        f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
+        f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
+        f"ensuring clarity, engagement, and curriculum alignment.\n\n"
+        f"Sections:\n1. **Introduction**\n2. **Step-by-Step Learning**\n3. **Engagement**\n"
+        f"4. **Real-World Applications**\n5. **Practice Problems**\n\n"
+        f"All math expressions must be in LaTeX."
+    )
+
+    try:
+        gpt_response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": prompt}],
+            max_tokens=1500
+        ).choices[0].message['content'].strip()
+        return gpt_response
+    except Exception as e:
+        st.error(f"Error generating learning path: {e}")
+        return None
 
 def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer = io.BytesIO()
@@ -467,7 +493,6 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
             mime="application/pdf"
         )
 
-
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
     payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
@@ -547,19 +572,16 @@ def generate_all_concepts_pdf(concepts, user_name):
         table_data.append(row)
 
     # Create Table
-    from reportlab.platypus import Table, TableStyle
-    from reportlab.lib import colors
-
     table = Table(table_data, repeatRows=1)
     table_style = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.grey),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('BACKGROUND', (0,0), (-1,0), '#4CAF50'),
+        ('TEXTCOLOR', (0,0), (-1,0), '#FFFFFF'),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('FONTSIZE', (0,0), (-1,0), 10),
         ('BOTTOMPADDING', (0,0), (-1,0), 12),
-        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,1), (-1,-1), '#F9F9F9'),
+        ('GRID', (0,0), (-1,-1), 1, '#DDDDDD'),
     ])
     table.setStyle(table_style)
 
@@ -570,6 +592,58 @@ def generate_all_concepts_pdf(concepts, user_name):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+# ------------------- 2G) FETCH REMEDIAL RESOURCES -------------------
+def fetch_remedial_resources(topic_id, concept_id):
+    remedial_api_url = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
+    payload = {
+        "TopicID": topic_id,
+        "ConceptID": concept_id
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(remedial_api_url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching remedial resources: {e}")
+        return None
+
+# ------------------- 2H) FORMAT REMEDIAL RESOURCES -------------------
+def format_remedial_resources(resources):
+    if not resources:
+        return "No remedial resources available for this concept."
+
+    message = ""
+
+    if resources.get("Video_List"):
+        message += "**🎥 Video Lectures:**\n"
+        for video in resources["Video_List"]:
+            video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+            title = video.get('LectureTitle', 'Video Lecture')
+            message += f"- [{title}]({video_url})\n"
+        message += "\n"
+
+    if resources.get("Notes_List"):
+        message += "**📄 Study Notes:**\n"
+        for note in resources["Notes_List"]:
+            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+            title = note.get('NotesTitle', 'Study Notes')
+            message += f"- [{title}]({note_url})\n"
+        message += "\n"
+
+    if resources.get("Exercise_List"):
+        message += "**📝 Practice Exercises:**\n"
+        for exercise in resources["Exercise_List"]:
+            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+            title = exercise.get('ExerciseTitle', 'Practice Exercise')
+            message += f"- [{title}]({exercise_url})\n"
+
+    return message
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
@@ -652,7 +726,6 @@ def baseline_testing_report():
     if s_skills:
         df_skills = pd.DataFrame(s_skills)
 
-        # Instead of table, just the bar chart
         # X-axis => RightAnswerPercent, Y-axis => SubjectSkillName
         skill_chart = alt.Chart(df_skills).mark_bar().encode(
             x=alt.X('RightAnswerPercent:Q', title='Correct %', scale=alt.Scale(domain=[0, 100])),
@@ -700,7 +773,6 @@ def baseline_testing_report():
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
-        # We remove the table display -> Just show the chart
         # Different color for each Bloom => color='TaxonomyText'
         tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
             x=alt.X('PercentObt:Q', title='Percent Correct', scale=alt.Scale(domain=[0, 100])),
@@ -715,7 +787,6 @@ def baseline_testing_report():
         st.altair_chart(tax_chart, use_container_width=True)
     else:
         st.info("No taxonomy data available.")
-
 
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
@@ -1181,7 +1252,7 @@ def display_learning_path_tab():
                     st.session_state.topic_id
                 )
 
-# ------------------- 2G) ALL CONCEPTS TAB -------------------
+# ------------------- 2I) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
     st.markdown("### 📚 All Concepts")
 
@@ -1213,9 +1284,6 @@ def display_all_concepts_tab():
     df_all_concepts['Status Indicator'] = df_all_concepts['ConceptStatus'].apply(status_indicator)
 
     # Display the DataFrame with HTML formatting
-    def make_clickable(val, row):
-        return val
-
     st.markdown(
         f"""
         <style>
@@ -1257,12 +1325,10 @@ def display_all_concepts_tab():
         status = row['ConceptStatus']
         status_html = row['Status Indicator']
 
-        # Remedial Option
+        # Remedial Option using expander
         remedial_html = ""
         if status in ["Weak", "Not-Attended"]:
-            remedial_html = f"""
-            <button onclick="window.open('','_self').alert('Fetching remedial resources for {concept_text}');" style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Remedial</button>
-            """
+            remedial_html = f"🧠"  # Placeholder icon
 
         # Previous Learning GAP Button
         learning_gap_html = f"""
@@ -1286,34 +1352,26 @@ def display_all_concepts_tab():
 
     st.markdown("</table>", unsafe_allow_html=True)
 
-    # Handle Remedial Button Clicks
-    # Since Streamlit cannot detect button clicks inside HTML, we need an alternative approach.
-    # One approach is to list concepts and provide buttons below the table.
+    # Iterate through all concepts and add expander for remedial resources
+    for concept in all_concepts:
+        if concept['ConceptStatus'] in ["Weak", "Not-Attended"]:
+            with st.expander(f"📌 Remedial Resources for {concept['ConceptText']}"):
+                resources = fetch_remedial_resources(concept['TopicID'], concept['ConceptID'])
+                formatted_resources = format_remedial_resources(resources)
+                st.markdown(formatted_resources)
 
-    st.markdown("---")
-    st.markdown("**Note:** Remedial resources are being fetched based on the concept's status.")
-
-    # Create a sidebar or separate area for remedial actions
-    st.markdown("#### Remedial Actions")
-    for idx, row in df_all_concepts.iterrows():
-        concept_id = row['ConceptID']
-        concept_text = row['ConceptText']
-        status = row['ConceptStatus']
-
-        if status in ["Weak", "Not-Attended"]:
-            remedial_button = st.button(f"Remedial for {concept_text}", key=f"remedial_{concept_id}")
-            if remedial_button:
-                # Fetch resources for the concept
-                resources = get_resources_for_concept(
-                    concept_text=concept_text,
-                    concept_list=st.session_state.auth_data.get('ConceptList', []),
-                    topic_id=st.session_state.topic_id
-                )
-                if resources:
-                    remedial_message = format_resources_message(resources)
-                    st.markdown(f"**Remedial Resources for {concept_text}:**\n\n{remedial_message}")
-                else:
-                    st.error(f"Failed to fetch remedial resources for {concept_text}.")
+    # Optionally, provide a PDF download of all concepts
+    if st.button("📥 Download All Concepts as PDF"):
+        pdf_bytes = generate_all_concepts_pdf(
+            st.session_state.all_concepts,
+            st.session_state.auth_data['UserInfo'][0]['FullName']
+        )
+        st.download_button(
+            label="Download All Concepts as PDF",
+            data=pdf_bytes,
+            file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
+            mime="application/pdf"
+        )
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
@@ -1357,8 +1415,8 @@ def main_screen():
                 add_initial_greeting()
                 display_chat(user_name)
         else:
-            # Non-English => Chat + Learning Path + Baseline Testing + All Concepts
-            tabs = st.tabs(["💬 Chat", "🧠 Learning Path", "📜 All Concepts", "📝 Baseline Testing"])
+            # Non-English => Chat + Learning Path + All Concepts + Baseline Testing
+            tabs = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 All Concepts", "📝 Baseline Testing"])
             with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
