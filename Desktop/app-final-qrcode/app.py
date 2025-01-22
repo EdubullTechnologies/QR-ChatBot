@@ -923,10 +923,6 @@ def login_screen():
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
 
-st.write("Subject ID:", st.session_state.subject_id)
-st.write("User ID:", st.session_state.user_id)
-st.write("Org Code:", st.session_state.org_code)
-st.write("All Concepts:", st.session_state.all_concepts)
 
 
 def add_initial_greeting():
@@ -1171,7 +1167,7 @@ def main_screen():
     with col2:
         if st.button("Logout"):
             st.session_state.clear()
-            st.rerun()
+            st.experimental_rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
