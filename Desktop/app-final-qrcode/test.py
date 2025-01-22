@@ -857,9 +857,6 @@ def display_all_concepts_tab():
                 else:
                     st.markdown("-")
 
-# ------------------- 2I) ALL CONCEPTS TAB (Original) -------------------
-# The original display_all_concepts_tab function was replaced above to include optimized API calls.
-
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
 # ----------------------------------------------------------------------------
@@ -1012,8 +1009,26 @@ def teacher_dashboard():
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
+                        st.success("Exam questions generated successfully!")
+                        st.markdown("### Generated Exam Questions")
+                        st.write(questions)
+                        # Optionally, provide a download button
+                        pdf_bytes = generate_exam_questions_pdf(
+                            questions,
+                            chosen_concept_text,
+                            st.session_state.auth_data['UserInfo'][0]['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
+
+# ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
+# Already integrated in display_all_concepts_tab function above
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1273,68 +1288,80 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
-# ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
-# Already integrated in display_all_concepts_tab function above
-
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
 # ----------------------------------------------------------------------------
-def main_screen():
-    user_info = st.session_state.auth_data['UserInfo'][0]
-    user_name = user_info['FullName']
-    topic_name = st.session_state.auth_data['TopicName']
+def load_data_parallel():
+    """
+    Load baseline and concepts data in parallel using ThreadPoolExecutor
+    """
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Start both tasks simultaneously
+        baseline_future = executor.submit(
+            fetch_baseline_data,
+            org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012'),
+            subject_id=st.session_state.subject_id,
+            user_id=st.session_state.user_id
+        )
+        
+        concepts_future = executor.submit(
+            fetch_all_concepts,
+            org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012'),
+            subject_id=st.session_state.subject_id,
+            user_id=st.session_state.user_id
+        )
+        
+        # Initialize session state variables if not already
+        st.session_state.baseline_data = None
+        st.session_state.all_concepts = []
+        
+        # Process baseline data
+        try:
+            st.session_state.baseline_data = baseline_future.result()
+        except Exception as e:
+            st.error(f"Error fetching baseline data: {e}")
+        
+        # Process all concepts data
+        try:
+            st.session_state.all_concepts = concepts_future.result() or []
+        except Exception as e:
+            st.error(f"Error fetching all concepts: {e}")
 
-    col1, col2 = st.columns([9, 1])
-    with col2:
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-
-    icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
-    st.markdown(
-        f"""
-        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if st.session_state.is_teacher:
-        # Teacher => Chat + Dashboard
-        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
-        with tabs[0]:
-            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-            add_initial_greeting()
-            display_chat(user_name)
-        with tabs[1]:
-            st.subheader("Teacher Dashboard")
-            teacher_dashboard()
-    else:
-        # Student => possibly multiple tabs
-        if st.session_state.is_english_mode:
-            # English => only Chat
-            tab = st.tabs(["💬 Chat"])[0]
-            with tab:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-        else:
-            # Non-English => Chat + Learning Path + All Concepts + Baseline Testing
-            tabs = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 All Concepts", "📝 Baseline Testing"])
-            with tabs[0]:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-
-            with tabs[1]:
-                st.subheader("Your Personalized Learning Path")
-                display_learning_path_tab()
-
-            with tabs[2]:
-                display_all_concepts_tab()
-
-            with tabs[3]:
-                st.subheader("Baseline Testing Report")
-                baseline_testing_report()
+def display_tabs_parallel():
+    """
+    Display tabs with parallel data loading
+    """
+    # Create placeholder containers for each tab
+    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 All Concepts", "📝 Baseline Testing"])
+    
+    # Create a placeholder for each tab's content
+    chat_placeholder = tab_containers[0].empty()
+    learning_path_placeholder = tab_containers[1].empty()
+    all_concepts_placeholder = tab_containers[2].empty()
+    baseline_testing_placeholder = tab_containers[3].empty()
+    
+    # Start parallel data loading if not already loaded
+    if not st.session_state.baseline_data or not st.session_state.all_concepts:
+        with st.spinner("Loading data..."):
+            load_data_parallel()
+    
+    # Display content in each tab
+    with tab_containers[0]:
+        chat_placeholder.subheader("Chat with your EeeBee AI buddy")
+        add_initial_greeting()
+        display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
+    
+    with tab_containers[1]:
+        learning_path_placeholder.subheader("Your Personalized Learning Path")
+        display_learning_path_tab()
+    
+    with tab_containers[2]:
+        all_concepts_placeholder.markdown("### 📚 All Concepts")
+        display_all_concepts_tab()
+    
+    with tab_containers[3]:
+        baseline_testing_placeholder.subheader("Baseline Testing Report")
+        baseline_testing_report()
 
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
@@ -1373,6 +1400,48 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
+
+def main_screen():
+    user_info = st.session_state.auth_data['UserInfo'][0]
+    user_name = user_info['FullName']
+    topic_name = st.session_state.auth_data['TopicName']
+
+    col1, col2 = st.columns([9, 1])
+    with col2:
+        if st.button("Logout"):
+            st.session_state.clear()
+            st.rerun()
+
+    icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
+    st.markdown(
+        f"""
+        # Hello {user_name}, <img src="{icon_img}" alt="EeeBee AI" style="width:55px; vertical-align:middle;"> EeeBee AI buddy is here to help you with :blue[{topic_name}]
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.is_teacher:
+        # Teacher => Chat + Dashboard
+        tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
+        with tabs[0]:
+            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+            add_initial_greeting()
+            display_chat(user_name)
+        with tabs[1]:
+            st.subheader("Teacher Dashboard")
+            teacher_dashboard()
+    else:
+        # Student => different tabs based on mode
+        if st.session_state.is_english_mode:
+            # English => only Chat
+            tab = st.tabs(["💬 Chat"])[0]
+            with tab:
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
+                add_initial_greeting()
+                display_chat(user_name)
+        else:
+            # Non-English => Use parallel loading for multiple tabs
+            display_tabs_parallel()
 
 # ----------------------------------------------------------------------------
 # 7) LAUNCH
