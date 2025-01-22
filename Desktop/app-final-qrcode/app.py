@@ -1162,31 +1162,17 @@ def display_all_concepts_tab():
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
+# ----------------------------------------------------------------------------
 def main_screen():
-    user_info = st.session_state.auth_data['UserInfo'][0]
-    user_name = user_info['FullName']
+    user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     topic_name = st.session_state.auth_data['TopicName']
-    
-    # Debug Information Section
-    with st.expander("🔍 Debug Information (Click to Expand)"):
-        st.write("### Session State Variables:")
-        st.write("- Subject ID:", st.session_state.subject_id)
-        st.write("- User ID:", st.session_state.user_id)
-        st.write("- Org Code:", st.session_state.org_code)
-        st.write("\n### Concepts Data:")
-        st.write("- Available Concepts:", len(st.session_state.all_concepts) if st.session_state.all_concepts else "No concepts loaded")
-        if st.session_state.all_concepts:
-            st.write("Sample of first concept:", st.session_state.all_concepts[0] if st.session_state.all_concepts else "None")
-        st.write("\n### Authentication Status:")
-        st.write("- Is Teacher:", st.session_state.is_teacher)
-        st.write("- Is English Mode:", st.session_state.is_english_mode)
-    
+
     col1, col2 = st.columns([9, 1])
     with col2:
-        if st.button("🔒 Logout"):
+        if st.button("Logout"):
             st.session_state.clear()
             st.rerun()
-    
+
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
         f"""
@@ -1194,12 +1180,12 @@ def main_screen():
         """,
         unsafe_allow_html=True,
     )
-    
+
     if st.session_state.is_teacher:
         # Teacher => Chat + Dashboard
         tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
         with tabs[0]:
-            st.subheader("Chat with your EeeBee AI buddy")
+            st.subheader("Chat with your EeeBee AI buddy", anchor=None)
             add_initial_greeting()
             display_chat(user_name)
         with tabs[1]:
@@ -1211,38 +1197,29 @@ def main_screen():
             # English => only Chat
             tab = st.tabs(["💬 Chat"])[0]
             with tab:
-                st.subheader("Chat with your EeeBee AI buddy")
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
                 display_chat(user_name)
         else:
             # Non-English => Chat + Learning Path + Baseline Testing + All Concepts
-            # Debug statement before creating tabs
-            st.write("Debug: About to create student tabs")
-            
             tab1, tab2, tab3, tab4 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing", "📚 All Concepts"])
-    
+
             with tab1:
-                st.subheader("Chat with your EeeBee AI buddy")
+                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
                 display_chat(user_name)
-    
+
             with tab2:
                 st.subheader("Your Personalized Learning Path")
                 display_learning_path_tab()
-    
+
             with tab3:
                 st.subheader("Baseline Testing Report")
                 baseline_testing_report()
-    
-            with tab4:
-                st.write("Debug: Entering All Concepts tab")
-                st.subheader("All Concepts")
-                if st.session_state.all_concepts:
-                    st.write(f"Debug: Found {len(st.session_state.all_concepts)} concepts")
-                else:
-                    st.write("Debug: No concepts found in session state")
-                display_all_concepts_tab()
 
+            with tab4:
+                st.subheader("All Concepts")
+                display_all_concepts_tab()
 
 # ----------------------------------------------------------------------------
 # 7) LAUNCH
