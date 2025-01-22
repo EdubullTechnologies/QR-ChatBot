@@ -432,33 +432,46 @@ def generate_learning_path(concept_text):
         st.error(f"Error generating learning path: {e}")
         return None
 
-def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
-        st.markdown(learning_path, unsafe_allow_html=True)
+# ------------------- 2G) LEARNING PATH TAB -------------------
+def display_learning_path_tab():
+    st.markdown("### 🧠 Your Personalized Learning Path")
 
-        resources = get_matching_resources(concept_text, concept_list, topic_id)
-        if resources:
-            st.markdown("### 📌 Additional Learning Resources")
-            if resources.get("Video_List"):
-                st.markdown("#### 🎥 Video Lectures")
-                for video in resources["Video_List"]:
-                    video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
-                    st.markdown(f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})")
-            if resources.get("Notes_List"):
-                st.markdown("#### 📄 Study Notes")
-                for note in resources["Notes_List"]:
-                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                    st.markdown(f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})")
-            if resources.get("Exercise_List"):
-                st.markdown("#### 📝 Practice Exercises")
-                for exercise in resources["Exercise_List"]:
-                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                    st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
+    if not st.session_state.learning_path_generated:
+        st.info("Generating your personalized learning path...")
+        # Assuming there's a weak concept; generate based on the first weak concept
+        if st.session_state.student_weak_concepts:
+            concept_text = st.session_state.student_weak_concepts[0]['ConceptText']
+            learning_path = generate_learning_path(concept_text)
+            if learning_path:
+                st.session_state.learning_path = learning_path
+                st.session_state.learning_path_generated = True
+        else:
+            st.warning("No weak concepts found to generate a learning path.")
+            return
+
+    if st.session_state.learning_path_generated and st.session_state.learning_path:
+        with st.expander("📄 View Learning Path", expanded=True):
+            st.markdown(st.session_state.learning_path, unsafe_allow_html=True)
+
+        # Fetch additional resources based on the first concept in the learning path
+        first_concept_match = re.search(r"weak concept: '(.+?)'", st.session_state.learning_path.lower())
+        if first_concept_match:
+            concept_text = first_concept_match.group(1).title()
+            resources = get_resources_for_concept(
+                concept_text=concept_text,
+                concept_list=st.session_state.auth_data.get('ConceptList', []),
+                topic_id=st.session_state.topic_id
+            )
+            if resources:
+                resource_message = format_resources_message(resources)
+                with st.expander("📌 Additional Learning Resources", expanded=True):
+                    st.markdown(resource_message)
+            else:
+                st.error("Failed to fetch additional learning resources.")
 
         # Download Button
         pdf_bytes = generate_learning_path_pdf(
-            learning_path,
+            st.session_state.learning_path,
             concept_text,
             st.session_state.auth_data['UserInfo'][0]['FullName']
         )
@@ -468,6 +481,8 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
             file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
             mime="application/pdf"
         )
+    else:
+        st.error("Failed to generate a learning path.")
 
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
@@ -620,9 +635,6 @@ def generate_all_concepts_pdf(concepts, user_name):
     buffer.close()
     return pdf_bytes
 
-# ------------------- 2F) PDF GENERATION FOR ALL CONCEPTS -------------------
-# Already defined above as generate_all_concepts_pdf
-
 # ------------------- 2G) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
     st.markdown("### 📚 All Concepts")
@@ -698,7 +710,7 @@ def display_all_concepts_tab():
                     # Check if resources are already fetched and stored in session state
                     if 'remedial_resources' not in st.session_state:
                         st.session_state.remedial_resources = {}
-                    
+
                     if concept_id not in st.session_state.remedial_resources:
                         with st.spinner("Fetching remedial resources..."):
                             resources = fetch_remedial_resources(topic_id, concept_id)
@@ -706,7 +718,7 @@ def display_all_concepts_tab():
                                 st.session_state.remedial_resources[concept_id] = resources
                             else:
                                 st.error("Failed to fetch remedial resources.")
-                    
+
                     # Retrieve resources from session state
                     resources = st.session_state.get('remedial_resources', {}).get(concept_id, None)
                     if resources:
@@ -730,6 +742,9 @@ def display_all_concepts_tab():
             file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
             mime="application/pdf"
         )
+
+# ------------------- 2C) PDF GENERATION FOR ALL CONCEPTS -------------------
+# Already defined above as generate_all_concepts_pdf
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
