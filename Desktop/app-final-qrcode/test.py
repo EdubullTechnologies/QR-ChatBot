@@ -16,7 +16,9 @@ from reportlab.platypus import (
     ListFlowable,
     ListItem,
     Image as RLImage,
-    PageBreak
+    PageBreak,
+    Table,
+    TableStyle
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
@@ -25,7 +27,6 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
-from streamlit_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
@@ -484,7 +485,58 @@ def fetch_all_concepts(org_code, subject_id, user_id):
         st.error(f"Error fetching all concepts: {e}")
         return None
 
-# ------------------- 2F) PDF GENERATION FOR ALL CONCEPTS -------------------
+# ------------------- 2F) FETCH REMEDIAL RESOURCES -------------------
+def fetch_remedial_resources(topic_id, concept_id):
+    content_payload = {
+        'TopicID': topic_id,
+        'ConceptID': int(concept_id)
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching remedial resources: {e}")
+        return None
+
+# ------------------- 2G) FORMAT RESOURCES -------------------
+def format_resources_message(resources):
+    """
+    Format resources data into a chat-friendly message.
+    """
+    message = "Here are the available resources for this concept:\n\n"
+
+    if resources.get("Video_List"):
+        message += "**🎥 Video Lectures:**\n"
+        for video in resources["Video_List"]:
+            video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+            title = video.get('LectureTitle', 'Video Lecture')
+            message += f"- [{title}]({video_url})\n"
+        message += "\n"
+
+    if resources.get("Notes_List"):
+        message += "**📄 Study Notes:**\n"
+        for note in resources["Notes_List"]:
+            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+            title = note.get('NotesTitle', 'Study Notes')
+            message += f"- [{title}]({note_url})\n"
+        message += "\n"
+
+    if resources.get("Exercise_List"):
+        message += "**📝 Practice Exercises:**\n"
+        for exercise in resources["Exercise_List"]:
+            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+            title = exercise.get('ExerciseTitle', 'Practice Exercise')
+            message += f"- [{title}]({exercise_url})\n"
+
+    return message
+
+# ------------------- 2C) PDF GENERATION FOR ALL CONCEPTS -------------------
 def generate_all_concepts_pdf(concepts, user_name):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -547,19 +599,16 @@ def generate_all_concepts_pdf(concepts, user_name):
         table_data.append(row)
 
     # Create Table
-    from reportlab.platypus import Table, TableStyle
-    from reportlab.lib import colors
-
     table = Table(table_data, repeatRows=1)
     table_style = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.grey),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('BACKGROUND', (0,0), (-1,0), '#4CAF50'),
+        ('TEXTCOLOR', (0,0), (-1,0), 'white'),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('FONTSIZE', (0,0), (-1,0), 10),
         ('BOTTOMPADDING', (0,0), (-1,0), 12),
-        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
-        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,1), (-1,-1), '#F2F2F2'),
+        ('GRID', (0,0), (-1,-1), 1, 'black'),
     ])
     table.setStyle(table_style)
 
@@ -570,6 +619,9 @@ def generate_all_concepts_pdf(concepts, user_name):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+# ------------------- 2F) PDF GENERATION FOR ALL CONCEPTS -------------------
+# Already defined above as generate_all_concepts_pdf
 
 # ------------------- 2G) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
@@ -602,62 +654,35 @@ def display_all_concepts_tab():
 
     df_all_concepts['Status Indicator'] = df_all_concepts['ConceptStatus'].apply(status_indicator)
 
-    # Prepare Data for AgGrid
-    grid_df = df_all_concepts.copy()
-    grid_df['Remedial'] = 'Remedial'
-    grid_df['Previous Learning GAP'] = 'Previous GAP'
+    # Select relevant columns
+    display_df = df_all_concepts[['ConceptID', 'ConceptText', 'TopicID', 'Status Indicator']].copy()
+    display_df.rename(columns={
+        'ConceptID': 'Concept ID',
+        'ConceptText': 'Concept Text',
+        'TopicID': 'Topic ID',
+        'Status Indicator': 'Status'
+    }, inplace=True)
 
-    # Define Grid Options
-    gb = GridOptionsBuilder.from_dataframe(grid_df)
-    gb.configure_column("Remedial", header_name="Remedial", cellRenderer=JsCode("""
-        function(params) {
-            return '<button style="background-color:#4CAF50;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Remedial</button>';
-        }
-    """), editable=False, sortable=False, filter=False)
+    # Style the DataFrame for better readability
+    styled_df = display_df.style.set_properties(**{
+        'text-align': 'left',
+        'padding': '5px',
+        'font-size': '12px'
+    }).set_table_styles([
+        {'selector': 'th', 'props': [('background-color', '#4CAF50'),
+                                     ('color', 'white'),
+                                     ('font-size', '14px'),
+                                     ('padding', '8px'),
+                                     ('text-align', 'left')]}
+    ])
 
-    gb.configure_column("Previous Learning GAP", header_name="Previous Learning GAP", cellRenderer=JsCode("""
-        function(params) {
-            return '<button style="background-color:#f44336;color:white;border:none;padding:5px 10px;text-align:center;text-decoration:none;display:inline-block;font-size:12px;border-radius:4px;">Previous GAP</button>';
-        }
-    """), editable=False, sortable=False, filter=False)
-
-    gb.configure_selection(selection_mode="single", use_checkbox=False)
-    grid_options = gb.build()
-
-    # Display AgGrid
-    grid_response = AgGrid(
-        grid_df,
-        gridOptions=grid_options,
-        enable_enterprise_modules=False,
-        update_mode=GridUpdateMode.NO_UPDATE,
-        allow_unsafe_jscode=True,  # Set to True to allow JS in cellRenderer
-        height=600,
-        width='100%',
-    )
-
-    # Handle Button Clicks
-    selected_row = grid_response['selected_rows']
-    if grid_response['selected_rows']:
-        selected = grid_response['selected_rows'][0]
-        concept_id = selected['ConceptID']
-        concept_text = selected['ConceptText']
-        topic_id = selected['TopicID']
-        status = selected['ConceptStatus']
-
-        # Identify which button was clicked
-        # Since AgGrid doesn't directly return which button was clicked,
-        # we can use Streamlit's session state or hidden inputs.
-        # Alternatively, use JavaScript to communicate button clicks.
-
-        # As a workaround, we can add separate buttons below the table.
-        # However, for simplicity, let's add buttons in a separate area.
-
-    # Alternative Approach: Iterate through DataFrame and create buttons
-    # to handle remedial actions.
+    # Display the DataFrame
+    st.dataframe(styled_df, height=600)
 
     st.markdown("---")
-    st.markdown("#### Remedial Actions")
+    st.markdown("#### 🛠️ Remedial Actions")
 
+    # Iterate through each concept and display remedial buttons for applicable ones
     for idx, row in df_all_concepts.iterrows():
         concept_id = row['ConceptID']
         concept_text = row['ConceptText']
@@ -665,28 +690,33 @@ def display_all_concepts_tab():
         status = row['ConceptStatus']
 
         if status in ["Weak", "Not-Attended"]:
-            col1, col2 = st.columns([3,1])
-            with col1:
-                st.markdown(f"**{concept_text}**")
-            with col2:
-                remedial_button = st.button("Remedial", key=f"remedial_{concept_id}")
-                gap_button = st.button("Previous GAP", key=f"gap_{concept_id}")
+            with st.expander(f"{concept_text}", expanded=False):
+                remedial_button = st.button("📘 Remedial", key=f"remedial_{concept_id}")
+                gap_button = st.button("🔍 Previous Learning GAP", key=f"gap_{concept_id}")
 
-            if remedial_button:
-                # Fetch resources for the concept
-                resources = get_resources_for_concept(
-                    concept_text=concept_text,
-                    concept_list=st.session_state.auth_data.get('ConceptList', []),
-                    topic_id=topic_id
-                )
-                if resources:
-                    remedial_message = format_resources_message(resources)
-                    st.success(f"**Remedial Resources for {concept_text}:**\n\n{remedial_message}")
-                else:
-                    st.error(f"Failed to fetch remedial resources for {concept_text}.")
+                if remedial_button:
+                    # Check if resources are already fetched and stored in session state
+                    if 'remedial_resources' not in st.session_state:
+                        st.session_state.remedial_resources = {}
+                    
+                    if concept_id not in st.session_state.remedial_resources:
+                        with st.spinner("Fetching remedial resources..."):
+                            resources = fetch_remedial_resources(topic_id, concept_id)
+                            if resources:
+                                st.session_state.remedial_resources[concept_id] = resources
+                            else:
+                                st.error("Failed to fetch remedial resources.")
+                    
+                    # Retrieve resources from session state
+                    resources = st.session_state.get('remedial_resources', {}).get(concept_id, None)
+                    if resources:
+                        remedial_message = format_resources_message(resources)
+                        st.markdown(remedial_message)
+                    else:
+                        st.error("No resources available.")
 
-            if gap_button:
-                st.info("Previous Learning GAP is under maintenance.")
+                if gap_button:
+                    st.info("🔍 Previous Learning GAP feature is under maintenance.")
 
     # Optional: Provide a download option for all concepts
     if st.button("📥 Download All Concepts as PDF"):
@@ -763,8 +793,8 @@ def baseline_testing_report():
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Marks (%)", f"{user_summary.get('MarksPercent', 0)}%")
-        col2.metric("Total Concepts.", user_summary.get("TotalQuestion"))
-        col3.metric("Cleared Concepts.", user_summary.get("CorrectQuestion"))
+        col2.metric("Total Concepts", user_summary.get("TotalQuestion"))
+        col3.metric("Cleared Concepts", user_summary.get("CorrectQuestion"))
         col4.metric("Weak Concepts", user_summary.get("WeakConceptCount"))
 
         col1, col2, col3 = st.columns(3)
@@ -810,7 +840,7 @@ def baseline_testing_report():
         df_concepts["S.No."] = range(1, len(df_concepts) + 1)
         # Concept Status => Cleared if RightAnswerPercent == 100, else Not Cleared
         df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
-            lambda x: "✅" if x == 100.0 else "❌"
+            lambda x: "✅ Cleared" if x == 100.0 else "❌ Not Cleared"
         )
         # Keep only 4 columns: S.No., Concept Status, Concept Name => ConceptText, Class => BranchName
         df_concepts.rename(columns={"ConceptText": "Concept Name", 
@@ -1273,9 +1303,6 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
-# ------------------- 2H) FETCH ALL CONCEPTS -------------------
-# (Already included above as fetch_all_concepts)
-
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
 # ----------------------------------------------------------------------------
@@ -1318,7 +1345,7 @@ def main_screen():
                 add_initial_greeting()
                 display_chat(user_name)
         else:
-            # Non-English => Chat + Learning Path + Baseline Testing + All Concepts
+            # Non-English => Chat + Learning Path + All Concepts + Baseline Testing
             tabs = st.tabs(["💬 Chat", "🧠 Learning Path", "📜 All Concepts", "📝 Baseline Testing"])
             with tabs[0]:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
