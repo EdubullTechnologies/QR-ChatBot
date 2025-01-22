@@ -46,6 +46,10 @@ API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
+API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"
+
+
+
 
 # Initialize session state variables
 if "auth_data" not in st.session_state:
@@ -462,6 +466,28 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
             mime="application/pdf"
         )
 
+# ------------------- 2E) FETCH ALL CONCEPTS -------------------
+def fetch_all_concepts(org_code, subject_id, user_id):
+    """
+    Fetches all concepts for a single student.
+    """
+    payload = {
+        "OrgCode": org_code,
+        "SubjectID": subject_id,
+        "UserID": user_id
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_ALL_CONCEPTS_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching all concepts: {e}")
+        return None
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
@@ -867,21 +893,36 @@ def login_screen():
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
 
-                    # Capture SubjectID if present
-                    # Get SubjectID from auth response
-                st.session_state.subject_id = auth_data.get("SubjectID")
-                if not st.session_state.subject_id:
-                    st.error("Subject ID not found in authentication response")
-                    return
-                    
-                if not st.session_state.is_teacher:
+                    # Capture SubjectID and UserID
+                    user_info = auth_data.get('UserInfo', [{}])[0]
+                    st.session_state.subject_id = auth_data.get("SubjectID")
+                    st.session_state.user_id = user_info.get("UserID")
+                    st.session_state.org_code = org_code
+
+                    if not st.session_state.subject_id:
+                        st.error("Subject ID not found in authentication response")
+                        return
+
+                    if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+
+                    # Fetch all concepts
+                    all_concepts = fetch_all_concepts(
+                        org_code=st.session_state.org_code,
+                        subject_id=st.session_state.subject_id,
+                        user_id=st.session_state.user_id
+                    )
+                    if all_concepts:
+                        st.session_state.all_concepts = all_concepts
+                    else:
+                        st.session_state.all_concepts = []
 
                     st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+
 
 
 def add_initial_greeting():
@@ -1017,131 +1058,7 @@ def display_chat(user_name: str):
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
         handle_user_input(user_input)
-def display_all_concepts_tab():
-    """Display concepts filtered by current topic_id"""
-    st.subheader("All Concepts Overview")
 
-    # Get necessary info from session state
-    user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
-    user_id = user_info.get('UserID')
-    org_code = user_info.get('OrgCode', '012')
-    subject_id = st.session_state.subject_id
-    current_topic_id = st.session_state.topic_id
-
-    try:
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        payload = {
-            "OrgCode": org_code,
-            "SubjectID": subject_id,
-            "UserID": user_id
-        }
-        
-        with st.spinner("Fetching concepts..."):
-            response = requests.post(
-                "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student",
-                json=payload,
-                headers=headers
-            )
-            response.raise_for_status()
-            all_concepts = response.json()
-
-            # Filter concepts for current topic
-            concepts_data = [
-                concept for concept in all_concepts 
-                if concept.get('TopicID') == current_topic_id
-            ]
-
-            if not concepts_data:
-                st.warning(f"No concepts found for current topic (ID: {current_topic_id})")
-                return
-
-            # Display status legend with counts for filtered concepts
-            status_counts = {
-                "Weak": len([c for c in concepts_data if c["ConceptStatus"] == "Weak"]),
-                "Cleared": len([c for c in concepts_data if c["ConceptStatus"] == "Cleared"]),
-                "Not-Attended": len([c for c in concepts_data if c["ConceptStatus"] == "Not-Attended"])
-            }
-
-            # Show status indicators with counts
-            st.markdown("### Status Overview")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.info(f"🔴 Weak Concepts: {status_counts['Weak']}")
-            with col2:
-                st.success(f"🟢 Cleared: {status_counts['Cleared']}")
-            with col3:
-                st.warning(f"🟡 Not Attended: {status_counts['Not-Attended']}")
-
-            # Create DataFrame for filtered concepts
-            df = pd.DataFrame(concepts_data)
-            
-            # Add status symbols
-            def get_status_symbol(status):
-                return {
-                    "Weak": "🔴",
-                    "Cleared": "🟢",
-                    "Not-Attended": "🟡"
-                }.get(status, "⚪")
-            
-            df["Status Display"] = df["ConceptStatus"].apply(lambda x: f"{get_status_symbol(x)} {x}")
-            df.index = range(1, len(df) + 1)
-
-            # Status filter
-            st.markdown("### Filter by Status")
-            selected_status = st.multiselect(
-                "Select Status:",
-                ["Weak", "Cleared", "Not-Attended"],
-                default=["Weak", "Not-Attended"]
-            )
-
-            filtered_df = df[df["ConceptStatus"].isin(selected_status)]
-
-            # Display concepts in expandable sections
-            st.markdown("### Concepts List")
-            for idx, row in filtered_df.iterrows():
-                with st.expander(f"{idx}. {row['Status Display']} - {row['ConceptText']}", expanded=False):
-                    col1, col2 = st.columns(2)
-                    
-                    # Show Remedial button for Weak and Not-Attended concepts
-                    if row["ConceptStatus"] in ["Weak", "Not-Attended"]:
-                        if col1.button("📚 Study Material", key=f"material_{row['ConceptID']}"):
-                            with st.spinner("Fetching study materials..."):
-                                remedial_content = get_resources_for_concept(
-                                    row['ConceptText'],
-                                    concepts_data,
-                                    current_topic_id  # Use current_topic_id here
-                                )
-                                if remedial_content:
-                                    if remedial_content.get("Video_List"):
-                                        st.markdown("#### 🎥 Video Lectures")
-                                        for video in remedial_content["Video_List"]:
-                                            video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
-                                            st.markdown(f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})")
-                                    
-                                    if remedial_content.get("Notes_List"):
-                                        st.markdown("#### 📄 Study Notes")
-                                        for note in remedial_content["Notes_List"]:
-                                            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                                            st.markdown(f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})")
-                                    
-                                    if remedial_content.get("Exercise_List"):
-                                        st.markdown("#### 📝 Practice Exercises")
-                                        for exercise in remedial_content["Exercise_List"]:
-                                            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                                            st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
-                                else:
-                                    st.error("No study materials available for this concept.")
-                    
-                    # Learning Gap button for all concepts
-                    if col2.button("📊 Learning Gap", key=f"gap_{row['ConceptID']}"):
-                        st.info("Previous Learning Gap feature is under development.", icon="ℹ️")
-
-    except Exception as e:
-        st.error(f"Error fetching or processing concepts: {e}")
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
     concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1179,6 +1096,65 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
+def display_all_concepts_tab():
+    if not st.session_state.all_concepts:
+        st.warning("No concepts data available.")
+        return
+
+    concepts = st.session_state.all_concepts
+
+    # Create a DataFrame from the concepts list
+    df_concepts = pd.DataFrame(concepts)
+
+    # Add S.No column
+    df_concepts.insert(0, 'S.No.', range(1, len(df_concepts) + 1))
+
+    # Rename columns for clarity
+    df_concepts.rename(columns={
+        "ConceptText": "Concept Name",
+        "ConceptStatus": "Status"
+    }, inplace=True)
+
+    # Function to handle Remedial action
+    def remedial_action(concept_id, concept_text):
+        resources = get_resources_for_concept(
+            concept_text=concept_text,
+            concept_list=st.session_state.all_concepts,
+            topic_id=st.session_state.topic_id
+        )
+        if resources:
+            resource_message = format_resources_message(resources)
+            st.session_state.chat_history.append(("assistant", resource_message))
+            st.success(f"Resources fetched for {concept_text}. Check the chat!")
+        else:
+            st.error("Failed to fetch resources.")
+
+    # Display the DataFrame with interactive buttons
+    for index, row in df_concepts.iterrows():
+        cols = st.columns([1, 3, 2, 2])
+        cols[0].write(row['S.No.'])
+        cols[1].write(row['Concept Name'])
+        
+        # Status Indicator
+        status = row['Status']
+        if status == "Weak":
+            color = "orange"
+        elif status == "Cleared":
+            color = "green"
+        else:
+            color = "red"
+        cols[2].markdown(f"<span style='color:{color}; font-weight:bold;'>{status}</span>", unsafe_allow_html=True)
+        
+        # Remedial Button
+        if status in ["Weak", "Not-Attended"]:
+            if cols[3].button("Remedial", key=f"remedial_{row['ConceptID']}"):
+                remedial_action(row['ConceptID'], row['Concept Name'])
+        else:
+            cols[3].write("")
+
+        # Previous Learning Gap Button
+        if cols[3].button("Previous Learning Gap", key=f"gap_{row['ConceptID']}"):
+            st.info("Under Development 🚧")
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
@@ -1191,7 +1167,7 @@ def main_screen():
     with col2:
         if st.button("Logout"):
             st.session_state.clear()
-            st.rerun()
+            st.experimental_rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
@@ -1202,7 +1178,7 @@ def main_screen():
     )
 
     if st.session_state.is_teacher:
-        # Teacher view - without concepts tab
+        # Teacher => Chat + Dashboard
         tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
         with tabs[0]:
             st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -1212,30 +1188,33 @@ def main_screen():
             st.subheader("Teacher Dashboard")
             teacher_dashboard()
     else:
-        # Student view
+        # Student => multiple tabs
         if st.session_state.is_english_mode:
-            # English mode with concepts tab
-            tabs = st.tabs(["💬 Chat", "📚 All Concepts"])
-            with tabs[0]:
+            # English => only Chat
+            tab = st.tabs(["💬 Chat"])[0]
+            with tab:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
                 display_chat(user_name)
-            with tabs[1]:
-                display_all_concepts_tab()
         else:
-            # Non-English mode with concepts tab
-            tabs = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing", "📚 All Concepts"])
-            with tabs[0]:
+            # Non-English => Chat + Learning Path + Baseline Testing + All Concepts
+            tab1, tab2, tab3, tab4 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing", "📚 All Concepts"])
+
+            with tab1:
                 st.subheader("Chat with your EeeBee AI buddy", anchor=None)
                 add_initial_greeting()
                 display_chat(user_name)
-            with tabs[1]:
+
+            with tab2:
                 st.subheader("Your Personalized Learning Path")
                 display_learning_path_tab()
-            with tabs[2]:
+
+            with tab3:
                 st.subheader("Baseline Testing Report")
                 baseline_testing_report()
-            with tabs[3]:
+
+            with tab4:
+                st.subheader("All Concepts")
                 display_all_concepts_tab()
 
 # ----------------------------------------------------------------------------
