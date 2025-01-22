@@ -93,7 +93,7 @@ if "user_id" not in st.session_state:
 if "all_concepts" not in st.session_state:
     st.session_state.all_concepts = []  # Initialize All Concepts
 if "remedial_info" not in st.session_state:
-    st.session_state.remedial_info = None
+    st.session_state.remedial_info = {}
 if 'show_gap_message' not in st.session_state:
     st.session_state.show_gap_message = False
 
@@ -477,6 +477,7 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
         )
 
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
+@st.cache_data(show_spinner=False)
 def fetch_all_concepts(org_code, subject_id, user_id):
     payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
     headers = {
@@ -631,6 +632,28 @@ def format_remedial_resources(resources):
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
 # ----------------------------------------------------------------------------
+@st.cache_data(show_spinner=False)
+def fetch_baseline_report(user_id, subject_id, org_code):
+    payload = {
+        "UserID": user_id,
+        "SubjectID": subject_id,
+        "OrgCode": org_code
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching baseline data: {e}")
+        return None
+
 def baseline_testing_report():
     if not st.session_state.baseline_data:
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
@@ -643,26 +666,9 @@ def baseline_testing_report():
             st.error("Subject ID not available")
             return
 
-        payload = {
-            "UserID": user_id,
-            "SubjectID": subject_id,
-            "OrgCode": org_code
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-
-        try:
-            with st.spinner("Fetching Baseline Report..."):
-                response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
-                response.raise_for_status()
-                st.session_state.baseline_data = response.json()
-        except Exception as e:
-            st.error(f"Error fetching baseline data: {e}")
-            return
+        with st.spinner("Fetching Baseline Report..."):
+            baseline_data = fetch_baseline_report(user_id, subject_id, org_code)
+            st.session_state.baseline_data = baseline_data
 
     baseline_data = st.session_state.baseline_data
     if not baseline_data:
@@ -809,7 +815,7 @@ def display_additional_graphs(weak_concepts):
     horizontal_bar = alt.Chart(df_long).mark_bar().encode(
         x=alt.X('Count:Q'),
         y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
+        color='Category:N',
         tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
     ).properties(
         title='Attended vs Cleared per Concept (Horizontal View)',
@@ -923,82 +929,101 @@ def teacher_dashboard():
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
+                        st.success("Exam questions generated successfully!")
+
+                        # Optionally, display or provide a download link for the PDF
+                        pdf_bytes = generate_exam_questions_pdf(
+                            questions,
+                            chosen_concept_text,
+                            st.session_state.auth_data['UserInfo'][0]['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-    # ------------------- 2I) ALL CONCEPTS TAB -------------------
-    def display_all_concepts_tab():
-        st.markdown("### 📚 All Concepts")
+# ------------------- 2I) ALL CONCEPTS TAB -------------------
+def display_all_concepts_tab():
+    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
 
-        # Fetch all concepts from session state
-        all_concepts = st.session_state.all_concepts
-        if not all_concepts:
-            st.warning("No concepts found.")
-            return
+    # Fetch all concepts from session state
+    all_concepts = st.session_state.all_concepts
+    remedial_info = st.session_state.get('remedial_info', {})
+    if not all_concepts:
+        st.warning("No concepts found.")
+        return
 
-        # Define column widths
-        col_widths = [1.2, 3, 1.2, 1, 1.5, 1.5]
+    # Define column widths for the new table structure
+    col_widths = [3, 1, 1.5, 1.5]
 
-        # Header
-        headers = ["Concept ID", "Concept Text", "Topic ID", "Status", "Remedial", "Previous Learning GAP"]
-        header_columns = st.columns(col_widths)
-        for idx, header in enumerate(headers):
-            header_columns[idx].markdown(f"**{header}**")
+    # Header
+    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
+    header_columns = st.columns(col_widths)
+    for idx, header in enumerate(headers):
+        header_columns[idx].markdown(f"**{header}**")
 
-        # Rows
-        for concept in all_concepts:
-            concept_id = concept['ConceptID']
-            concept_text = concept['ConceptText']
-            topic_id = concept['TopicID']
-            status = concept['ConceptStatus']
-            status_html = f"<span style='color:{'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'};'>{'🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'} {status}</span>"
+    # Rows
+    for concept in all_concepts:
+        concept_id = concept['ConceptID']      # Still needed internally
+        concept_text = concept['ConceptText']
+        status = concept['ConceptStatus']
+        status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
+        status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
+        status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
 
-            # Initialize columns for the row
-            row_columns = st.columns(col_widths)
+        # Initialize columns for the row
+        row_columns = st.columns(col_widths)
 
-            # Fill columns
-            row_columns[0].markdown(str(concept_id))
-            row_columns[1].markdown(concept_text)
-            row_columns[2].markdown(str(topic_id))
-            row_columns[3].markdown(status_html, unsafe_allow_html=True)
+        # Fill columns
+        row_columns[0].markdown(concept_text)
+        row_columns[1].markdown(status_html, unsafe_allow_html=True)
 
-            # Remedial column with Expander
-            with row_columns[4]:
-                if status in ["Weak", "Not-Attended"]:
-                    with st.expander("🧠 Remedial Resources"):
-                        resources = fetch_remedial_resources(topic_id, concept_id)
-                        formatted_resources = format_remedial_resources(resources)
-                        st.markdown(formatted_resources)
-                else:
-                    st.markdown("-")
+        # Remedial column with Expander
+        with row_columns[2]:
+            if status in ["Weak", "Not-Attended"]:
+                with st.expander("🧠 Remedial Resources"):
+                    resources = remedial_info.get(concept_id, {})
+                    formatted_resources = format_remedial_resources(resources)
+                    st.markdown(formatted_resources)
+            else:
+                st.markdown("-")
 
-            # Previous Learning GAP column
-            with row_columns[5]:
-                if status in ["Weak", "Not-Attended"]:
-                    st.button("Previous GAP", key=f"gap_{concept_id}", on_click=show_gap_message)
-                else:
-                    st.markdown("-")
+        # Previous Learning GAP column
+        with row_columns[3]:
+            if status in ["Weak", "Not-Attended"]:
+                # Option 1: Disable the button (Requires Streamlit >= 1.21)
+                try:
+                    st.button("Previous GAP", key=f"gap_{concept_id}", disabled=True)
+                except TypeError:
+                    # Option 2: Replace with static text if 'disabled' is not supported
+                    st.markdown("**Previous GAP** (Unavailable)")
+            else:
+                st.markdown("-")
 
-        # Heading below the table
-        st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
+    # Heading below the table
+    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps above the remedials.")
 
-        # Optionally, provide a PDF download of all concepts
-        if st.button("📥 Download All Concepts as PDF"):
-            pdf_bytes = generate_all_concepts_pdf(
-                st.session_state.all_concepts,
-                st.session_state.auth_data['UserInfo'][0]['FullName']
-            )
-            st.download_button(
-                label="Download All Concepts as PDF",
-                data=pdf_bytes,
-                file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
-                mime="application/pdf"
-            )
+    # Optionally, provide a PDF download of all concepts
+    if st.button("📥 Download All Concepts as PDF"):
+        pdf_bytes = generate_all_concepts_pdf(
+            st.session_state.all_concepts,
+            st.session_state.auth_data['UserInfo'][0]['FullName']
+        )
+        st.download_button(
+            label="Download All Concepts as PDF",
+            data=pdf_bytes,
+            file_name=f"All_Concepts_{st.session_state.auth_data['UserInfo'][0]['FullName']}.pdf",
+            mime="application/pdf"
+        )
 
-        # Display Gap Message if button was clicked
-        if st.session_state.show_gap_message:
-            st.warning("Previous Learning GAP is under maintenance.")
-            st.session_state.show_gap_message = False
+    # Display Gap Message if button was clicked (No longer necessary if buttons do nothing)
+    if st.session_state.show_gap_message:
+        st.warning("Previous Learning GAP is under maintenance.")
+        st.session_state.show_gap_message = False
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1112,8 +1137,21 @@ def login_screen():
                         )
                         if all_concepts:
                             st.session_state.all_concepts = all_concepts
+
+                            # Pre-fetch remedial resources for all Weak concepts
+                            remedial_info = {}
+                            with st.spinner("🔄 Fetching remedial resources for all weak concepts..."):
+                                for concept in all_concepts:
+                                    status = concept.get("ConceptStatus", "")
+                                    if status in ["Weak", "Not-Attended"]:
+                                        concept_id = concept.get("ConceptID")
+                                        topic_id = concept.get("TopicID")
+                                        resources = fetch_remedial_resources(topic_id, concept_id)
+                                        remedial_info[concept_id] = resources
+                            st.session_state.remedial_info = remedial_info
                         else:
                             st.session_state.all_concepts = []
+                            st.session_state.remedial_info = {}
 
                         st.rerun()
                 else:
@@ -1255,6 +1293,7 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
+# ------------------- 2J) LEARNING PATH TAB -------------------
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
     concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1292,66 +1331,6 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
-
-# ------------------- 2I) ALL CONCEPTS TAB -------------------
-def display_all_concepts_tab():
-    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
-    
-    # Fetch all concepts from session state
-    all_concepts = st.session_state.all_concepts
-    if not all_concepts:
-        st.warning("No concepts found.")
-        return
-    
-    # Define column widths for the new table structure
-    # Removed Concept ID and Topic ID, so updated widths accordingly
-    col_widths = [3, 1, 1.5, 1.5]
-    
-    # Header
-    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
-    header_columns = st.columns(col_widths)
-    for idx, header in enumerate(headers):
-        header_columns[idx].markdown(f"**{header}**")
-    
-    # Rows
-    for concept in all_concepts:
-        concept_id = concept['ConceptID']      # Still needed internally
-        concept_text = concept['ConceptText']
-        topic_id = concept['TopicID']          # Still needed internally
-        status = concept['ConceptStatus']
-        status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
-        status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
-        status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
-    
-        # Initialize columns for the row
-        row_columns = st.columns(col_widths)
-    
-        # Fill columns
-        row_columns[0].markdown(concept_text)
-        row_columns[1].markdown(status_html, unsafe_allow_html=True)
-    
-        # Remedial column with Expander
-        with row_columns[2]:
-            if status in ["Weak", "Not-Attended"]:
-                with st.expander("🧠 Remedial Resources"):
-                    resources = fetch_remedial_resources(topic_id, concept_id)
-                    formatted_resources = format_remedial_resources(resources)
-                    st.markdown(formatted_resources)
-            else:
-                st.markdown("-")
-    
-        # Previous Learning GAP column
-        with row_columns[3]:
-            if status in ["Weak", "Not-Attended"]:
-                # Option 1: Disable the button (Requires Streamlit >= 1.21)
-                try:
-                    st.button("Previous GAP", key=f"gap_{concept_id}", disabled=True)
-                except TypeError:
-                    # Option 2: Replace with static text if 'disabled' is not supported
-                    st.markdown("**Previous GAP** (Unavailable)")
-            else:
-                st.markdown("-")
-    
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
