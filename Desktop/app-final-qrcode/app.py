@@ -868,20 +868,19 @@ def login_screen():
                     st.session_state.is_teacher = (user_type_value == 2)
 
                     # Capture SubjectID if present
-                    # Get SubjectID from auth response
-                st.session_state.subject_id = auth_data.get("SubjectID")
-                if not st.session_state.subject_id:
-                    st.error("Subject ID not found in authentication response")
-                    return
-                    
-                if not st.session_state.is_teacher:
-                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+                    st.session_state.subject_id = auth_data.get("SubjectID")
+                    if not st.session_state.subject_id:
+                        st.error("Subject ID not found in authentication response")
+                        return
 
-                    st.rerun()
+                    if not st.session_state.is_teacher:
+                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+                        st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
+
 
 
 def add_initial_greeting():
