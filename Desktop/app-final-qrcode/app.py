@@ -35,17 +35,44 @@ warnings.simplefilter("ignore", DeprecationWarning)
 # Import the Cookie Manager
 from streamlit_cookies_manager import EncryptedCookieManager
 
+# Initialize session state variables
+if "cookies_initialized" not in st.session_state:
+    st.session_state.cookies_initialized = False
+
 # Initialize the Cookie Manager with the password from secrets
 cookies = EncryptedCookieManager(
-    # Set the names of the cookies you want to manage
     cookie_keys=["auth_token"],
-    prefix="",  # No prefix
-    password=st.secrets["cookies_manager"]["password"]  # Use the password from secrets
+    prefix="",
+    password=st.secrets["cookies_manager"]["password"]
 )
 
 # Wait until the cookie manager is ready
 if not cookies.ready():
     st.stop()
+
+# Check if cookies need to be loaded (only do this once)
+if not st.session_state.cookies_initialized:
+    if cookies.get("auth_token"):
+        try:
+            auth_token = cookies.get("auth_token")
+            auth_data_dict = json.loads(auth_token)
+            
+            # Update session state with cookie data
+            st.session_state.auth_data = auth_data_dict["auth_data"]
+            st.session_state.is_authenticated = auth_data_dict["is_authenticated"]
+            st.session_state.topic_id = auth_data_dict["topic_id"]
+            st.session_state.is_teacher = auth_data_dict["is_teacher"]
+            st.session_state.subject_id = auth_data_dict["subject_id"]
+            
+            # Mark cookies as initialized
+            st.session_state.cookies_initialized = True
+            
+            # Force a rerun to ensure the main screen shows
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error reading authentication cookie: {e}")
+            st.session_state.is_authenticated = False
+    st.session_state.cookies_initialized = True
 
 # Load OpenAI API Key (from Streamlit secrets)
 try:
@@ -486,7 +513,7 @@ def baseline_testing_report():
     2. X-axis => %, Y-axis => skill name
     3. Concept table with S.No, Concept Status, Concept Name, Class
     4. No concept-wise bar chart
-    5. Bloom’s: No table, multi-color bar chart
+    5. Bloom's: No table, multi-color bar chart
     """
     if not st.session_state.baseline_data:
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
@@ -600,10 +627,10 @@ def baseline_testing_report():
         st.info("No concept-wise data available.")
 
     # ----------------------------------------------------------------
-    # D) Bloom’s Taxonomy Performance (NO TABLE, MULTI-COLOR)
+    # D) Bloom's Taxonomy Performance (NO TABLE, MULTI-COLOR)
     # ----------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Bloom’s Taxonomy Performance")
+    st.markdown("### Bloom's Taxonomy Performance")
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
@@ -1132,23 +1159,8 @@ def display_learning_path_tab():
 # 7) LAUNCH
 # ----------------------------------------------------------------------------
 def main():
-    if cookies.get("auth_token"):
-        try:
-            # **Load authentication data from the cookie**
-            auth_token = cookies.get("auth_token")
-            auth_data_dict = json.loads(auth_token)
-            st.session_state.auth_data = auth_data_dict["auth_data"]
-            st.session_state.is_authenticated = auth_data_dict["is_authenticated"]
-            st.session_state.topic_id = auth_data_dict["topic_id"]
-            st.session_state.is_teacher = auth_data_dict["is_teacher"]
-            st.session_state.subject_id = auth_data_dict["subject_id"]
-        except Exception as e:
-            st.error(f"Error reading authentication cookie: {e}")
-            st.session_state.is_authenticated = False
-
     if st.session_state.is_authenticated:
         main_screen()
-        st.stop()
     else:
         placeholder = st.empty()
         with placeholder.container():
