@@ -4,7 +4,7 @@ import re
 import io
 import json
 import streamlit as st
-from openai import OpenAI
+import openai
 import requests
 from PIL import Image
 from io import BytesIO
@@ -41,11 +41,7 @@ try:
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
 
-# Initialize OpenAI client with DeepSeek configuration
-client = OpenAI(
-    api_key=OPENAI_API_KEY,
-    base_url="https://api.deepseek.com"
-)
+openai.api_key = OPENAI_API_KEY
 
 # API Endpoints
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
@@ -347,13 +343,12 @@ def generate_learning_path(concept_text):
     )
 
     try:
-        # Updated API call using DeepSeek
-        response = client.chat.completions.create(
-            model="deepseek-chat",
+        gpt_response = openai.ChatCompletion.create(
+            model="gpt-4",
             messages=[{"role": "system", "content": prompt}],
-            stream=False
-        )
-        return response.choices[0].message.content.strip()
+            max_tokens=1500
+        ).choices[0].message['content'].strip()
+        return gpt_response
     except Exception as e:
         st.error(f"Error generating learning path: {e}")
         return None
@@ -547,7 +542,7 @@ def generate_all_concepts_pdf(concepts, user_name):
     story.append(Spacer(1, 12))
 
     # Table Headers
-    headers = ["Concept ID", "Concept", "Topic ID", "Status"]
+    headers = ["Concept ID", "Concept Text", "Topic ID", "Status"]
     table_data = [headers]
 
     # Table Rows
@@ -762,10 +757,10 @@ def baseline_testing_report():
         st.info("No concept-wise data available.")
 
     # ----------------------------------------------------------------
-    # D) Bloom's Taxonomy Performance (NO TABLE, MULTI-COLOR)
+    # D) Bloom’s Taxonomy Performance (NO TABLE, MULTI-COLOR)
     # ----------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Bloom's Taxonomy Performance")
+    st.markdown("### Bloom’s Taxonomy Performance")
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
@@ -1007,12 +1002,12 @@ def teacher_dashboard():
 
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
-                        response = client.chat.completions.create(
-                            model="deepseek-chat",
+                        response = openai.ChatCompletion.create(
+                            model="gpt-4",
                             messages=[{"role": "system", "content": prompt}],
-                            stream=False
+                            max_tokens=4000
                         )
-                        questions = response.choices[0].message.content.strip()
+                        questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
                         st.markdown("### Generated Exam Questions")
@@ -1211,7 +1206,7 @@ Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
 - Provide suggestions for lesson planning, concept explanation, and exam question design.
 - Encourage step-by-step reasoning and critical thinking.
-- All math in LaTeX delimiters ($...$ inline, $$...$$).
+- Use LaTeX for math.
 """
     else:
         weak_concepts = [wc['ConceptText'] for wc in st.session_state.student_weak_concepts]
@@ -1222,11 +1217,9 @@ You are a highly knowledgeable educational assistant named EeeBee, specialized i
 
 Student Mode Instructions:
 - The student is in {branch_name}, following NCERT.
-- Focus on {topic_name} only.
 - The student's weak concepts: {weak_concepts_str}.
-- Guide with step-by-step problem solving.
-- Use hints instead of direct answers.
-- All math in LaTeX delimiters ($...$ inline, $$...$$).
+- Provide step-by-step explanations and encourage problem-solving.
+- Use LaTeX for math expressions.
 """
     return system_prompt
 
@@ -1246,13 +1239,11 @@ def get_gpt_response(user_input):
                     mentioned_concept = concept['ConceptText']
                     break
 
-            # Updated API call using DeepSeek
-            response = client.chat.completions.create(
-                model="deepseek-chat",
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4",
                 messages=conversation_history_formatted,
-                stream=False
-            )
-            gpt_response = response.choices[0].message.content.strip()
+                max_tokens=2000
+            ).choices[0].message['content'].strip()
 
             st.session_state.chat_history.append(("assistant", gpt_response))
 
@@ -1341,7 +1332,7 @@ def display_tabs_parallel():
     Display tabs with parallel data loading
     """
     # Create placeholder containers for each tab
-    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
+    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 All Concepts", "📝 Baseline Testing"])
     
     # Create a placeholder for each tab's content
     chat_placeholder = tab_containers[0].empty()
@@ -1365,7 +1356,7 @@ def display_tabs_parallel():
         display_learning_path_tab()
     
     with tab_containers[2]:
-        all_concepts_placeholder.subheader("Gap Analyzer™")
+        all_concepts_placeholder.markdown("### 📚 All Concepts")
         display_all_concepts_tab()
     
     with tab_containers[3]:
