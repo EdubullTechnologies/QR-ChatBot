@@ -871,15 +871,15 @@ def display_additional_graphs(weak_concepts):
     })
 
     horizontal_bar = alt.Chart(df_long).mark_bar().encode(
-        x=alt.X('Count:Q'),
-        y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color='Category:N', legend=alt.Legend(title="Category"),
-        tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
-    ).properties(
-        title='Attended vs Cleared per Concept (Horizontal View)',
-        width=600
-    )
-    st.altair_chart(horizontal_bar, use_container_width=True)
+    x=alt.X('Count:Q'),
+    y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
+    color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
+    tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
+).properties(
+    title='Attended vs Cleared per Concept (Horizontal View)',
+    width=600
+)
+st.altair_chart(horizontal_bar, use_container_width=True)
 
 def teacher_dashboard():
     batches = st.session_state.auth_data.get("BatchList", [])
