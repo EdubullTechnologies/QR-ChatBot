@@ -4,7 +4,7 @@ import re
 import io
 import json
 import streamlit as st
-import openai
+from openai import OpenAI
 import requests
 from PIL import Image
 from io import BytesIO
@@ -16,7 +16,9 @@ from reportlab.platypus import (
     ListFlowable,
     ListItem,
     Image as RLImage,
-    PageBreak
+    PageBreak,
+    Table,
+    TableStyle
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER, TA_LEFT
@@ -25,6 +27,7 @@ import pandas as pd
 import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from concurrent.futures import ThreadPoolExecutor, as_completed  # For parallel API calls
 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
@@ -38,7 +41,11 @@ try:
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
 
-openai.api_key = OPENAI_API_KEY
+# Initialize OpenAI client with DeepSeek configuration
+client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    base_url="https://api.deepseek.com"
+)
 
 # API Endpoints
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
@@ -46,6 +53,7 @@ API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
+API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"  # New API Endpoint for All Concepts
 
 # Initialize session state variables
 if "auth_data" not in st.session_state:
@@ -85,6 +93,18 @@ if "baseline_data" not in st.session_state:
     st.session_state.baseline_data = None
 if "subject_id" not in st.session_state:
     st.session_state.subject_id = None  # Default if unknown
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None  # Initialize UserID
+if "all_concepts" not in st.session_state:
+    st.session_state.all_concepts = []  # Initialize All Concepts
+if "remedial_info" not in st.session_state:
+    st.session_state.remedial_info = None
+if 'show_gap_message' not in st.session_state:
+    st.session_state.show_gap_message = False
+
+# Define the show_gap_message function globally
+def show_gap_message():
+    st.session_state.show_gap_message = True
 
 # Streamlit page config
 st.set_page_config(
@@ -314,6 +334,29 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer.close()
     return pdf_bytes
 
+def generate_learning_path(concept_text):
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    prompt = (
+        f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
+        f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
+        f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
+        f"ensuring clarity, engagement, and curriculum alignment.\n\n"
+        f"Sections:\n1. **Introduction**\n2. **Step-by-Step Learning**\n3. **Engagement**\n"
+        f"4. **Real-World Applications**\n5. **Practice Problems**\n\n"
+        f"All math expressions must be in LaTeX."
+    )
+
+    try:
+        # Updated API call using DeepSeek
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "system", "content": prompt}],
+            stream=False
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"Error generating learning path: {e}")
+        return None
 
 def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer = io.BytesIO()
@@ -402,29 +445,6 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     return pdf_bytes
 
 # ------------------- 2D) LEARNING PATH GENERATION -------------------
-def generate_learning_path(concept_text):
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    prompt = (
-        f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
-        f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
-        f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
-        f"ensuring clarity, engagement, and curriculum alignment.\n\n"
-        f"Sections:\n1. **Introduction**\n2. **Step-by-Step Learning**\n3. **Engagement**\n"
-        f"4. **Real-World Applications**\n5. **Practice Problems**\n\n"
-        f"All math expressions must be in LaTeX."
-    )
-
-    try:
-        gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": prompt}],
-            max_tokens=1500
-        ).choices[0].message['content'].strip()
-        return gpt_response
-    except Exception as e:
-        st.error(f"Error generating learning path: {e}")
-        return None
-
 def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
@@ -462,10 +482,182 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
             mime="application/pdf"
         )
 
+# ------------------- 2E) FETCH ALL CONCEPTS -------------------
+def fetch_all_concepts(org_code, subject_id, user_id):
+    payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_ALL_CONCEPTS_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching all concepts: {e}")
+        return None
+
+# ------------------- 2F) PDF GENERATION FOR ALL CONCEPTS -------------------
+def generate_all_concepts_pdf(concepts, user_name):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+                            rightMargin=72, leftMargin=72,
+                            topMargin=72, bottomMargin=18)
+    story = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=16,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Heading2'],
+        fontName='Helvetica',
+        fontSize=12,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    table_header_style = ParagraphStyle(
+        'TableHeader',
+        parent=styles['Heading4'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        alignment=TA_LEFT,
+        spaceAfter=6
+    )
+    table_cell_style = ParagraphStyle(
+        'TableCell',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        alignment=TA_LEFT,
+        spaceAfter=6
+    )
+
+    # Title
+    story.append(Paragraph("All Concepts", title_style))
+    user_name_display = user_name if user_name else "User"
+    story.append(Paragraph(f"User: {user_name_display}", subtitle_style))
+    story.append(Spacer(1, 12))
+
+    # Table Headers
+    headers = ["Concept ID", "Concept", "Topic ID", "Status"]
+    table_data = [headers]
+
+    # Table Rows
+    for concept in concepts:
+        row = [
+            str(concept.get("ConceptID", "")),
+            concept.get("ConceptText", ""),
+            str(concept.get("TopicID", "")),
+            concept.get("ConceptStatus", "")
+        ]
+        table_data.append(row)
+
+    # Create Table
+    table = Table(table_data, repeatRows=1, colWidths=[1.2*inch, 3*inch, 1.2*inch, 1*inch])
+    table_style = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), '#4CAF50'),
+        ('TEXTCOLOR', (0,0), (-1,0), '#FFFFFF'),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 12),
+        ('BACKGROUND', (0,1), (-1,-1), '#F9F9F9'),
+        ('GRID', (0,0), (-1,-1), 1, '#DDDDDD'),
+    ])
+    table.setStyle(table_style)
+
+    story.append(table)
+    story.append(Spacer(1, 12))
+
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
+# ------------------- 2G) FETCH REMEDIAL RESOURCES -------------------
+def fetch_remedial_resources(topic_id, concept_id):
+    remedial_api_url = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
+    payload = {
+        "TopicID": topic_id,
+        "ConceptID": concept_id
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(remedial_api_url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching remedial resources: {e}")
+        return None
+
+# ------------------- 2H) FORMAT REMEDIAL RESOURCES -------------------
+def format_remedial_resources(resources):
+    if not resources:
+        return "No remedial resources available for this concept."
+
+    message = ""
+
+    if resources.get("Video_List"):
+        message += "**🎥 Video Lectures:**\n"
+        for video in resources["Video_List"]:
+            video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+            title = video.get('LectureTitle', 'Video Lecture')
+            message += f"- [{title}]({video_url})\n"
+        message += "\n"
+
+    if resources.get("Notes_List"):
+        message += "**📄 Study Notes:**\n"
+        for note in resources["Notes_List"]:
+            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+            title = note.get('NotesTitle', 'Study Notes')
+            message += f"- [{title}]({note_url})\n"
+        message += "\n"
+
+    if resources.get("Exercise_List"):
+        message += "**📝 Practice Exercises:**\n"
+        for exercise in resources["Exercise_List"]:
+            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+            title = exercise.get('ExerciseTitle', 'Practice Exercise')
+            message += f"- [{title}]({exercise_url})\n"
+
+    return message
 
 # ----------------------------------------------------------------------------
 # 3) BASELINE TESTING REPORT (MODIFIED)
 # ----------------------------------------------------------------------------
+def fetch_baseline_data(org_code, subject_id, user_id):
+    payload = {
+        "UserID": user_id,
+        "SubjectID": subject_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+
+    try:
+        with st.spinner("EeeBee is waking up..."):
+            response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        st.error(f"Error fetching baseline data: {e}")
+        return None
+
 def baseline_testing_report():
     if not st.session_state.baseline_data:
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
@@ -478,27 +670,13 @@ def baseline_testing_report():
             st.error("Subject ID not available")
             return
 
-        payload = {
-            "UserID": user_id,
-            "SubjectID": subject_id,
-            "OrgCode": org_code
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-
-        try:
-            with st.spinner("Fetching Baseline Report..."):
-                response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
-                response.raise_for_status()
-                st.session_state.baseline_data = response.json()
-        except Exception as e:
-            st.error(f"Error fetching baseline data: {e}")
-            return
-
+        # Fetch Baseline Data Early (Moved from the login)
+        st.session_state.baseline_data = fetch_baseline_data(
+            org_code=org_code,
+            subject_id=subject_id,
+            user_id=user_id
+        )
+    
     baseline_data = st.session_state.baseline_data
     if not baseline_data:
         st.warning("No baseline data available.")
@@ -525,8 +703,8 @@ def baseline_testing_report():
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Marks (%)", f"{user_summary.get('MarksPercent', 0)}%")
-        col2.metric("Total Concepts.", user_summary.get("TotalQuestion"))
-        col3.metric("Cleared Concepts.", user_summary.get("CorrectQuestion"))
+        col2.metric("Total Concepts", user_summary.get("TotalQuestion"))
+        col3.metric("Cleared Concepts", user_summary.get("CorrectQuestion"))
         col4.metric("Weak Concepts", user_summary.get("WeakConceptCount"))
 
         col1, col2, col3 = st.columns(3)
@@ -544,7 +722,6 @@ def baseline_testing_report():
     if s_skills:
         df_skills = pd.DataFrame(s_skills)
 
-        # Instead of table, just the bar chart
         # X-axis => RightAnswerPercent, Y-axis => SubjectSkillName
         skill_chart = alt.Chart(df_skills).mark_bar().encode(
             x=alt.X('RightAnswerPercent:Q', title='Correct %', scale=alt.Scale(domain=[0, 100])),
@@ -585,14 +762,13 @@ def baseline_testing_report():
         st.info("No concept-wise data available.")
 
     # ----------------------------------------------------------------
-    # D) Bloom’s Taxonomy Performance (NO TABLE, MULTI-COLOR)
+    # D) Bloom's Taxonomy Performance (NO TABLE, MULTI-COLOR)
     # ----------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Bloom’s Taxonomy Performance")
+    st.markdown("### Bloom's Taxonomy Performance")
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
-        # We remove the table display -> Just show the chart
         # Different color for each Bloom => color='TaxonomyText'
         tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
             x=alt.X('PercentObt:Q', title='Percent Correct', scale=alt.Scale(domain=[0, 100])),
@@ -608,6 +784,83 @@ def baseline_testing_report():
     else:
         st.info("No taxonomy data available.")
 
+# ------------------- 2I) ALL CONCEPTS TAB -------------------
+def display_all_concepts_tab():
+    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
+    
+    # Fetch all concepts from session state
+    all_concepts = st.session_state.all_concepts
+    if not all_concepts:
+        st.warning("No concepts found.")
+        return
+    
+    # Define column widths for the new table structure
+    # Updated to remove Concept ID and Topic ID from display columns
+    col_widths = [3, 1, 1.5, 1.5]
+    
+    # Header
+    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
+    header_columns = st.columns(col_widths)
+    for idx, header in enumerate(headers):
+        header_columns[idx].markdown(f"**{header}**")
+    
+    # Prepare Concept Data
+    concepts_to_fetch = [
+        {
+            "concept_id": concept['ConceptID'],
+            "concept_text": concept['ConceptText'],
+            "topic_id": concept['TopicID'],
+            "status": concept['ConceptStatus']
+        }
+        for concept in all_concepts
+    ]
+    
+    # Function to fetch remedial resources for a single concept
+    @st.cache_data(show_spinner=False)
+    def cached_fetch_remedial_resources(topic_id, concept_id):
+        return fetch_remedial_resources(topic_id, concept_id)
+    
+    def fetch_resources(concept):
+        if concept['status'] in ["Weak", "Not-Attended"]:
+            resources = cached_fetch_remedial_resources(concept['topic_id'], concept['concept_id'])
+            formatted_resources = format_remedial_resources(resources)
+        else:
+            formatted_resources = "-"
+        return (concept, formatted_resources)
+    
+    # Use ThreadPoolExecutor to parallelize API calls
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_concept = {executor.submit(fetch_resources, concept): concept for concept in concepts_to_fetch}
+        for future in as_completed(future_to_concept):
+            concept, remedial = future.result()
+            
+            concept_text = concept['concept_text']
+            status = concept['status']
+            status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
+            status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
+            status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
+            
+            # Initialize columns for the row
+            row_columns = st.columns(col_widths)
+            
+            # Fill columns
+            row_columns[0].markdown(concept_text)
+            row_columns[1].markdown(status_html, unsafe_allow_html=True)
+            
+            # Remedial column with Expander or "-"
+            with row_columns[2]:
+                if remedial != "-":
+                    with st.expander("🧠 Remedial Resources"):
+                        st.markdown(remedial)
+                else:
+                    st.markdown("-")
+            
+            # Previous Learning GAP column
+            with row_columns[3]:
+                if status in ["Weak", "Not-Attended"]:
+                    st.button("Previous GAP", key=f"gap_{concept['concept_id']}", on_click=show_gap_message)
+                else:
+                    st.markdown("-")
 
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
@@ -681,7 +934,7 @@ def teacher_dashboard():
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json"
         }
-        with st.spinner("🔄 Fetching weak concepts..."):
+        with st.spinner("EeeBee is waking up..."):
             try:
                 response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
                 response.raise_for_status()
@@ -754,31 +1007,33 @@ def teacher_dashboard():
 
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
-                        response = openai.ChatCompletion.create(
-                            model="gpt-4o",
+                        response = client.chat.completions.create(
+                            model="deepseek-chat",
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000
+                            stream=False
                         )
-                        questions = response.choices[0].message['content'].strip()
+                        questions = response.choices[0].message.content.strip()
                         st.session_state.exam_questions = questions
+                        st.success("Exam questions generated successfully!")
+                        st.markdown("### Generated Exam Questions")
+                        st.write(questions)
+                        # Optionally, provide a download button
+                        pdf_bytes = generate_exam_questions_pdf(
+                            questions,
+                            chosen_concept_text,
+                            st.session_state.auth_data['UserInfo'][0]['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-    if st.session_state.exam_questions:
-        st.markdown(f"### 📝 Generated Exam Questions")
-        st.markdown(st.session_state.exam_questions)
-
-        pdf_bytes = generate_exam_questions_pdf(
-            st.session_state.exam_questions,
-            st.session_state.selected_teacher_concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="📥 Download Exam Questions as PDF",
-            data=pdf_bytes,
-            file_name=f"Exam_Questions_{st.session_state.selected_teacher_concept_text}.pdf",
-            mime="application/pdf"
-        )
+# ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
+# Already integrated in display_all_concepts_tab function above
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -867,21 +1122,42 @@ def login_screen():
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
 
-                    # Capture SubjectID if present
+                    # Capture SubjectID and UserID
                     st.session_state.subject_id = auth_data.get("SubjectID")
                     if not st.session_state.subject_id:
                         st.error("Subject ID not found in authentication response")
                         return
 
+                    # **Store UserID in session state**
+                    user_info = auth_data.get("UserInfo")
+                    if user_info and len(user_info) > 0:
+                        st.session_state.user_id = user_info[0].get("UserID")
+                    else:
+                        st.error("UserInfo not found in authentication response")
+                        return
+
                     if not st.session_state.is_teacher:
                         st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+
+                        # Fetch Baseline Data Early
+                        st.session_state.baseline_data = fetch_baseline_data(
+                            org_code=org_code,
+                            subject_id=st.session_state.subject_id,
+                            user_id=st.session_state.user_id
+                        )
+
+                        # Fetch All Concepts After Baseline
+                        st.session_state.all_concepts = fetch_all_concepts(
+                            org_code=org_code,
+                            subject_id=st.session_state.subject_id,
+                            user_id=st.session_state.user_id
+                        ) or []
+
                         st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
-
-
 
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
@@ -946,6 +1222,7 @@ You are a highly knowledgeable educational assistant named EeeBee, specialized i
 
 Student Mode Instructions:
 - The student is in {branch_name}, following NCERT.
+- Focus on {topic_name} only.
 - The student's weak concepts: {weak_concepts_str}.
 - Guide with step-by-step problem solving.
 - Use hints instead of direct answers.
@@ -969,11 +1246,13 @@ def get_gpt_response(user_input):
                     mentioned_concept = concept['ConceptText']
                     break
 
-            gpt_response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
+            # Updated API call using DeepSeek
+            response = client.chat.completions.create(
+                model="deepseek-chat",
                 messages=conversation_history_formatted,
-                max_tokens=2000
-            ).choices[0].message['content'].strip()
+                stream=False
+            )
+            gpt_response = response.choices[0].message.content.strip()
 
             st.session_state.chat_history.append(("assistant", gpt_response))
 
@@ -1018,6 +1297,81 @@ def display_chat(user_name: str):
     if user_input:
         handle_user_input(user_input)
 
+# ----------------------------------------------------------------------------
+# 6) MAIN SCREEN
+# ----------------------------------------------------------------------------
+def load_data_parallel():
+    """
+    Load baseline and concepts data in parallel using ThreadPoolExecutor
+    """
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Start both tasks simultaneously
+        baseline_future = executor.submit(
+            fetch_baseline_data,
+            org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012'),
+            subject_id=st.session_state.subject_id,
+            user_id=st.session_state.user_id
+        )
+        
+        concepts_future = executor.submit(
+            fetch_all_concepts,
+            org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012'),
+            subject_id=st.session_state.subject_id,
+            user_id=st.session_state.user_id
+        )
+        
+        # Initialize session state variables if not already
+        st.session_state.baseline_data = None
+        st.session_state.all_concepts = []
+        
+        # Process baseline data
+        try:
+            st.session_state.baseline_data = baseline_future.result()
+        except Exception as e:
+            st.error(f"Error fetching baseline data: {e}")
+        
+        # Process all concepts data
+        try:
+            st.session_state.all_concepts = concepts_future.result() or []
+        except Exception as e:
+            st.error(f"Error fetching all concepts: {e}")
+
+def display_tabs_parallel():
+    """
+    Display tabs with parallel data loading
+    """
+    # Create placeholder containers for each tab
+    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
+    
+    # Create a placeholder for each tab's content
+    chat_placeholder = tab_containers[0].empty()
+    learning_path_placeholder = tab_containers[1].empty()
+    all_concepts_placeholder = tab_containers[2].empty()
+    baseline_testing_placeholder = tab_containers[3].empty()
+    
+    # Start parallel data loading if not already loaded
+    if not st.session_state.baseline_data or not st.session_state.all_concepts:
+        with st.spinner("Loading data..."):
+            load_data_parallel()
+    
+    # Display content in each tab
+    with tab_containers[0]:
+        chat_placeholder.subheader("Chat with your EeeBee AI buddy")
+        add_initial_greeting()
+        display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
+    
+    with tab_containers[1]:
+        learning_path_placeholder.subheader("Your Personalized Learning Path")
+        display_learning_path_tab()
+    
+    with tab_containers[2]:
+        all_concepts_placeholder.subheader("Gap Analyzer™")
+        display_all_concepts_tab()
+    
+    with tab_containers[3]:
+        baseline_testing_placeholder.subheader("Baseline Testing Report")
+        baseline_testing_report()
+
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
     concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1056,11 +1410,9 @@ def display_learning_path_tab():
                     st.session_state.topic_id
                 )
 
-# ----------------------------------------------------------------------------
-# 6) MAIN SCREEN
-# ----------------------------------------------------------------------------
 def main_screen():
-    user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+    user_info = st.session_state.auth_data['UserInfo'][0]
+    user_name = user_info['FullName']
     topic_name = st.session_state.auth_data['TopicName']
 
     col1, col2 = st.columns([9, 1])
@@ -1077,7 +1429,6 @@ def main_screen():
         unsafe_allow_html=True,
     )
 
-
     if st.session_state.is_teacher:
         # Teacher => Chat + Dashboard
         tabs = st.tabs(["💬 Chat", "📊 Teacher Dashboard"])
@@ -1089,7 +1440,7 @@ def main_screen():
             st.subheader("Teacher Dashboard")
             teacher_dashboard()
     else:
-        # Student => possibly multiple tabs
+        # Student => different tabs based on mode
         if st.session_state.is_english_mode:
             # English => only Chat
             tab = st.tabs(["💬 Chat"])[0]
@@ -1098,21 +1449,8 @@ def main_screen():
                 add_initial_greeting()
                 display_chat(user_name)
         else:
-            # Non-English => Chat + Learning Path + Baseline Testing
-            tab1, tab2, tab3 = st.tabs(["💬 Chat", "🧠 Learning Path", "📝 Baseline Testing"])
-
-            with tab1:
-                st.subheader("Chat with your EeeBee AI buddy", anchor=None)
-                add_initial_greeting()
-                display_chat(user_name)
-
-            with tab2:
-                st.subheader("Your Personalized Learning Path")
-                display_learning_path_tab()
-
-            with tab3:
-                st.subheader("Baseline Testing Report")
-                baseline_testing_report()
+            # Non-English => Use parallel loading for multiple tabs
+            display_tabs_parallel()
 
 # ----------------------------------------------------------------------------
 # 7) LAUNCH
