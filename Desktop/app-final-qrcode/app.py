@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed  # For parallel 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
 # ----------------------------------------------------------------------------
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
@@ -121,7 +122,6 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-
 
 # ----------------------------------------------------------------------------
 # 2) HELPER FUNCTIONS
@@ -457,7 +457,11 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
 
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
-    payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
+    payload = {
+        "OrgCode": org_code,
+        "SubjectID": subject_id,
+        "UserID": user_id
+    }
     headers = {
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0",
@@ -1015,137 +1019,27 @@ def teacher_dashboard():
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
+                        
+                        # Optionally display the questions
+                        st.markdown("### 📝 Generated Exam Questions")
+                        st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
+                        
+                        # Provide Download Button for PDF
+                        pdf_bytes = generate_exam_questions_pdf(
+                            questions,
+                            chosen_concept_text,
+                            st.session_state.auth_data['UserInfo'][0]['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-    # ----------------------------------------------------------------------------
-    # 5) LOGIN SCREEN & MAIN ROUTING
-    # ----------------------------------------------------------------------------
-    def login_screen():
-        try:
-            image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.image(image_url, width=160)
-            st.markdown(
-                """<style>
-                   @media only screen and (max-width: 600px) {
-                       .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
-                   }
-                   @media only screen and (min-width: 601px) {
-                       .title { font-size: 4em; font-weight: bold; margin-top: 90px; margin-left: -125px; text-align: left; }
-                   }
-                   </style>
-                """, unsafe_allow_html=True
-            )
-            with col2:
-                st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Error loading image: {e}")
-
-        st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
-
-        user_type_choice = st.radio("Select User Type", ["Student", "Teacher"])
-        user_type_value = 2 if user_type_choice == "Teacher" else 3
-
-        org_code = st.text_input("🏫 School Code", key="org_code")
-        login_id = st.text_input("👤 Login ID", key="login_id")
-        password = st.text_input("🔒 Password", type="password", key="password")
-
-        query_params = st.experimental_get_query_params()
-        E_params = query_params.get("E", [None])
-        T_params = query_params.get("T", [None])
-
-        E_value = E_params[0]
-        T_value = T_params[0]
-
-        api_url = None
-        topic_id = None
-
-        if E_value is not None and T_value is not None:
-            st.warning("Provide either ?E=xx for English OR ?T=xx for Non-English, not both.")
-        elif E_value is not None and T_value is None:
-            st.session_state.is_english_mode = True
-            api_url = API_AUTH_URL_ENGLISH
-            topic_id = E_value
-        elif E_value is None and T_value is not None:
-            st.session_state.is_english_mode = False
-            api_url = API_AUTH_URL_MATH_SCIENCE
-            topic_id = T_value
-        else:
-            st.warning("Please provide ?E=... or ?T=... in the URL.")
-
-        if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
-            if topic_id is None or api_url is None:
-                st.warning("Please ensure correct E or T parameter is provided.")
-                return
-
-            auth_payload = {
-                'OrgCode': org_code,
-                'TopicID': int(topic_id),
-                'LoginID': login_id,
-                'Password': password,
-            }
-            if not st.session_state.is_english_mode:
-                auth_payload['UserType'] = user_type_value
-
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
-            }
-            try:
-                with st.spinner("🔄 Authenticating..."):
-                    auth_response = requests.post(api_url, json=auth_payload, headers=headers)
-                    auth_response.raise_for_status()
-                    auth_data = auth_response.json()
-                    if auth_data.get("statusCode") == 1:
-                        st.session_state.auth_data = auth_data
-                        st.session_state.is_authenticated = True
-                        st.session_state.topic_id = int(topic_id)
-                        st.session_state.is_teacher = (user_type_value == 2)
-
-                        # Capture SubjectID and UserID
-                        st.session_state.subject_id = auth_data.get("SubjectID")
-                        if not st.session_state.subject_id:
-                            st.error("Subject ID not found in authentication response")
-                            return
-
-                        # **Store UserID in session state**
-                        user_info = auth_data.get("UserInfo")
-                        if user_info and len(user_info) > 0:
-                            st.session_state.user_id = user_info[0].get("UserID")
-                        else:
-                            st.error("UserInfo not found in authentication response")
-                            return
-
-                        if not st.session_state.is_teacher:
-                            st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-
-                            # Fetch Baseline Data Early
-                            st.session_state.baseline_data = fetch_baseline_data(
-                                org_code=org_code,
-                                subject_id=st.session_state.subject_id,
-                                user_id=st.session_state.user_id
-                            )
-
-                            # Fetch All Concepts After Baseline
-                            st.session_state.all_concepts = fetch_all_concepts(
-                                org_code=org_code,
-                                subject_id=st.session_state.subject_id,
-                                user_id=st.session_state.user_id
-                            ) or []
-                        else:
-                            # Initialize teacher-specific session states
-                            st.session_state.teacher_weak_concepts = []
-
-                        # **Add st.rerun() here for teachers as well**
-                        st.rerun()
-                    else:
-                        st.error("🚫 Authentication failed. Check credentials.")
-            except requests.exceptions.RequestException as e:
-                st.error(f"Error connecting to the authentication API: {e}")
-
+# ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
@@ -1299,6 +1193,134 @@ def display_chat(user_name: str):
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
         handle_user_input(user_input)
+
+# ----------------------------------------------------------------------------
+# 5) LOGIN SCREEN & MAIN ROUTING
+# ----------------------------------------------------------------------------
+def login_screen():
+    try:
+        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(image_url, width=160)
+        st.markdown(
+            """<style>
+               @media only screen and (max-width: 600px) {
+                   .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
+               }
+               @media only screen and (min-width: 601px) {
+                   .title { font-size: 4em; font-weight: bold; margin-top: 90px; margin-left: -125px; text-align: left; }
+               }
+               </style>
+            """, unsafe_allow_html=True
+        )
+        with col2:
+            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error loading image: {e}")
+
+    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
+
+    user_type_choice = st.radio("Select User Type", ["Student", "Teacher"])
+    user_type_value = 2 if user_type_choice == "Teacher" else 3
+
+    org_code = st.text_input("🏫 School Code", key="org_code")
+    login_id = st.text_input("👤 Login ID", key="login_id")
+    password = st.text_input("🔒 Password", type="password", key="password")
+
+    query_params = st.experimental_get_query_params()
+    E_params = query_params.get("E", [None])
+    T_params = query_params.get("T", [None])
+
+    E_value = E_params[0]
+    T_value = T_params[0]
+
+    api_url = None
+    topic_id = None
+
+    if E_value is not None and T_value is not None:
+        st.warning("Provide either ?E=xx for English OR ?T=xx for Non-English, not both.")
+    elif E_value is not None and T_value is None:
+        st.session_state.is_english_mode = True
+        api_url = API_AUTH_URL_ENGLISH
+        topic_id = E_value
+    elif E_value is None and T_value is not None:
+        st.session_state.is_english_mode = False
+        api_url = API_AUTH_URL_MATH_SCIENCE
+        topic_id = T_value
+    else:
+        st.warning("Please provide ?E=... or ?T=... in the URL.")
+
+    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
+        if topic_id is None or api_url is None:
+            st.warning("Please ensure correct E or T parameter is provided.")
+            return
+
+        auth_payload = {
+            'OrgCode': org_code,
+            'TopicID': int(topic_id),
+            'LoginID': login_id,
+            'Password': password,
+        }
+        if not st.session_state.is_english_mode:
+            auth_payload['UserType'] = user_type_value
+
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        try:
+            with st.spinner("🔄 Authenticating..."):
+                auth_response = requests.post(api_url, json=auth_payload, headers=headers)
+                auth_response.raise_for_status()
+                auth_data = auth_response.json()
+                if auth_data.get("statusCode") == 1:
+                    st.session_state.auth_data = auth_data
+                    st.session_state.is_authenticated = True
+                    st.session_state.topic_id = int(topic_id)
+                    st.session_state.is_teacher = (user_type_value == 2)
+
+                    # Capture SubjectID and UserID
+                    st.session_state.subject_id = auth_data.get("SubjectID")
+                    if not st.session_state.subject_id:
+                        st.error("Subject ID not found in authentication response")
+                        return
+
+                    # **Store UserID in session state**
+                    user_info = auth_data.get("UserInfo")
+                    if user_info and len(user_info) > 0:
+                        st.session_state.user_id = user_info[0].get("UserID")
+                    else:
+                        st.error("UserInfo not found in authentication response")
+                        return
+
+                    if not st.session_state.is_teacher:
+                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+
+                        # Fetch Baseline Data Early
+                        st.session_state.baseline_data = fetch_baseline_data(
+                            org_code=org_code,
+                            subject_id=st.session_state.subject_id,
+                            user_id=st.session_state.user_id
+                        )
+
+                        # Fetch All Concepts After Baseline
+                        st.session_state.all_concepts = fetch_all_concepts(
+                            org_code=org_code,
+                            subject_id=st.session_state.subject_id,
+                            user_id=st.session_state.user_id
+                        ) or []
+                    else:
+                        # Initialize teacher-specific session states
+                        st.session_state.teacher_weak_concepts = []
+
+                    # **Add st.rerun() here for teachers as well**
+                    st.rerun()
+                else:
+                    st.error("🚫 Authentication failed. Check credentials.")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error connecting to the authentication API: {e}")
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
