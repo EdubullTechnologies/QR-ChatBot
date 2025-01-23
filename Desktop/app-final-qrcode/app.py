@@ -40,8 +40,10 @@ try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
+    OPENAI_API_KEY = None
 
-openai.api_key = OPENAI_API_KEY
+if OPENAI_API_KEY:
+    openai.api_key = OPENAI_API_KEY
 
 # API Endpoints
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
@@ -125,7 +127,17 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # 2) HELPER FUNCTIONS
 # ----------------------------------------------------------------------------
 
-# ------------------- 2A) LATEX TO IMAGE -------------------
+# ------------------- 2A) BLOOM'S TAXONOMY MAPPING -------------------
+# Mapping of Bloom's taxonomy levels
+BLOOMS_MAPPING = {
+    "L1 (Remember)": "Remember",
+    "L2 (Understand)": "Understand",
+    "L3 (Apply)": "Apply",
+    "L4 (Analyze)": "Analyze",
+    "L5 (Evaluate)": "Evaluate"
+}
+
+# ------------------- 2B) LATEX TO IMAGE -------------------
 def latex_to_image(latex_code, dpi=300):
     """
     Converts LaTeX code to PNG and returns it as a BytesIO object.
@@ -143,7 +155,7 @@ def latex_to_image(latex_code, dpi=300):
         st.error(f"Error converting LaTeX to image: {e}")
         return None
 
-# ------------------- 2B) FETCHING RESOURCES -------------------
+# ------------------- 2C) FETCHING RESOURCES -------------------
 def get_matching_resources(concept_text, concept_list, topic_id):
     def clean_text(text):
         return text.lower().strip().replace(" ", "")
@@ -172,31 +184,7 @@ def get_matching_resources(concept_text, concept_list, topic_id):
     return None
 
 def get_resources_for_concept(concept_text, concept_list, topic_id):
-    def clean_text(text):
-        return text.lower().strip().replace(" ", "")
-
-    matching_concept = next(
-        (c for c in concept_list if clean_text(c['ConceptText']) == clean_text(concept_text)),
-        None
-    )
-    if matching_concept:
-        content_payload = {
-            'TopicID': topic_id,
-            'ConceptID': int(matching_concept['ConceptID'])
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        try:
-            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            st.error(f"Error fetching resources: {e}")
-            return None
-    return None
+    return get_matching_resources(concept_text, concept_list, topic_id)
 
 def format_resources_message(resources):
     """
@@ -229,7 +217,7 @@ def format_resources_message(resources):
 
     return message
 
-# ------------------- 2C) PDF GENERATION -------------------
+# ------------------- 2D) PDF GENERATION -------------------
 def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -438,44 +426,6 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-# ------------------- 2D) LEARNING PATH GENERATION -------------------
-def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
-        st.markdown(learning_path, unsafe_allow_html=True)
-
-        resources = get_matching_resources(concept_text, concept_list, topic_id)
-        if resources:
-            st.markdown("### 📌 Additional Learning Resources")
-            if resources.get("Video_List"):
-                st.markdown("#### 🎥 Video Lectures")
-                for video in resources["Video_List"]:
-                    video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
-                    st.markdown(f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})")
-            if resources.get("Notes_List"):
-                st.markdown("#### 📄 Study Notes")
-                for note in resources["Notes_List"]:
-                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                    st.markdown(f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})")
-            if resources.get("Exercise_List"):
-                st.markdown("#### 📝 Practice Exercises")
-                for exercise in resources["Exercise_List"]:
-                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                    st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
-
-        # Download Button
-        pdf_bytes = generate_learning_path_pdf(
-            learning_path,
-            concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="📥 Download Learning Path as PDF",
-            data=pdf_bytes,
-            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
-            mime="application/pdf"
-        )
 
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
@@ -978,6 +928,9 @@ def teacher_dashboard():
             ["L1 (Remember)", "L2 (Understand)", "L3 (Apply)", "L4 (Analyze)", "L5 (Evaluate)"],
             index=3
         )
+        
+        # Retrieve the full Bloom’s level description
+        bloom_full = BLOOMS_MAPPING.get(bloom_level, "Analyze")
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
@@ -989,7 +942,6 @@ def teacher_dashboard():
 
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                bloom_short = bloom_level.split()[0]
 
                 prompt = (
                     f"You are an educational AI assistant helping a teacher. The teacher wants to create "
@@ -997,7 +949,7 @@ def teacher_dashboard():
                     f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
                     f"Generate a set of 20 challenging and thought-provoking exam questions.\n"
                     f"No answers, only questions. Provide them in LaTeX format as needed.\n"
-                    f"Focus on Bloom's Level {bloom_short}.\n"
+                    f"Focus on Bloom's Level {bloom_full}.\n"
                 )
 
                 with st.spinner("Generating exam questions... Please wait."):
@@ -1026,9 +978,6 @@ def teacher_dashboard():
                         )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
-
-# ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
-# Already integrated in display_all_concepts_tab function above
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1147,8 +1096,12 @@ def login_screen():
                             subject_id=st.session_state.subject_id,
                             user_id=st.session_state.user_id
                         ) or []
+                    else:
+                        # Initialize teacher-specific session states
+                        st.session_state.teacher_weak_concepts = []
 
-                        st.rerun()
+                    # **Add st.rerun() here for teachers as well**
+                    st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
@@ -1218,8 +1171,9 @@ You are a highly knowledgeable educational assistant named EeeBee, specialized i
 Student Mode Instructions:
 - The student is in {branch_name}, following NCERT.
 - The student's weak concepts: {weak_concepts_str}.
-- Provide step-by-step explanations and encourage problem-solving.
-- Use LaTeX for math expressions.
+- Guide with step-by-step problem solving.
+- Use hints instead of direct answers.
+- All math in LaTeX delimiters ($...$ inline, $$...$$).
 """
     return system_prompt
 
@@ -1363,6 +1317,43 @@ def display_tabs_parallel():
         baseline_testing_placeholder.subheader("Baseline Testing Report")
         baseline_testing_report()
 
+def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
+        st.markdown(learning_path, unsafe_allow_html=True)
+
+        resources = get_matching_resources(concept_text, concept_list, topic_id)
+        if resources:
+            st.markdown("### 📌 Additional Learning Resources")
+            if resources.get("Video_List"):
+                st.markdown("#### 🎥 Video Lectures")
+                for video in resources["Video_List"]:
+                    video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+                    st.markdown(f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})")
+            if resources.get("Notes_List"):
+                st.markdown("#### 📄 Study Notes")
+                for note in resources["Notes_List"]:
+                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                    st.markdown(f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})")
+            if resources.get("Exercise_List"):
+                st.markdown("#### 📝 Practice Exercises")
+                for exercise in resources["Exercise_List"]:
+                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                    st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
+
+        # Download Button
+        pdf_bytes = generate_learning_path_pdf(
+            learning_path,
+            concept_text,
+            st.session_state.auth_data['UserInfo'][0]['FullName']
+        )
+        st.download_button(
+            label="📥 Download Learning Path as PDF",
+            data=pdf_bytes,
+            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
+            mime="application/pdf"
+        )
+
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
     concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1404,7 +1395,7 @@ def display_learning_path_tab():
 def main_screen():
     user_info = st.session_state.auth_data['UserInfo'][0]
     user_name = user_info['FullName']
-    topic_name = st.session_state.auth_data['TopicName']
+    topic_name = st.session_state.auth_data.get('TopicName')
 
     col1, col2 = st.columns([9, 1])
     with col2:
