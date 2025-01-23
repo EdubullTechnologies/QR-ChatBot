@@ -127,17 +127,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # 2) HELPER FUNCTIONS
 # ----------------------------------------------------------------------------
 
-# ------------------- 2A) BLOOM'S TAXONOMY MAPPING -------------------
-# Mapping of Bloom's taxonomy levels
-BLOOMS_MAPPING = {
-    "L1 (Remember)": "Remember",
-    "L2 (Understand)": "Understand",
-    "L3 (Apply)": "Apply",
-    "L4 (Analyze)": "Analyze",
-    "L5 (Evaluate)": "Evaluate"
-}
-
-# ------------------- 2B) LATEX TO IMAGE -------------------
+# ------------------- 2A) LATEX TO IMAGE -------------------
 def latex_to_image(latex_code, dpi=300):
     """
     Converts LaTeX code to PNG and returns it as a BytesIO object.
@@ -155,7 +145,7 @@ def latex_to_image(latex_code, dpi=300):
         st.error(f"Error converting LaTeX to image: {e}")
         return None
 
-# ------------------- 2C) FETCHING RESOURCES -------------------
+# ------------------- 2B) FETCHING RESOURCES -------------------
 def get_matching_resources(concept_text, concept_list, topic_id):
     def clean_text(text):
         return text.lower().strip().replace(" ", "")
@@ -217,7 +207,7 @@ def format_resources_message(resources):
 
     return message
 
-# ------------------- 2D) PDF GENERATION -------------------
+# ------------------- 2C) PDF GENERATION -------------------
 def generate_exam_questions_pdf(questions, concept_text, user_name):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -426,6 +416,44 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+# ------------------- 2D) LEARNING PATH GENERATION -------------------
+def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
+        st.markdown(learning_path, unsafe_allow_html=True)
+
+        resources = get_matching_resources(concept_text, concept_list, topic_id)
+        if resources:
+            st.markdown("### 📌 Additional Learning Resources")
+            if resources.get("Video_List"):
+                st.markdown("#### 🎥 Video Lectures")
+                for video in resources["Video_List"]:
+                    video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+                    st.markdown(f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})")
+            if resources.get("Notes_List"):
+                st.markdown("#### 📄 Study Notes")
+                for note in resources["Notes_List"]:
+                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                    st.markdown(f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})")
+            if resources.get("Exercise_List"):
+                st.markdown("#### 📝 Practice Exercises")
+                for exercise in resources["Exercise_List"]:
+                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                    st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
+
+        # Download Button
+        pdf_bytes = generate_learning_path_pdf(
+            learning_path,
+            concept_text,
+            st.session_state.auth_data['UserInfo'][0]['FullName']
+        )
+        st.download_button(
+            label="📥 Download Learning Path as PDF",
+            data=pdf_bytes,
+            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
+            mime="application/pdf"
+        )
 
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
@@ -845,7 +873,7 @@ def display_additional_graphs(weak_concepts):
     horizontal_bar = alt.Chart(df_long).mark_bar().encode(
         x=alt.X('Count:Q'),
         y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
+        color='Category:N', legend=alt.Legend(title="Category"),
         tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
     ).properties(
         title='Attended vs Cleared per Concept (Horizontal View)',
@@ -879,7 +907,7 @@ def teacher_dashboard():
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json"
         }
-        with st.spinner("EeeBee is waking up..."):
+        with st.spinner("EeeBee is fetching weak concepts..."):
             try:
                 response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
                 response.raise_for_status()
@@ -923,15 +951,23 @@ def teacher_dashboard():
 
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
+        # Bloom's Taxonomy Level Selection
         bloom_level = st.radio(
             "Select Bloom's Taxonomy Level for the Questions",
-            ["L1 (Remember)", "L2 (Understand)", "L3 (Apply)", "L4 (Analyze)", "L5 (Evaluate)"],
-            index=3
+            [
+                "L1 (Remember)",
+                "L2 (Understand)",
+                "L3 (Apply)",
+                "L4 (Analyze)",
+                "L5 (Evaluate)"
+            ],
+            index=3  # Default to L4
         )
-        
-        # Retrieve the full Bloom’s level description
-        bloom_full = BLOOMS_MAPPING.get(bloom_level, "Analyze")
 
+        # Parse out the short code (L1, L2, etc.) from the selectbox choice
+        bloom_short = bloom_level.split()[0]  # E.g., "L4"
+
+        # Concept Selection
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
 
@@ -943,41 +979,47 @@ def teacher_dashboard():
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
 
+                # Build the prompt with the new instructions
                 prompt = (
-                    f"You are an educational AI assistant helping a teacher. The teacher wants to create "
-                    f"exam questions for the concept '{chosen_concept_text}'.\n"
-                    f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
-                    f"Generate a set of 20 challenging and thought-provoking exam questions.\n"
-                    f"No answers, only questions. Provide them in LaTeX format as needed.\n"
-                    f"Focus on Bloom's Level {bloom_full}.\n"
+                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                    f"Teacher Mode Instructions:\n"
+                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
+                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
+                    f"- Offer insights into common student difficulties and ways to address them.\n"
+                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
+                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
+                    f"- Keep all mathematical expressions within LaTeX delimiters:\n"
+                    f"  - Use `$...$` for inline math\n"
+                    f"  - Use `$$...$$` for display math\n"
+                    f"- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.\n"
+                    f"- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n"
+                    f"- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.\n\n"
+                    f"Now, generate a set of 20 challenging and thought-provoking exam questions for the concept '{chosen_concept_text}'.\n"
+                    f"Generated questions should be aligned with NEP 2020 and NCF guidelines.\n"
+                    f"Vary in difficulty.\n"
+                    f"Encourage critical thinking.\n"
+                    f"Be clearly formatted and numbered.\n\n"
+                    f"Do not provide the answers, only the questions.\n"
+                    f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display).\n"
+                    f"Focus on **Bloom's Taxonomy Level {bloom_short}**.\n"
+                    f"Label each question clearly with **({bloom_short})** at the end of the question.\n"
                 )
 
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4",
+                            model="gpt-4",  # Ensure you have access to the GPT-4 model
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000
+                            max_tokens=5000
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
-                        st.markdown("### Generated Exam Questions")
-                        st.write(questions)
-                        # Optionally, provide a download button
-                        pdf_bytes = generate_exam_questions_pdf(
-                            questions,
-                            chosen_concept_text,
-                            st.session_state.auth_data['UserInfo'][0]['FullName']
-                        )
-                        st.download_button(
-                            label="📥 Download Exam Questions as PDF",
-                            data=pdf_bytes,
-                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
-                            mime="application/pdf"
-                        )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
+
+    # ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
+    # Already integrated in display_all_concepts_tab function above
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1151,30 +1193,49 @@ def handle_user_input(user_input):
 def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+
     if st.session_state.is_teacher:
+        # TEACHER MODE PROMPT
         system_prompt = f"""
-You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Provide suggestions for lesson planning, concept explanation, and exam question design.
-- Encourage step-by-step reasoning and critical thinking.
-- Use LaTeX for math.
-"""
+- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
+- Offer insights into common student difficulties and ways to address them.
+- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.
+- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
+- Keep all mathematical expressions within LaTeX delimiters:
+  - Use `$...$` for inline math
+  - Use `$$...$$` for display math
+- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.
+- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.
+- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.
+        """
     else:
-        weak_concepts = [wc['ConceptText'] for wc in st.session_state.student_weak_concepts]
-        weak_concepts_str = ", ".join(weak_concepts) if weak_concepts else "none"
+        # STUDENT MODE PROMPT
+        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
+        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
 
         system_prompt = f"""
-You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Student Mode Instructions:
-- The student is in {branch_name}, following NCERT.
-- The student's weak concepts: {weak_concepts_str}.
-- Guide with step-by-step problem solving.
-- Use hints instead of direct answers.
-- All math in LaTeX delimiters ($...$ inline, $$...$$).
-"""
+- The student is in {branch_name}, following the NCERT curriculum.
+- The student's weak concepts include: {weak_concepts_text}.
+- Mention that you identified these weak concepts from the Edubull app, which are visible in the student's profile.
+- Always provide the weak concepts as a list: [{weak_concepts_text}].
+- Focus strictly on {topic_name} and avoid unrelated content.
+- Encourage the student to solve problems step-by-step and think critically.
+- Avoid giving direct, complete answers. Instead, ask guiding questions and offer hints that lead them to discover the solution.
+- Support the student's reasoning and help them build confidence in their problem-solving skills.
+- If asked for exam or practice questions, present them in a progressive manner aligned with {branch_name} NCERT guidelines.
+- All mathematical expressions must be enclosed in LaTeX delimiters:
+  - Use `$...$` for inline math
+  - Use `$$...$$` for display math
+- If the student insists on a direct solution, gently remind them that the goal is to practice problem-solving and reasoning.
+        """
+
     return system_prompt
 
 def get_gpt_response(user_input):
@@ -1316,43 +1377,6 @@ def display_tabs_parallel():
     with tab_containers[3]:
         baseline_testing_placeholder.subheader("Baseline Testing Report")
         baseline_testing_report()
-
-def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
-        st.markdown(learning_path, unsafe_allow_html=True)
-
-        resources = get_matching_resources(concept_text, concept_list, topic_id)
-        if resources:
-            st.markdown("### 📌 Additional Learning Resources")
-            if resources.get("Video_List"):
-                st.markdown("#### 🎥 Video Lectures")
-                for video in resources["Video_List"]:
-                    video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
-                    st.markdown(f"- [{video.get('LectureTitle', 'Video Lecture')}]({video_url})")
-            if resources.get("Notes_List"):
-                st.markdown("#### 📄 Study Notes")
-                for note in resources["Notes_List"]:
-                    note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
-                    st.markdown(f"- [{note.get('NotesTitle', 'Study Notes')}]({note_url})")
-            if resources.get("Exercise_List"):
-                st.markdown("#### 📝 Practice Exercises")
-                for exercise in resources["Exercise_List"]:
-                    exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
-                    st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
-
-        # Download Button
-        pdf_bytes = generate_learning_path_pdf(
-            learning_path,
-            concept_text,
-            st.session_state.auth_data['UserInfo'][0]['FullName']
-        )
-        st.download_button(
-            label="📥 Download Learning Path as PDF",
-            data=pdf_bytes,
-            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Learning_Path_{concept_text}.pdf",
-            mime="application/pdf"
-        )
 
 def display_learning_path_tab():
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
