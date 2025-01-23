@@ -1014,7 +1014,7 @@ def teacher_dashboard():
                         response = openai.ChatCompletion.create(
                             model="gpt-4o",  # Ensure you have access to the gpt-4o-mini model
                             messages=[{"role": "system", "content": prompt}],
-                            max_tokens=5000
+                            max_tokens=8000
                         )
                         questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
@@ -1366,7 +1366,7 @@ def display_tabs_parallel():
     Display tabs with parallel data loading
     """
     # Create placeholder containers for each tab
-    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "📚 All Concepts", "📝 Baseline Testing"])
+    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
     
     # Create a placeholder for each tab's content
     chat_placeholder = tab_containers[0].empty()
@@ -1390,7 +1390,7 @@ def display_tabs_parallel():
         display_learning_path_tab()
     
     with tab_containers[2]:
-        all_concepts_placeholder.markdown("### 📚 All Concepts")
+        all_concepts_placeholder.subheader("Gap Analyzer")
         display_all_concepts_tab()
     
     with tab_containers[3]:
