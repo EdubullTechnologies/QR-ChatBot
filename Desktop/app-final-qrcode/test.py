@@ -4,7 +4,7 @@ import re
 import io
 import json
 import streamlit as st
-from openai import OpenAI
+import openai
 import requests
 from PIL import Image
 from io import BytesIO
@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed  # For parallel 
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
 # ----------------------------------------------------------------------------
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.simplefilter("ignore", DeprecationWarning)
 
@@ -40,12 +41,10 @@ try:
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 except KeyError:
     st.error("API key for OpenAI not found in secrets.")
+    OPENAI_API_KEY = None
 
-# Initialize OpenAI client with DeepSeek configuration
-client = OpenAI(
-    api_key=OPENAI_API_KEY,
-    base_url="https://api.deepseek.com"
-)
+if OPENAI_API_KEY:
+    openai.api_key = OPENAI_API_KEY
 
 # API Endpoints
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
@@ -124,7 +123,6 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-
 # ----------------------------------------------------------------------------
 # 2) HELPER FUNCTIONS
 # ----------------------------------------------------------------------------
@@ -176,31 +174,7 @@ def get_matching_resources(concept_text, concept_list, topic_id):
     return None
 
 def get_resources_for_concept(concept_text, concept_list, topic_id):
-    def clean_text(text):
-        return text.lower().strip().replace(" ", "")
-
-    matching_concept = next(
-        (c for c in concept_list if clean_text(c['ConceptText']) == clean_text(concept_text)),
-        None
-    )
-    if matching_concept:
-        content_payload = {
-            'TopicID': topic_id,
-            'ConceptID': int(matching_concept['ConceptID'])
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        try:
-            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            st.error(f"Error fetching resources: {e}")
-            return None
-    return None
+    return get_matching_resources(concept_text, concept_list, topic_id)
 
 def format_resources_message(resources):
     """
@@ -347,13 +321,12 @@ def generate_learning_path(concept_text):
     )
 
     try:
-        # Updated API call using DeepSeek
-        response = client.chat.completions.create(
-            model="deepseek-chat",
+        gpt_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
             messages=[{"role": "system", "content": prompt}],
-            stream=False
-        )
-        return response.choices[0].message.content.strip()
+            max_tokens=1500
+        ).choices[0].message['content'].strip()
+        return gpt_response
     except Exception as e:
         st.error(f"Error generating learning path: {e}")
         return None
@@ -484,7 +457,11 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
 
 # ------------------- 2E) FETCH ALL CONCEPTS -------------------
 def fetch_all_concepts(org_code, subject_id, user_id):
-    payload = {'OrgCode': org_code, 'SubjectID': subject_id, 'UserID': user_id}
+    payload = {
+        "OrgCode": org_code,
+        "SubjectID": subject_id,
+        "UserID": user_id
+    }
     headers = {
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0",
@@ -547,7 +524,7 @@ def generate_all_concepts_pdf(concepts, user_name):
     story.append(Spacer(1, 12))
 
     # Table Headers
-    headers = ["Concept ID", "Concept", "Topic ID", "Status"]
+    headers = ["Concept ID", "Concept Text", "Topic ID", "Status"]
     table_data = [headers]
 
     # Table Rows
@@ -762,10 +739,10 @@ def baseline_testing_report():
         st.info("No concept-wise data available.")
 
     # ----------------------------------------------------------------
-    # D) Bloom's Taxonomy Performance (NO TABLE, MULTI-COLOR)
+    # D) Bloom’s Taxonomy Performance (NO TABLE, MULTI-COLOR)
     # ----------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Bloom's Taxonomy Performance")
+    st.markdown("### Bloom’s Taxonomy Performance")
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
 
@@ -773,7 +750,7 @@ def baseline_testing_report():
         tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
             x=alt.X('PercentObt:Q', title='Percent Correct', scale=alt.Scale(domain=[0, 100])),
             y=alt.Y('TaxonomyText:N', sort='-x', title='Bloom\'s Level'),
-            color='TaxonomyText:N',  # different color per Bloom's
+            color=alt.Color('TaxonomyText:N', legend=alt.Legend(title="Bloom's Level")),
             tooltip=['TaxonomyText:N', 'TotalQuestion:Q', 'CorrectAnswer:Q', 'PercentObt:Q']
         ).properties(
             width=700,
@@ -934,7 +911,7 @@ def teacher_dashboard():
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json"
         }
-        with st.spinner("EeeBee is waking up..."):
+        with st.spinner("EeeBee is fetching weak concepts..."):
             try:
                 response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
                 response.raise_for_status()
@@ -959,7 +936,7 @@ def teacher_dashboard():
         chart = alt.Chart(df_long).mark_bar().encode(
             x='Concept:N',
             y='Count:Q',
-            color='Category:N',
+            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
             tooltip=['Concept:N', 'Category:N', 'Count:Q']
         ).properties(
             title='Weak Concepts Overview',
@@ -978,12 +955,23 @@ def teacher_dashboard():
 
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
+        # Bloom's Taxonomy Level Selection
         bloom_level = st.radio(
             "Select Bloom's Taxonomy Level for the Questions",
-            ["L1 (Remember)", "L2 (Understand)", "L3 (Apply)", "L4 (Analyze)", "L5 (Evaluate)"],
-            index=3
+            [
+                "L1 (Remember)",
+                "L2 (Understand)",
+                "L3 (Apply)",
+                "L4 (Analyze)",
+                "L5 (Evaluate)"
+            ],
+            index=3  # Default to L4
         )
 
+        # Parse out the short code (L1, L2, etc.) from the selectbox choice
+        bloom_short = bloom_level.split()[0]  # E.g., "L4"
+
+        # Concept Selection
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
 
@@ -994,30 +982,49 @@ def teacher_dashboard():
 
             if st.button("Generate Exam Questions"):
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                bloom_short = bloom_level.split()[0]
 
+                # Build the prompt with the new instructions
                 prompt = (
-                    f"You are an educational AI assistant helping a teacher. The teacher wants to create "
-                    f"exam questions for the concept '{chosen_concept_text}'.\n"
-                    f"The teacher is teaching students in {branch_name}, following the NCERT curriculum.\n"
-                    f"Generate a set of 20 challenging and thought-provoking exam questions.\n"
-                    f"No answers, only questions. Provide them in LaTeX format as needed.\n"
-                    f"Focus on Bloom's Level {bloom_short}.\n"
+                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                    f"Teacher Mode Instructions:\n"
+                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
+                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
+                    f"- Offer insights into common student difficulties and ways to address them.\n"
+                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
+                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
+                    f"- Keep all mathematical expressions within LaTeX delimiters:\n"
+                    f"  - Use `$...$` for inline math\n"
+                    f"  - Use `$$...$$` for display math\n"
+                    f"- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.\n"
+                    f"- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n"
+                    f"- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.\n\n"
+                    f"Now, generate a set of 20 challenging and thought-provoking exam questions for the concept '{chosen_concept_text}'.\n"
+                    f"Generated questions should be aligned with NEP 2020 and NCF guidelines.\n"
+                    f"Vary in difficulty.\n"
+                    f"Encourage critical thinking.\n"
+                    f"Be clearly formatted and numbered.\n\n"
+                    f"Do not provide the answers, only the questions.\n"
+                    f"Ensure that all mathematical expressions are enclosed within LaTeX delimiters (`$...$` for inline and `$$...$$` for display).\n"
+                    f"Focus on **Bloom's Taxonomy Level {bloom_short}**.\n"
+                    f"Label each question clearly with **({bloom_short})** at the end of the question.\n"
                 )
 
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
-                        response = client.chat.completions.create(
-                            model="deepseek-chat",
+                        response = openai.ChatCompletion.create(
+                            model="gpt-4o",  # Ensure you have access to the gpt-4o-mini model
                             messages=[{"role": "system", "content": prompt}],
-                            stream=False
+                            max_tokens=8000
                         )
-                        questions = response.choices[0].message.content.strip()
+                        questions = response.choices[0].message['content'].strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
-                        st.markdown("### Generated Exam Questions")
-                        st.write(questions)
-                        # Optionally, provide a download button
+                        
+                        # Optionally display the questions
+                        st.markdown("### 📝 Generated Exam Questions")
+                        st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
+                        
+                        # Provide Download Button for PDF
                         pdf_bytes = generate_exam_questions_pdf(
                             questions,
                             chosen_concept_text,
@@ -1032,8 +1039,160 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-# ------------------- 2I) ALL CONCEPTS TAB (Optimized) -------------------
-# Already integrated in display_all_concepts_tab function above
+# ------------------- 2J) CHAT FUNCTIONS -------------------
+def add_initial_greeting():
+    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
+
+        concept_list = st.session_state.auth_data.get('ConceptList', [])
+        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+
+        concept_options = "\n\n**📚 Available Concepts:**\n"
+        for concept in concept_list:
+            concept_options += f"- {concept['ConceptText']}\n"
+
+        weak_concepts_text = ""
+        if weak_concepts:
+            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
+            for concept in weak_concepts:
+                weak_concepts_text += f"- {concept['ConceptText']}\n"
+
+        st.session_state.available_concepts = {
+            concept['ConceptText']: concept['ConceptID'] for concept in concept_list
+        }
+
+        greeting_message = (
+            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+            f"I'm here to help you with {topic_name}.\n\n"
+            f"You can:\n"
+            f"1. Ask me questions about any concept\n"
+            f"2. Request learning resources (videos, notes, exercises)\n"
+            f"3. Get help understanding specific topics\n"
+            f"{concept_options}"
+            f"{weak_concepts_text}\n\n"
+            f"What would you like to discuss?"
+        )
+        st.session_state.chat_history.append(("assistant", greeting_message))
+
+def handle_user_input(user_input):
+    if user_input:
+        st.session_state.chat_history.append(("user", user_input))
+        get_gpt_response(user_input)
+        st.rerun()
+
+def get_system_prompt():
+    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+
+    if st.session_state.is_teacher:
+        # TEACHER MODE PROMPT
+        system_prompt = f"""
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+
+Teacher Mode Instructions:
+- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
+- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
+- Offer insights into common student difficulties and ways to address them.
+- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.
+- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
+- Keep all mathematical expressions within LaTeX delimiters:
+  - Use `$...$` for inline math
+  - Use `$$...$$` for display math
+- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.
+- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.
+- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.
+        """
+    else:
+        # STUDENT MODE PROMPT
+        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
+        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
+
+        system_prompt = f"""
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+
+Student Mode Instructions:
+- The student is in {branch_name}, following the NCERT curriculum.
+- The student's weak concepts include: {weak_concepts_text}.
+- Mention that you identified these weak concepts from the Edubull app, which are visible in the student's profile.
+- Always provide the weak concepts as a list: [{weak_concepts_text}].
+- Focus strictly on {topic_name} and avoid unrelated content.
+- Encourage the student to solve problems step-by-step and think critically.
+- Avoid giving direct, complete answers. Instead, ask guiding questions and offer hints that lead them to discover the solution.
+- Support the student's reasoning and help them build confidence in their problem-solving skills.
+- If asked for exam or practice questions, present them in a progressive manner aligned with {branch_name} NCERT guidelines.
+- All mathematical expressions must be enclosed in LaTeX delimiters:
+  - Use `$...$` for inline math
+  - Use `$$...$$` for display math
+- If the student insists on a direct solution, gently remind them that the goal is to practice problem-solving and reasoning.
+        """
+
+    return system_prompt
+
+def get_gpt_response(user_input):
+    system_prompt = get_system_prompt()
+    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
+    conversation_history_formatted += [
+        {"role": role, "content": content}
+        for role, content in st.session_state.chat_history
+    ]
+    try:
+        with st.spinner("EeeBee is thinking..."):
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
+            mentioned_concept = None
+            for concept in concept_list:
+                if concept['ConceptText'].lower() in user_input.lower():
+                    mentioned_concept = concept['ConceptText']
+                    break
+
+            gpt_response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=conversation_history_formatted,
+                max_tokens=2000
+            ).choices[0].message['content'].strip()
+
+            st.session_state.chat_history.append(("assistant", gpt_response))
+
+            # If user specifically requests resources for a concept
+            if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
+                resources = get_resources_for_concept(
+                    mentioned_concept,
+                    concept_list,
+                    st.session_state.topic_id
+                )
+                if resources:
+                    resource_message = format_resources_message(resources)
+                    st.session_state.chat_history.append(("assistant", resource_message))
+
+    except Exception as e:
+        st.error(f"Error in GPT response: {e}")
+
+def display_chat(user_name: str):
+    chat_container = st.container()
+    with chat_container:
+        chat_history_html = """
+        <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
+        padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+        """
+        for role, message in st.session_state.chat_history:
+            if role == "assistant":
+                chat_history_html += (
+                    "<div style='text-align: left; color: #000; background-color: #e0e7ff;"
+                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
+                    f"<b>EeeBee:</b> {message}</div>"
+                )
+            else:
+                chat_history_html += (
+                    "<div style='text-align: left; color: #fff; background-color: #2563eb;"
+                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
+                    f"<b>{user_name}:</b> {message}</div>"
+                )
+        chat_history_html += "</div>"
+        st.markdown(chat_history_html, unsafe_allow_html=True)
+
+    user_input = st.chat_input("Enter your question about the topic")
+    if user_input:
+        handle_user_input(user_input)
 
 # ----------------------------------------------------------------------------
 # 5) LOGIN SCREEN & MAIN ROUTING
@@ -1152,150 +1311,16 @@ def login_screen():
                             subject_id=st.session_state.subject_id,
                             user_id=st.session_state.user_id
                         ) or []
+                    else:
+                        # Initialize teacher-specific session states
+                        st.session_state.teacher_weak_concepts = []
 
-                        st.rerun()
+                    # **Add st.rerun() here for teachers as well**
+                    st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the authentication API: {e}")
-
-def add_initial_greeting():
-    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
-
-        concept_list = st.session_state.auth_data.get('ConceptList', [])
-        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
-
-        concept_options = "\n\n**📚 Available Concepts:**\n"
-        for concept in concept_list:
-            concept_options += f"- {concept['ConceptText']}\n"
-
-        weak_concepts_text = ""
-        if weak_concepts:
-            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
-            for concept in weak_concepts:
-                weak_concepts_text += f"- {concept['ConceptText']}\n"
-
-        st.session_state.available_concepts = {
-            concept['ConceptText']: concept['ConceptID'] for concept in concept_list
-        }
-
-        greeting_message = (
-            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-            f"I'm here to help you with {topic_name}.\n\n"
-            f"You can:\n"
-            f"1. Ask me questions about any concept\n"
-            f"2. Request learning resources (videos, notes, exercises)\n"
-            f"3. Get help understanding specific topics\n"
-            f"{concept_options}"
-            f"{weak_concepts_text}\n\n"
-            f"What would you like to discuss?"
-        )
-        st.session_state.chat_history.append(("assistant", greeting_message))
-
-def handle_user_input(user_input):
-    if user_input:
-        st.session_state.chat_history.append(("user", user_input))
-        get_gpt_response(user_input)
-        st.rerun()
-
-def get_system_prompt():
-    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    if st.session_state.is_teacher:
-        system_prompt = f"""
-You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
-
-Teacher Mode Instructions:
-- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Provide suggestions for lesson planning, concept explanation, and exam question design.
-- Encourage step-by-step reasoning and critical thinking.
-- All math in LaTeX delimiters ($...$ inline, $$...$$).
-"""
-    else:
-        weak_concepts = [wc['ConceptText'] for wc in st.session_state.student_weak_concepts]
-        weak_concepts_str = ", ".join(weak_concepts) if weak_concepts else "none"
-
-        system_prompt = f"""
-You are a highly knowledgeable educational assistant named EeeBee, specialized in {topic_name}.
-
-Student Mode Instructions:
-- The student is in {branch_name}, following NCERT.
-- Focus on {topic_name} only.
-- The student's weak concepts: {weak_concepts_str}.
-- Guide with step-by-step problem solving.
-- Use hints instead of direct answers.
-- All math in LaTeX delimiters ($...$ inline, $$...$$).
-"""
-    return system_prompt
-
-def get_gpt_response(user_input):
-    system_prompt = get_system_prompt()
-    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-    conversation_history_formatted += [
-        {"role": role, "content": content}
-        for role, content in st.session_state.chat_history
-    ]
-    try:
-        with st.spinner("EeeBee is thinking..."):
-            concept_list = st.session_state.auth_data.get('ConceptList', [])
-            mentioned_concept = None
-            for concept in concept_list:
-                if concept['ConceptText'].lower() in user_input.lower():
-                    mentioned_concept = concept['ConceptText']
-                    break
-
-            # Updated API call using DeepSeek
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=conversation_history_formatted,
-                stream=False
-            )
-            gpt_response = response.choices[0].message.content.strip()
-
-            st.session_state.chat_history.append(("assistant", gpt_response))
-
-            # If user specifically requests resources for a concept
-            if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
-                resources = get_resources_for_concept(
-                    mentioned_concept,
-                    concept_list,
-                    st.session_state.topic_id
-                )
-                if resources:
-                    resource_message = format_resources_message(resources)
-                    st.session_state.chat_history.append(("assistant", resource_message))
-
-    except Exception as e:
-        st.error(f"Error in GPT response: {e}")
-
-def display_chat(user_name: str):
-    chat_container = st.container()
-    with chat_container:
-        chat_history_html = """
-        <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
-        padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-        """
-        for role, message in st.session_state.chat_history:
-            if role == "assistant":
-                chat_history_html += (
-                    "<div style='text-align: left; color: #000; background-color: #e0e7ff;"
-                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
-                    f"<b>EeeBee:</b> {message}</div>"
-                )
-            else:
-                chat_history_html += (
-                    "<div style='text-align: left; color: #fff; background-color: #2563eb;"
-                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
-                    f"<b>{user_name}:</b> {message}</div>"
-                )
-        chat_history_html += "</div>"
-        st.markdown(chat_history_html, unsafe_allow_html=True)
-
-    user_input = st.chat_input("Enter your question about the topic")
-    if user_input:
-        handle_user_input(user_input)
 
 # ----------------------------------------------------------------------------
 # 6) MAIN SCREEN
@@ -1365,7 +1390,7 @@ def display_tabs_parallel():
         display_learning_path_tab()
     
     with tab_containers[2]:
-        all_concepts_placeholder.subheader("Gap Analyzer™")
+        all_concepts_placeholder.subheader("Gap Analyzer")
         display_all_concepts_tab()
     
     with tab_containers[3]:
@@ -1413,7 +1438,7 @@ def display_learning_path_tab():
 def main_screen():
     user_info = st.session_state.auth_data['UserInfo'][0]
     user_name = user_info['FullName']
-    topic_name = st.session_state.auth_data['TopicName']
+    topic_name = st.session_state.auth_data.get('TopicName')
 
     col1, col2 = st.columns([9, 1])
     with col2:
