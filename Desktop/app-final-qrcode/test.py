@@ -322,55 +322,15 @@ def generate_learning_path(concept_text):
         f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
         f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
         f"ensuring clarity, engagement, and curriculum alignment.\n\n"
-        f"Important LaTeX Formatting Rules:\n"
-        f"1. Always use $...$ for inline math expressions (e.g., 'The mass is $2000\\text{{ kg}}$')\n"
-        f"2. Use $$....$$ for displayed equations on their own line\n"
-        f"3. Never use parentheses () to denote math expressions\n"
-        f"4. For units, always use \\text{{}} inside math mode (e.g., $9.8\\text{{ m/s}}^2$)\n"
-        f"5. For multi-line equations, use aligned environments:\n"
-        f"   $$\\begin{{aligned}}\n"
-        f"   F &= ma \\\\\n"
-        f"   &= 2000\\text{{ kg}} \\times 9.8\\text{{ m/s}}^2\n"
-        f"   \\end{{aligned}}$$\n\n"
-        f"Examples of Correct LaTeX Usage:\n"
-        f"- Inline: A mass of $50\\text{{ kg}}$ accelerates at $9.8\\text{{ m/s}}^2$\n"
-        f"- Display: $$F = \\mu_s \\cdot N = 0.7 \\times 1960\\text{{ N}}$$\n"
-        f"- Variables: If $x$ represents distance and $t$ represents time, then velocity is $v = \\frac{{dx}}{{dt}}$\n\n"
-        f"Content Sections:\n"
-        f"1. **Introduction**\n"
-        f"   - Brief overview of the concept\n"
-        f"   - Why it's important\n"
-        f"   - Prerequisites needed\n\n"
-        f"2. **Step-by-Step Learning**\n"
-        f"   - Break down the concept into smaller parts\n"
-        f"   - Include clear examples with properly formatted LaTeX\n"
-        f"   - Define all variables and symbols used\n\n"
-        f"3. **Engagement**\n"
-        f"   - Interactive examples\n"
-        f"   - Guided practice problems\n"
-        f"   - Visual representations when applicable\n\n"
-        f"4. **Real-World Applications**\n"
-        f"   - Practical examples\n"
-        f"   - Industry applications\n"
-        f"   - Daily life connections\n\n"
-        f"5. **Practice Problems**\n"
-        f"   - Progressive difficulty levels\n"
-        f"   - Step-by-step solutions\n"
-        f"   - Multiple approaches when possible\n\n"
-        f"Remember:\n"
-        f"- Every mathematical expression must be in LaTeX format\n"
-        f"- Use proper spacing and formatting for readability\n"
-        f"- Include units inside \\text{{}} when in math mode\n"
-        f"- Maintain NCERT curriculum alignment\n"
+        f"Sections:\n1. **Introduction**\n2. **Step-by-Step Learning**\n3. **Engagement**\n"
+        f"4. **Real-World Applications**\n5. **Practice Problems**\n\n"
+        f"All math expressions must be in LaTeX."
     )
 
     try:
         gpt_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
-            messages=[{
-                "role": "system", 
-                "content": prompt
-            }],
+            messages=[{"role": "system", "content": prompt}],
             max_tokens=1500
         ).choices[0].message['content'].strip()
         return gpt_response
@@ -1132,24 +1092,19 @@ def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
 
+    # Add explicit check for teacher mode
     if st.session_state.is_teacher:
-        # TEACHER MODE PROMPT
-        system_prompt = f"""
+        return f"""
 You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
 - Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
 - Offer insights into common student difficulties and ways to address them.
-- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.
-- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
-- Keep all mathematical expressions within LaTeX delimiters:
-  - Use `$...$` for inline math
-  - Use `$$...$$` for display math
-- Emphasize to the teacher the importance of fostering critical thinking and step-by-step reasoning in students.
-- If the teacher requests sample questions or exercises, provide them in a progressive manner, ensuring they prompt the student to reason through each step.
-- Do not provide final solutions outright; instead, suggest ways to guide students toward the solution on their own.
-        """
+- Encourage a teaching methodology where students learn progressively.
+- Keep all mathematical expressions within LaTeX delimiters.
+- Focus on helping teachers design effective teaching strategies and assessments.
+"""
     else:
         # STUDENT MODE PROMPT
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
@@ -1174,7 +1129,7 @@ Student Mode Instructions:
 - If the student insists on a direct solution, gently remind them that the goal is to practice problem-solving and reasoning.
         """
 
-    return system_prompt
+        return system_prompt
 
 def get_gpt_response(user_input):
     system_prompt = get_system_prompt()
@@ -1353,6 +1308,9 @@ def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user
         st.session_state.is_authenticated = True
         st.session_state.topic_id = int(topic_id)
         st.session_state.is_english_mode = is_english_mode
+        
+        # Set is_teacher based on user_type_value
+        st.session_state.is_teacher = (user_type_value == 2)  # **Added this line**
         
         # Set subject_id only for non-English mode
         if not is_english_mode:
