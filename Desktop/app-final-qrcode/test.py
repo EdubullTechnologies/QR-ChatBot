@@ -636,10 +636,11 @@ def fetch_baseline_data(org_code, subject_id, user_id):
         return None
 
 def baseline_testing_report():
+    if st.session_state.is_english_mode:
+        st.warning("Baseline Testing is not available in English mode.")
+        return
+
     if not st.session_state.baseline_data:
-        if st.session_state.is_english_mode:
-            st.warning("Baseline Testing is not available in English mode.")
-            return
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
         user_id = user_info.get('UserID')
         org_code = user_info.get('OrgCode', '012')
@@ -650,7 +651,7 @@ def baseline_testing_report():
             st.error("Subject ID not available")
             return
 
-        # Fetch Baseline Data Early (Moved from the login)
+        # Fetch Baseline Data Early
         st.session_state.baseline_data = fetch_baseline_data(
             org_code=org_code,
             subject_id=subject_id,
@@ -1162,14 +1163,17 @@ def get_gpt_response(user_input):
 
             # If user specifically requests resources for a concept
             if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
-                resources = get_resources_for_concept(
-                    mentioned_concept,
-                    concept_list,
-                    st.session_state.topic_id
-                )
-                if resources:
-                    resource_message = format_resources_message(resources)
-                    st.session_state.chat_history.append(("assistant", resource_message))
+                if not st.session_state.is_english_mode:
+                    resources = get_resources_for_concept(
+                        mentioned_concept,
+                        concept_list,
+                        st.session_state.topic_id
+                    )
+                    if resources:
+                        resource_message = format_resources_message(resources)
+                        st.session_state.chat_history.append(("assistant", resource_message))
+                else:
+                    st.session_state.chat_history.append(("assistant", "🔍 **Resources are not available in English mode.**"))
 
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
@@ -1282,28 +1286,33 @@ def login_screen():
                 auth_response = requests.post(api_url, json=auth_payload, headers=headers)
                 auth_response.raise_for_status()
                 auth_data = auth_response.json()
+                
+                # Debug: Display authentication response
+                st.write("🔍 **Authentication Response:**", auth_data)
+                
                 if auth_data.get("statusCode") == 1:
                     st.session_state.auth_data = auth_data
                     st.session_state.is_authenticated = True
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
 
-                    # Capture SubjectID and UserID only for T mode
+                    user_info = auth_data.get("UserInfo")
+                    if user_info and len(user_info) > 0:
+                        st.session_state.user_id = user_info[0].get("UserID")
+                        if not st.session_state.user_id:
+                            st.error("UserID not found in authentication response")
+                            return
+                    else:
+                        st.error("UserInfo not found in authentication response")
+                        return
+
                     if not st.session_state.is_english_mode:
+                        # Handle T mode
                         st.session_state.subject_id = auth_data.get("SubjectID")
                         if not st.session_state.subject_id:
                             st.error("Subject ID not found in authentication response")
                             return
 
-                        # Store UserID
-                        user_info = auth_data.get("UserInfo")
-                        if user_info and len(user_info) > 0:
-                            st.session_state.user_id = user_info[0].get("UserID")
-                        else:
-                            st.error("UserInfo not found in authentication response")
-                            return
-
-                        # For Student in T mode
                         if not st.session_state.is_teacher:
                             st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
 
@@ -1324,14 +1333,13 @@ def login_screen():
                             # Initialize teacher-specific session states
                             st.session_state.teacher_weak_concepts = []
                     else:
-                        # For E mode, no subject_id or related data
-                        user_info = auth_data.get("UserInfo")
-                        if user_info and len(user_info) > 0:
-                            st.session_state.user_id = user_info[0].get("UserID")
-                        else:
-                            st.error("UserInfo not found in authentication response")
-                            return
+                        # Handle E mode
+                        # E mode does not require subject_id or related data
+                        # Ensure that subject_id is explicitly set to None
+                        st.session_state.subject_id = None
+                        st.session_state.student_weak_concepts = []  # Not applicable in E mode
 
+                    st.success("✅ Authentication successful!")
                     st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
@@ -1393,32 +1401,32 @@ def display_tabs_parallel():
 
     # Create placeholder containers for each tab
     tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
-    
+
     # Create a placeholder for each tab's content
     chat_placeholder = tab_containers[0].empty()
     learning_path_placeholder = tab_containers[1].empty()
     all_concepts_placeholder = tab_containers[2].empty()
     baseline_testing_placeholder = tab_containers[3].empty()
-    
+
     # Start parallel data loading if not already loaded
     if not st.session_state.baseline_data or not st.session_state.all_concepts:
         with st.spinner("Loading data..."):
             load_data_parallel()
-    
+
     # Display content in each tab
     with tab_containers[0]:
         chat_placeholder.subheader("Chat with your EeeBee AI buddy")
         add_initial_greeting()
         display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
-    
+
     with tab_containers[1]:
         learning_path_placeholder.subheader("Your Personalized Learning Path")
         display_learning_path_tab()
-    
+
     with tab_containers[2]:
         all_concepts_placeholder.subheader("Gap Analyzer")
         display_all_concepts_tab()
-    
+
     with tab_containers[3]:
         baseline_testing_placeholder.subheader("Baseline Testing Report")
         baseline_testing_report()
