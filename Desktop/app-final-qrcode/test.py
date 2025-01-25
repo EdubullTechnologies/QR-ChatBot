@@ -184,7 +184,10 @@ def format_resources_message(resources):
     """
     Format resources data into a chat-friendly message.
     """
-    message = "Here are the available resources for this concept:\n\n"
+    if not resources:
+        return "No remedial resources available for this concept."
+
+    message = ""
 
     if resources.get("Video_List"):
         message += "**🎥 Video Lectures:**\n"
@@ -363,7 +366,7 @@ def generate_learning_path(concept_text):
 
     try:
         gpt_response = openai.ChatCompletion.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{
                 "role": "system", 
                 "content": prompt
@@ -1056,7 +1059,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = openai.ChatCompletion.create(
-                            model="gpt-4o",  # Ensure you have access to the gpt-4o-mini model
+                            model="gpt-4o-mini",  # Ensure you have access to the gpt-4o-mini model
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=8000
                         )
@@ -1239,9 +1242,8 @@ def display_chat(user_name: str):
         handle_user_input(user_input)
 
 # ----------------------------------------------------------------------------
-# 5) LOGIN SCREEN & MAIN ROUTING
+# 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
 # ----------------------------------------------------------------------------
-
 def verify_auth_response(auth_data, is_english_mode):
     """
     Verifies the authentication response based on the mode (English vs Non-English).
@@ -1273,7 +1275,7 @@ def verify_auth_response(auth_data, is_english_mode):
     # For English mode, we skip subject_id verification
     if is_english_mode:
         return True, None, None
-        
+    
     # For non-English mode, we require subject_id
     subject_id = auth_data.get("SubjectID")
     if subject_id is None:
@@ -1616,211 +1618,7 @@ def main_screen():
             display_tabs_parallel()
 
 # ----------------------------------------------------------------------------
-# 7) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
-# ----------------------------------------------------------------------------
-def verify_auth_response(auth_data, is_english_mode):
-    """
-    Verifies the authentication response based on the mode (English vs Non-English).
-    """
-    if not auth_data:
-        return False, None, "No authentication data received"
-        
-    # Check status code for both modes
-    if auth_data.get("statusCode") != 1:
-        return False, None, "Authentication failed - invalid status code"
-    
-    # For English mode, we skip subject_id verification
-    if is_english_mode:
-        return True, None, None
-    
-    # For non-English mode, we require subject_id
-    subject_id = auth_data.get("SubjectID")
-    if subject_id is None:
-        # Attempt to retrieve SubjectID from a nested structure if applicable
-        subject_id = auth_data.get("UserInfo", [{}])[0].get("SubjectID")
-        if subject_id is None:
-            return False, None, "Subject ID not found in authentication response"
-    
-    return True, subject_id, None
-
-def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user_type_value=3):
-    """
-    Enhanced login flow with mode-specific handling.
-    
-    The authentication process differs based on the mode:
-    
-    English Mode (E parameter):
-    - Uses English-specific API endpoint
-    - Simpler authentication flow
-    - No subject ID requirement
-    - Limited to chat functionality
-    
-    Non-English Mode (T parameter):
-    - Uses Math/Science API endpoint
-    - Requires subject ID
-    - Enables advanced features like baseline testing
-    - Supports complete learning analytics
-    
-    Args:
-        org_code (str): Organization code
-        login_id (str): User's login ID
-        password (str): User's password
-        topic_id (int): Topic identifier
-        is_english_mode (bool): Whether system is in English mode
-        user_type_value (int): User type (2=Teacher, 3=Student)
-    
-    Returns:
-        tuple: (success, error_message)
-    """
-    # Select API URL based on mode
-    api_url = API_AUTH_URL_ENGLISH if is_english_mode else API_AUTH_URL_MATH_SCIENCE
-    
-    # Construct auth payload
-    auth_payload = {
-        'OrgCode': org_code,
-        'TopicID': int(topic_id),
-        'LoginID': login_id,
-        'Password': password,
-    }
-    
-    # Add UserType only for non-English mode
-    if not is_english_mode:
-        auth_payload['UserType'] = user_type_value
-        
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-    
-    try:
-        # Make API request
-        response = requests.post(api_url, json=auth_payload, headers=headers)
-        response.raise_for_status()
-        auth_data = response.json()
-        logging.info(f"Authentication Response: {auth_data}")
-        
-        # Verify response based on mode
-        is_valid, subject_id, error_msg = verify_auth_response(auth_data, is_english_mode)
-        if not is_valid:
-            return False, error_msg
-            
-        # Initialize session state
-        st.session_state.auth_data = auth_data
-        st.session_state.is_authenticated = True
-        st.session_state.topic_id = int(topic_id)
-        st.session_state.is_english_mode = is_english_mode
-        
-        # Set subject_id only for non-English mode
-        if not is_english_mode:
-            st.session_state.subject_id = subject_id
-            
-            # Initialize additional features for non-English mode
-            user_info = auth_data.get("UserInfo", [{}])[0]
-            st.session_state.user_id = user_info.get("UserID")
-            
-            # For students, initialize weak concepts
-            if user_type_value == 3:  # Student
-                st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-        else:
-            # For English mode, only initialize basic user info
-            user_info = auth_data.get("UserInfo", [{}])[0]
-            st.session_state.user_id = user_info.get("UserID")
-        
-        return True, None
-            
-    except requests.exceptions.RequestException as e:
-        logging.error(f"API Request failed: {e}")
-        return False, f"API Request failed: {str(e)}"
-    except ValueError as e:
-        logging.error(f"Invalid JSON response: {e}")
-        return False, f"Invalid JSON response: {str(e)}"
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return False, f"Unexpected error: {str(e)}"
-
-def login_screen():
-    try:
-        image_url = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/login_page_img.png"
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.image(image_url, width=160)
-        st.markdown(
-            """<style>
-               @media only screen and (max-width: 600px) {
-                   .title { font-size: 2.5em; margin-top: 20px; text-align: center; }
-               }
-               @media only screen and (min-width: 601px) {
-                   .title { font-size: 4em; font-weight: bold; margin-top: 90px; margin-left: -125px; text-align: left; }
-               }
-               </style>
-            """, unsafe_allow_html=True
-        )
-        with col2:
-            st.markdown('<div class="title">EeeBee AI Buddy Login</div>', unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Error loading image: {e}")
-
-    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
-
-    user_type_choice = st.radio("Select User Type", ["Student", "Teacher"])
-    user_type_value = 2 if user_type_choice == "Teacher" else 3
-
-    org_code = st.text_input("🏫 School Code", key="org_code")
-    login_id = st.text_input("👤 Login ID", key="login_id")
-    password = st.text_input("🔒 Password", type="password", key="password")
-
-    query_params = st.experimental_get_query_params()
-    E_params = query_params.get("E", [None])
-    T_params = query_params.get("T", [None])
-
-    E_value = E_params[0]
-    T_value = T_params[0]
-
-    api_url = None
-    topic_id = None
-
-    if E_value is not None and T_value is not None:
-        st.warning("Provide either ?E=xx for English OR ?T=xx for Non-English, not both.")
-    elif E_value is not None and T_value is None:
-        st.session_state.is_english_mode = True
-        api_url = API_AUTH_URL_ENGLISH
-        topic_id = E_value
-    elif E_value is None and T_value is not None:
-        st.session_state.is_english_mode = False
-        api_url = API_AUTH_URL_MATH_SCIENCE
-        topic_id = T_value
-    else:
-        st.warning("Please provide ?E=... or ?T=... in the URL.")
-
-    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
-        if topic_id is None or api_url is None:
-            st.warning("Please ensure correct E or T parameter is provided.")
-            return
-
-        # Validate inputs
-        if not org_code or not login_id or not password:
-            st.error("Please fill in all the fields.")
-            return
-
-        # Use the enhanced_login function
-        success, error_message = enhanced_login(
-            org_code=org_code,
-            login_id=login_id,
-            password=password,
-            topic_id=topic_id,
-            is_english_mode=st.session_state.is_english_mode,
-            user_type_value=user_type_value
-        )
-
-        if success:
-            st.success("✅ Authentication successful!")
-            st.rerun()
-        else:
-            st.error(f"🚫 Authentication failed: {error_message}")
-
-# ----------------------------------------------------------------------------
-# 8) LAUNCH
+# 7) LAUNCH
 # ----------------------------------------------------------------------------
 def main():
     if st.session_state.is_authenticated:
