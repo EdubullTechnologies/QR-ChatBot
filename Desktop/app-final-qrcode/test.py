@@ -91,11 +91,11 @@ if "available_concepts" not in st.session_state:
 if "baseline_data" not in st.session_state:
     st.session_state.baseline_data = None
 if "subject_id" not in st.session_state:
-    st.session_state.subject_id = None  # Default if unknown
+    st.session_state.subject_id = None  # Only relevant for T mode
 if "user_id" not in st.session_state:
     st.session_state.user_id = None  # Initialize UserID
 if "all_concepts" not in st.session_state:
-    st.session_state.all_concepts = []  # Initialize All Concepts
+    st.session_state.all_concepts = []  # Only relevant for T mode
 if "remedial_info" not in st.session_state:
     st.session_state.remedial_info = None
 if 'show_gap_message' not in st.session_state:
@@ -637,6 +637,9 @@ def fetch_baseline_data(org_code, subject_id, user_id):
 
 def baseline_testing_report():
     if not st.session_state.baseline_data:
+        if st.session_state.is_english_mode:
+            st.warning("Baseline Testing is not available in English mode.")
+            return
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
         user_id = user_info.get('UserID')
         org_code = user_info.get('OrgCode', '012')
@@ -763,6 +766,10 @@ def baseline_testing_report():
 
 # ------------------- 2I) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
+    if st.session_state.is_english_mode:
+        st.warning("Gap Analyzer™ is not available in English mode.")
+        return
+
     st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
     
     # Fetch all concepts from session state
@@ -1053,7 +1060,7 @@ def add_initial_greeting():
             concept_options += f"- {concept['ConceptText']}\n"
 
         weak_concepts_text = ""
-        if weak_concepts:
+        if weak_concepts and not st.session_state.is_english_mode:
             weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
             for concept in weak_concepts:
                 weak_concepts_text += f"- {concept['ConceptText']}\n"
@@ -1281,41 +1288,50 @@ def login_screen():
                     st.session_state.topic_id = int(topic_id)
                     st.session_state.is_teacher = (user_type_value == 2)
 
-                    # Capture SubjectID and UserID
-                    st.session_state.subject_id = auth_data.get("SubjectID")
-                    if not st.session_state.subject_id:
-                        st.error("Subject ID not found in authentication response")
-                        return
+                    # Capture SubjectID and UserID only for T mode
+                    if not st.session_state.is_english_mode:
+                        st.session_state.subject_id = auth_data.get("SubjectID")
+                        if not st.session_state.subject_id:
+                            st.error("Subject ID not found in authentication response")
+                            return
 
-                    # **Store UserID in session state**
-                    user_info = auth_data.get("UserInfo")
-                    if user_info and len(user_info) > 0:
-                        st.session_state.user_id = user_info[0].get("UserID")
+                        # Store UserID
+                        user_info = auth_data.get("UserInfo")
+                        if user_info and len(user_info) > 0:
+                            st.session_state.user_id = user_info[0].get("UserID")
+                        else:
+                            st.error("UserInfo not found in authentication response")
+                            return
+
+                        # For Student in T mode
+                        if not st.session_state.is_teacher:
+                            st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+
+                            # Fetch Baseline Data Early
+                            st.session_state.baseline_data = fetch_baseline_data(
+                                org_code=org_code,
+                                subject_id=st.session_state.subject_id,
+                                user_id=st.session_state.user_id
+                            )
+
+                            # Fetch All Concepts After Baseline
+                            st.session_state.all_concepts = fetch_all_concepts(
+                                org_code=org_code,
+                                subject_id=st.session_state.subject_id,
+                                user_id=st.session_state.user_id
+                            ) or []
+                        else:
+                            # Initialize teacher-specific session states
+                            st.session_state.teacher_weak_concepts = []
                     else:
-                        st.error("UserInfo not found in authentication response")
-                        return
+                        # For E mode, no subject_id or related data
+                        user_info = auth_data.get("UserInfo")
+                        if user_info and len(user_info) > 0:
+                            st.session_state.user_id = user_info[0].get("UserID")
+                        else:
+                            st.error("UserInfo not found in authentication response")
+                            return
 
-                    if not st.session_state.is_teacher:
-                        st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-
-                        # Fetch Baseline Data Early
-                        st.session_state.baseline_data = fetch_baseline_data(
-                            org_code=org_code,
-                            subject_id=st.session_state.subject_id,
-                            user_id=st.session_state.user_id
-                        )
-
-                        # Fetch All Concepts After Baseline
-                        st.session_state.all_concepts = fetch_all_concepts(
-                            org_code=org_code,
-                            subject_id=st.session_state.subject_id,
-                            user_id=st.session_state.user_id
-                        ) or []
-                    else:
-                        # Initialize teacher-specific session states
-                        st.session_state.teacher_weak_concepts = []
-
-                    # **Add st.rerun() here for teachers as well**
                     st.rerun()
                 else:
                     st.error("🚫 Authentication failed. Check credentials.")
@@ -1328,7 +1344,12 @@ def login_screen():
 def load_data_parallel():
     """
     Load baseline and concepts data in parallel using ThreadPoolExecutor
+    Only for Non-English (T) mode
     """
+    if st.session_state.is_english_mode:
+        # In E mode, skip fetching baseline and all concepts
+        return
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         # Start both tasks simultaneously
         baseline_future = executor.submit(
@@ -1364,7 +1385,12 @@ def load_data_parallel():
 def display_tabs_parallel():
     """
     Display tabs with parallel data loading
+    Only for Non-English (T) mode
     """
+    if st.session_state.is_english_mode:
+        # In E mode, this function should not be called
+        return
+
     # Create placeholder containers for each tab
     tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
     
@@ -1398,6 +1424,10 @@ def display_tabs_parallel():
         baseline_testing_report()
 
 def display_learning_path_tab():
+    if st.session_state.is_english_mode:
+        st.warning("Learning Path is not available in English mode.")
+        return
+
     weak_concepts = st.session_state.auth_data.get("WeakConceptList", [])
     concept_list = st.session_state.auth_data.get('ConceptList', [])
 
