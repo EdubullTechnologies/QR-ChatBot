@@ -31,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Import DeepSeek-style client from openai package
 try:
-    from openai import OpenAI  # The library name is 'openai', but we create a client object via 'OpenAI'
+    from openai import OpenAI
 except ImportError:
     st.error("Please install the openai library: pip3 install openai")
     raise
@@ -53,7 +53,7 @@ except KeyError:
     st.error("API key for OpenAI/DeepSeek not found in secrets.")
     OPENAI_API_KEY = None
 
-# Initialize the DeepSeek client if we have the key
+# Initialize the DeepSeek (OpenAI-like) client if we have the key
 if OPENAI_API_KEY:
     # Create the client with your base_url
     client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://api.deepseek.com")
@@ -352,7 +352,8 @@ def generate_learning_path(concept_text):
             stream=False,
             max_tokens=1500
         )
-        gpt_response = response.choices[0].message['content'].strip()
+        # NOTE: Use dot-notation to access the message content
+        gpt_response = response.choices[0].message.content.strip()
         return gpt_response
     except Exception as e:
         st.error(f"Error generating learning path: {e}")
@@ -674,7 +675,7 @@ def baseline_testing_report():
             st.error("Subject ID not available")
             return
 
-        # Fetch Baseline Data Early (Moved from the login)
+        # Fetch Baseline Data Early
         st.session_state.baseline_data = fetch_baseline_data(
             org_code=org_code,
             subject_id=subject_id,
@@ -1014,7 +1015,8 @@ def teacher_dashboard():
                             max_tokens=4000,
                             stream=False
                         )
-                        questions = response.choices[0].message['content'].strip()
+                        # Use dot-notation to access the content
+                        questions = response.choices[0].message.content.strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
                         
@@ -1136,7 +1138,8 @@ def get_gpt_response(user_input):
                 max_tokens=2000,
                 stream=False
             )
-            gpt_response = response.choices[0].message['content'].strip()
+            # Dot-notation instead of subscript
+            gpt_response = response.choices[0].message.content.strip()
 
             st.session_state.chat_history.append(("assistant", gpt_response))
 
@@ -1500,7 +1503,8 @@ if __name__ == "__main__":
 #         ],
 #         stream=False
 #     )
-#     print(response.choices[0].message['content'])
+#     # Access .content (not ['content'])
+#     print(response.choices[0].message.content)
 # else:
 #     print("DeepSeek client not available (missing API key).")
 # -----------------------------------------------------------------------------
