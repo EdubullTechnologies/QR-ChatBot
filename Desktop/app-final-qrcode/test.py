@@ -993,7 +993,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.experimental_rerun()
+        st.rerun()
 
 def get_system_prompt():
     """
@@ -1236,7 +1236,7 @@ def login_screen():
         )
         if success:
             st.success("✅ Authentication successful!")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error(f"🚫 Authentication failed: {error_message}")
 
@@ -1338,7 +1338,7 @@ def main_screen():
         if st.button("Logout"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
-            st.experimental_rerun()
+            st.rerun()
 
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
