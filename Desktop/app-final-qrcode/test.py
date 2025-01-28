@@ -104,6 +104,7 @@ def initialize_session_state():
         "show_gap_message": False,
         "concepts_and_students": None,  # Added for teacher_dashboard
         "chat_context": None,           # Added for student discussion
+        "selected_student": None,       # **New:** Selected student for chat
     }
     for key, value in default_values.items():
         if key not in st.session_state:
@@ -939,85 +940,8 @@ def teacher_dashboard():
             height=800
         )
 
-        # Add student selector for detailed view
-        students = detailed_data.get("Students", [])
-        if students:
-            selected_student = st.selectbox(
-                "Select a student to view details:",
-                options=[s["FullName"] for s in students],
-                format_func=lambda x: x
-            )
-
-            if selected_student:
-                student_data = next(s for s in students if s["FullName"] == selected_student)
-                st.markdown(f"### Detailed Analysis for {selected_student}")
-
-                # Display student metrics
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Concepts", student_data.get("TotalConceptCount", 0))
-                col2.metric("Weak Concepts", student_data.get("WeakConceptCount", 0))
-                col3.metric("Cleared Concepts", student_data.get("ClearedConceptCount", 0))
-
-                # Add action buttons
-                if st.button("Generate Improvement Plan"):
-                    generate_improvement_plan(student_data, detailed_data.get("Concepts", []))
-
-                if st.button("Start Student Discussion in Chat"):
-                    st.session_state.chat_context = {
-                        "student": selected_student,
-                        "data": student_data
-                    }
-                    st.rerun()
-        else:
-            st.info("No students found in the selected batch.")
-
-def generate_improvement_plan(student_data, concepts):
-    if not client:
-        st.error("DeepSeek client is not initialized. Check your API key.")
-        return
-        
-    prompt = f"""
-    Generate a detailed improvement plan for {student_data['FullName']}.
-    
-    Current Status:
-    - Total Concepts: {student_data.get('TotalConceptCount', 0)}
-    - Weak Concepts: {student_data.get('WeakConceptCount', 0)}
-    - Cleared Concepts: {student_data.get('ClearedConceptCount', 0)}
-    
-    Concepts covered:
-    {', '.join(c['ConceptText'] for c in concepts)}
-    
-    Please provide:
-    1. Specific areas needing attention
-    2. Recommended learning strategies
-    3. Practice exercises
-    4. Timeline for improvement
-    5. Assessment milestones
-    """
-
-    try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",  # Using the DeepSeek model name
-            messages=[{"role": "system", "content": prompt}],
-            stream=False,
-            max_tokens=2000,
-        )
-        plan = response.choices[0].message.content
-
-        # Display the plan
-        st.markdown("### 📝 Personalized Improvement Plan")
-        st.markdown(plan)
-
-        # Add download option
-        pdf_bytes = generate_improvement_plan_pdf(plan, student_data['FullName'])
-        st.download_button(
-            label="📥 Download Improvement Plan",
-            data=pdf_bytes,
-            file_name=f"improvement_plan_{student_data['FullName'].replace(' ', '_')}.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Error generating improvement plan: {e}")
+        # **Modified:** Removed individual student selection from the dashboard
+        # Instead, we'll handle student selection within the chat interface
 
 # ----------------------------------------------------------------------------
 # 5) CHAT FUNCTIONS
@@ -1068,17 +992,17 @@ def get_system_prompt():
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
 
     if st.session_state.is_teacher:
-        # Add student context if available
+        # Add student context if available from chat_context
         student_context = ""
-        if st.session_state.chat_context:
-            student = st.session_state.chat_context["student"]
-            data = st.session_state.chat_context["data"]
+        if st.session_state.selected_student:
+            student = st.session_state.selected_student
+            student_data = st.session_state.chat_context["data"] if st.session_state.chat_context else {}
             student_context = f"""
             Currently discussing student: {student}
             Performance metrics:
-            - Total Concepts: {data.get('TotalConceptCount', 0)}
-            - Weak Concepts: {data.get('WeakConceptCount', 0)}
-            - Cleared Concepts: {data.get('ClearedConceptCount', 0)}
+            - Total Concepts: {student_data.get('TotalConceptCount', 0)}
+            - Weak Concepts: {student_data.get('WeakConceptCount', 0)}
+            - Cleared Concepts: {student_data.get('ClearedConceptCount', 0)}
             """
 
         return f"""
@@ -1178,6 +1102,29 @@ def display_chat(user_name: str):
                 )
         chat_history_html += "</div>"
         st.markdown(chat_history_html, unsafe_allow_html=True)
+
+    # **New:** Student Selection Dropdown within Chat Interface
+    if st.session_state.is_teacher:
+        # Fetch list of students from session state
+        students = st.session_state.concepts_and_students.get("Students", []) if st.session_state.concepts_and_students else []
+        student_names = [student["FullName"] for student in students]
+        if student_names:
+            selected_student = st.selectbox("Select a Student for Chat:", options=student_names, key="selected_student_dropdown")
+            if selected_student != st.session_state.selected_student:
+                # Update the selected student in session state
+                st.session_state.selected_student = selected_student
+                # Optionally, fetch and store student data
+                student_data = next((s for s in students if s["FullName"] == selected_student), {})
+                st.session_state.chat_context = {
+                    "student": selected_student,
+                    "data": student_data
+                }
+                # Clear previous chat history when a new student is selected
+                st.session_state.chat_history = []
+                add_initial_greeting()
+    else:
+        # For students, no need to select another student
+        st.session_state.selected_student = None
 
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
