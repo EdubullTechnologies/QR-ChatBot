@@ -1266,7 +1266,7 @@ def get_system_prompt():
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
 
     if st.session_state.is_teacher:
-    return f"""You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+        return f"""You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 1. Context and Role:
@@ -1321,10 +1321,10 @@ Teacher Mode Instructions:
    - Provide enrichment activities
    - Include differentiation techniques
    - Support diverse learning styles"""
-else:
-    weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
-    weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
-    return f"""You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+    else:
+        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
+        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
+        return f"""You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Student Mode Instructions:
 1. Context and Learning Profile:
