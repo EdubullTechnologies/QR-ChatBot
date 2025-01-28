@@ -28,6 +28,7 @@ import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time  # Added for retry logic
 
 # ----------------------------------------------------------------------------------
 # If you are using a custom LLM or a DeepSeek-like client, import it; 
@@ -187,8 +188,12 @@ def get_matching_resources(concept_text, concept_list, topic_id):
         }
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/115.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
         }
         try:
             response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
@@ -489,8 +494,12 @@ def fetch_all_concepts(org_code, subject_id, user_id):
     }
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
     }
     try:
         response = requests.post(API_ALL_CONCEPTS_URL, json=payload, headers=headers)
@@ -576,8 +585,12 @@ def fetch_remedial_resources(topic_id, concept_id):
     }
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
     }
     try:
         response = requests.post(remedial_api_url, json=payload, headers=headers)
@@ -628,8 +641,12 @@ def fetch_baseline_data(org_code, subject_id, user_id):
     }
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
     }
     try:
         with st.spinner("EeeBee is fetching baseline data..."):
@@ -812,7 +829,12 @@ def fetch_teacher_topicwise_data(batch_id, topic_id, org_code):
     }
     headers = {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
     }
     try:
         response = requests.post(API_TEACHER_TOPICWISE_WEAK_STUDENTS, json=payload, headers=headers)
@@ -1133,7 +1155,7 @@ def verify_auth_response(auth_data, is_english_mode):
 
     return True, subject_id, None
 
-def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user_type_value=3):
+def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user_type_value=3, retries=3):
     api_url = API_AUTH_URL_ENGLISH if is_english_mode else API_AUTH_URL_MATH_SCIENCE
     auth_payload = {
         'OrgCode': org_code,
@@ -1142,46 +1164,68 @@ def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user
         'Password': password,
     }
     if not is_english_mode:
-        auth_payload['UserType'] = user_type_value
+        auth_payload['UserType'] = int(user_type_value)
 
     headers = {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
     }
 
-    try:
-        response = requests.post(api_url, json=auth_payload, headers=headers)
-        response.raise_for_status()
-        auth_data = response.json()
-        logging.info(f"Auth Response: {auth_data}")
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.post(api_url, json=auth_payload, headers=headers)
+            response.raise_for_status()
+            auth_data = response.json()
+            logging.info(f"Auth Response: {auth_data}")
 
-        is_valid, subject_id, error_msg = verify_auth_response(auth_data, is_english_mode)
-        if not is_valid:
-            return False, error_msg
+            is_valid, subject_id, error_msg = verify_auth_response(auth_data, is_english_mode)
+            if not is_valid:
+                return False, error_msg
 
-        st.session_state.auth_data = auth_data
-        st.session_state.is_authenticated = True
-        st.session_state.topic_id = int(topic_id)
-        st.session_state.is_english_mode = is_english_mode
-        st.session_state.is_teacher = (user_type_value == 2)
+            st.session_state.auth_data = auth_data
+            st.session_state.is_authenticated = True
+            st.session_state.topic_id = int(topic_id)
+            st.session_state.is_english_mode = is_english_mode
+            st.session_state.is_teacher = (user_type_value == 2)
 
-        if not is_english_mode:
-            st.session_state.subject_id = subject_id
-            user_info = auth_data.get("UserInfo", [{}])[0]
-            st.session_state.user_id = user_info.get("UserID")
-            if user_type_value == 3:  # Student
-                st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
-        else:
-            user_info = auth_data.get("UserInfo", [{}])[0]
-            st.session_state.user_id = user_info.get("UserID")
+            if not is_english_mode:
+                st.session_state.subject_id = subject_id
+                user_info = auth_data.get("UserInfo", [{}])[0]
+                st.session_state.user_id = user_info.get("UserID")
+                if user_type_value == 3:  # Student
+                    st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
+            else:
+                user_info = auth_data.get("UserInfo", [{}])[0]
+                st.session_state.user_id = user_info.get("UserID")
 
-        return True, None
-    except requests.exceptions.RequestException as e:
-        return False, f"API Request failed: {e}"
-    except ValueError as e:
-        return False, f"Invalid JSON response: {e}"
-    except Exception as e:
-        return False, f"Unexpected error: {e}"
+            return True, None
+        except requests.exceptions.HTTPError as http_err:
+            if response.status_code == 403:
+                st.header(f"🚫 Authentication failed: Forbidden (403). Attempt {attempt} of {retries}.")
+                if attempt < retries:
+                    wait_time = 2 ** attempt
+                    st.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    st.header("🚫 Authentication failed: Access Forbidden. Please contact support.")
+                    return False, "Access Forbidden (403)."
+            else:
+                st.error(f"HTTP error occurred: {http_err}")
+                return False, str(http_err)
+        except requests.exceptions.RequestException as e:
+            st.error(f"Request exception: {e}")
+            return False, str(e)
+        except ValueError as e:
+            st.error(f"Invalid JSON response: {e}")
+            return False, str(e)
+        except Exception as e:
+            st.error(f"Unexpected error: {e}")
+            return False, str(e)
 
 def login_screen():
     try:
