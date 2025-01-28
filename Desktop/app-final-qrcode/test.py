@@ -895,7 +895,7 @@ def display_student_management():
         st.markdown(f"- **Total Concepts:** {selected_student['TotalConceptCount']}")
         st.markdown(f"- **Weak Concepts:** {selected_student['WeakConceptCount']}")
         st.markdown(f"- **Cleared Concepts:** {selected_student['ClearedConceptCount']}")
-
+    
         # Show a quick bar chart
         chart_data = pd.DataFrame({
             "Category": ["Weak", "Cleared", "Remaining"],
@@ -1238,7 +1238,8 @@ def login_screen():
             st.success("✅ Authentication successful!")
             st.rerun()
         else:
-            st.error(f"🚫 Authentication failed: {error_message}")
+            # Changed from st.error to st.header for prominent display
+            st.header(f"🚫 Authentication failed: {error_message}")
 
 # ----------------------------------------------------------------------------------
 # 7) MAIN APP SCREEN
