@@ -34,7 +34,7 @@ import streamlit.components.v1 as components  # Ensure components is imported
 try:
     from openai import OpenAI
 except ImportError:
-    st.error("Please install the openai library: pip3 install openai")
+    st.error("Please install the openai library: pip install openai")
     raise
 
 # ----------------------------------------------------------------------------
@@ -65,9 +65,16 @@ else:
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
 API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org_StudentVerify_with_topic_for_chatbot"
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
-API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
+API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts_AND_Students"
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
 API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"  # New API Endpoint for All Concepts
+
+# Define Global Headers
+HEADERS = {
+    "Content-Type": "application/json",
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json"
+}
 
 # Initialize session state variables
 def initialize_session_state():
@@ -162,13 +169,8 @@ def get_matching_resources(concept_text, concept_list, topic_id):
             'TopicID': topic_id,
             'ConceptID': int(matching_concept['ConceptID'])
         }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
         try:
-            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+            response = requests.post(API_CONTENT_URL, json=content_payload, headers=HEADERS)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -316,8 +318,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
 
 def generate_learning_path(concept_text):
     """
-    Generates a learning path using DeepSeek Chat. 
-    Replace the prompt/model as needed for your scenario.
+    Generates a learning path using DeepSeek Chat Completion.
     """
     if not client:
         st.error("DeepSeek client is not initialized. Check your API key.")
@@ -339,9 +340,9 @@ def generate_learning_path(concept_text):
             model="deepseek-chat",  # Using the DeepSeek model name
             messages=[{"role": "system", "content": prompt}],
             stream=False,
-            max_tokens=1500
+            max_tokens=1500,
         )
-        # NOTE: Use dot-notation to access the message content
+        # Use dot-notation to access the message content
         gpt_response = response.choices[0].message.content.strip()
         return gpt_response
     except Exception as e:
@@ -479,13 +480,8 @@ def fetch_all_concepts(org_code, subject_id, user_id):
         "SubjectID": subject_id,
         "UserID": user_id
     }
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
     try:
-        response = requests.post(API_ALL_CONCEPTS_URL, json=payload, headers=headers)
+        response = requests.post(API_ALL_CONCEPTS_URL, json=payload, headers=HEADERS)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -583,13 +579,8 @@ def fetch_remedial_resources(topic_id, concept_id):
         "TopicID": topic_id,
         "ConceptID": concept_id
     }
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
     try:
-        response = requests.post(remedial_api_url, json=payload, headers=headers)
+        response = requests.post(remedial_api_url, json=payload, headers=HEADERS)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -637,15 +628,9 @@ def fetch_baseline_data(org_code, subject_id, user_id):
         "SubjectID": subject_id,
         "OrgCode": org_code
     }
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-
     try:
         with st.spinner("EeeBee is waking up..."):
-            response = requests.post(API_BASELINE_REPORT, json=payload, headers=headers)
+            response = requests.post(API_BASELINE_REPORT, json=payload, headers=HEADERS)
             response.raise_for_status()
             return response.json()
     except Exception as e:
@@ -932,170 +917,107 @@ def teacher_dashboard():
             "TopicID": st.session_state.topic_id,
             "OrgCode": org_code
         }
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        with st.spinner("EeeBee is fetching weak concepts..."):
-            try:
-                response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
+        try:
+            with st.spinner("EeeBee is fetching detailed data..."):
+                response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=HEADERS)
                 response.raise_for_status()
-                weak_concepts = response.json()
-                st.session_state.teacher_weak_concepts = weak_concepts
-            except Exception as e:
-                st.error(f"Error fetching weak concepts: {e}")
-                st.session_state.teacher_weak_concepts = []
+                detailed_data = response.json()
+                
+                # Store in session state
+                st.session_state.concepts_and_students = detailed_data
+        except Exception as e:
+            st.error(f"Error fetching detailed data: {e}")
+            st.session_state.concepts_and_students = None
 
-    if st.session_state.teacher_weak_concepts:
-        df = []
-        for wc in st.session_state.teacher_weak_concepts:
-            df.append({
-                "Concept": wc["ConceptText"],
-                "Attended": wc["AttendedStudentCount"],
-                "Cleared": wc["ClearedStudentCount"]
-            })
-        df = pd.DataFrame(df)
+    if st.session_state.concepts_and_students:
+        detailed_data = st.session_state.concepts_and_students
 
-        # Main bar chart
-        df_long = df.melt('Concept', var_name='Category', value_name='Count')
-        chart = alt.Chart(df_long).mark_bar().encode(
-            x='Concept:N',
-            y='Count:Q',
-            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-            tooltip=['Concept:N', 'Category:N', 'Count:Q']
-        ).properties(
-            title='Weak Concepts Overview',
-            width=600
+        # Display the React component
+        st.markdown("### Student Performance Dashboard")
+        components.html(
+            render_student_performance_dashboard(detailed_data),
+            height=800
         )
 
-        rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(
-            color='red', strokeDash=[4, 4]
-        ).encode(y='y:Q')
-        text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
-            align='left', dx=5, dy=-5, color='red'
-        ).encode(y='y:Q', text=alt.value(f'Total Students: {total_students}'))
+        # Add student selector for detailed view
+        students = detailed_data.get("Students", [])
+        if students:
+            selected_student = st.selectbox(
+                "Select a student to view details:",
+                options=[s["FullName"] for s in students],
+                format_func=lambda x: x
+            )
 
-        final_chart = (chart + rule + text).interactive()
-        st.altair_chart(final_chart, use_container_width=True)
+            if selected_student:
+                student_data = next(s for s in students if s["FullName"] == selected_student)
+                st.markdown(f"### Detailed Analysis for {selected_student}")
 
-        display_additional_graphs(st.session_state.teacher_weak_concepts)
+                # Display student metrics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Concepts", student_data.get("TotalConceptCount", 0))
+                col2.metric("Weak Concepts", student_data.get("WeakConceptCount", 0))
+                col3.metric("Cleared Concepts", student_data.get("ClearedConceptCount", 0))
 
-        # Bloom's Level
-        bloom_level = st.radio(
-            "Select Bloom's Taxonomy Level for the Questions",
-            [
-                "L1 (Remember)",
-                "L2 (Understand)",
-                "L3 (Apply)",
-                "L4 (Analyze)",
-                "L5 (Evaluate)"
-            ],
-            index=3  # Default to L4
-        )
-        bloom_short = bloom_level.split()[0]  # e.g. "L4"
+                # Add action buttons
+                if st.button("Generate Improvement Plan"):
+                    generate_improvement_plan(student_data, detailed_data.get("Concepts", []))
 
-        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
+                if st.button("Start Student Discussion in Chat"):
+                    st.session_state.chat_context = {
+                        "student": selected_student,
+                        "data": student_data
+                    }
+                    st.rerun()
+        else:
+            st.info("No students found in the selected batch.")
 
-        if chosen_concept_text:
-            chosen_concept_id = concept_list[chosen_concept_text]
-            st.session_state.selected_teacher_concept_id = chosen_concept_id
-            st.session_state.selected_teacher_concept_text = chosen_concept_text
-
-            if st.button("Generate Exam Questions"):
-                if not client:
-                    st.error("DeepSeek client is not initialized. Check your API key.")
-                    return
-
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                prompt = (
-                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
-                    f"Teacher Mode Instructions:\n"
-                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
-                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
-                    f"- Offer insights into common student difficulties and ways to address them.\n"
-                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
-                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
-                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
-                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
-                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n"
-                    f"- Do not provide final solutions, only the questions.\n\n"
-                    f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
-                    f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
-                )
-
-                with st.spinner("Generating exam questions... Please wait."):
-                    try:
-                        response = client.chat.completions.create(
-                            model="deepseek-chat",
-                            messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000,
-                            stream=False
-                        )
-                        # Use dot-notation to access the content
-                        questions = response.choices[0].message.content.strip()
-                        st.session_state.exam_questions = questions
-                        st.success("Exam questions generated successfully!")
-                        
-                        st.markdown("### 📝 Generated Exam Questions")
-                        st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
-                        
-                        pdf_bytes = generate_exam_questions_pdf(
-                            questions,
-                            chosen_concept_text,
-                            st.session_state.auth_data['UserInfo'][0]['FullName']
-                        )
-                        st.download_button(
-                            label="📥 Download Exam Questions as PDF",
-                            data=pdf_bytes,
-                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error generating exam questions: {e}")
+def generate_improvement_plan(student_data, concepts):
+    if not client:
+        st.error("DeepSeek client is not initialized. Check your API key.")
+        return
+        
+    prompt = f"""
+    Generate a detailed improvement plan for {student_data['FullName']}.
     
-    # ------------------- 4A) ADDITIONAL GRAPH FUNCTIONS -------------------
-def display_additional_graphs(weak_concepts):
-    df = pd.DataFrame(weak_concepts)
-    total_attended = df["AttendedStudentCount"].sum()
-    total_cleared = df["ClearedStudentCount"].sum()
-    total_not_cleared = total_attended - total_cleared
+    Current Status:
+    - Total Concepts: {student_data.get('TotalConceptCount', 0)}
+    - Weak Concepts: {student_data.get('WeakConceptCount', 0)}
+    - Cleared Concepts: {student_data.get('ClearedConceptCount', 0)}
+    
+    Concepts covered:
+    {', '.join(c['ConceptText'] for c in concepts)}
+    
+    Please provide:
+    1. Specific areas needing attention
+    2. Recommended learning strategies
+    3. Practice exercises
+    4. Timeline for improvement
+    5. Assessment milestones
+    """
 
-    data_overall = pd.DataFrame({
-        'Category': ['Cleared', 'Not Cleared'],
-        'Count': [total_cleared, total_not_cleared]
-    })
-    donut_chart = alt.Chart(data_overall).mark_arc(innerRadius=50).encode(
-        theta='Count:Q',
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['Category:N', 'Count:Q']
-    ).properties(
-        title='Overall Cleared vs Not Cleared Students'
-    )
-    st.altair_chart(donut_chart, use_container_width=True)
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",  # Using the DeepSeek model name
+            messages=[{"role": "system", "content": prompt}],
+            stream=False,
+            max_tokens=2000,
+        )
+        plan = response.choices[0].message.content
 
-    df_long = df.melt(
-        id_vars='ConceptText',
-        value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
-        var_name='Category',
-        value_name='Count'
-    )
-    df_long['Category'] = df_long['Category'].replace({
-        'AttendedStudentCount': 'Attended',
-        'ClearedStudentCount': 'Cleared'
-    })
+        # Display the plan
+        st.markdown("### 📝 Personalized Improvement Plan")
+        st.markdown(plan)
 
-    horizontal_bar = alt.Chart(df_long).mark_bar().encode(
-        x=alt.X('Count:Q'),
-        y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
-    ).properties(
-        title='Attended vs Cleared per Concept (Horizontal View)',
-        width=600
-    )
-    st.altair_chart(horizontal_bar, use_container_width=True)
+        # Add download option
+        pdf_bytes = generate_improvement_plan_pdf(plan, student_data['FullName'])
+        st.download_button(
+            label="📥 Download Improvement Plan",
+            data=pdf_bytes,
+            file_name=f"improvement_plan_{student_data['FullName'].replace(' ', '_')}.pdf",
+            mime="application/pdf"
+        )
+    except Exception as e:
+        st.error(f"Error generating improvement plan: {e}")
 
 # ----------------------------------------------------------------------------
 # 5) CHAT FUNCTIONS
@@ -1154,11 +1076,11 @@ def get_system_prompt():
             student_context = f"""
             Currently discussing student: {student}
             Performance metrics:
-            - Total Concepts: {data['TotalConceptCount']}
-            - Weak Concepts: {data['WeakConceptCount']}
-            - Cleared Concepts: {data['ClearedConceptCount']}
+            - Total Concepts: {data.get('TotalConceptCount', 0)}
+            - Weak Concepts: {data.get('WeakConceptCount', 0)}
+            - Cleared Concepts: {data.get('ClearedConceptCount', 0)}
             """
-        
+
         return f"""
         You are a highly knowledgeable educational assistant named EeeBee.
         {student_context}
@@ -1193,7 +1115,7 @@ def get_gpt_response(user_input):
     if not client:
         st.error("DeepSeek client is not initialized. Check your API key.")
         return
-    
+
     system_prompt = get_system_prompt()
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [
@@ -1210,10 +1132,10 @@ def get_gpt_response(user_input):
                     break
 
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model="deepseek-chat",  # Using the DeepSeek model name
                 messages=conversation_history_formatted,
+                stream=False,
                 max_tokens=2000,
-                stream=False
             )
             # Dot-notation instead of subscript
             gpt_response = response.choices[0].message.content.strip()
@@ -1295,14 +1217,8 @@ def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user
     if not is_english_mode:
         auth_payload['UserType'] = user_type_value
         
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
-    
     try:
-        response = requests.post(api_url, json=auth_payload, headers=headers)
+        response = requests.post(api_url, json=auth_payload, headers=HEADERS)
         response.raise_for_status()
         auth_data = response.json()
         logging.info(f"Authentication Response: {auth_data}")
@@ -1579,7 +1495,7 @@ if __name__ == "__main__":
 #         ],
 #         stream=False
 #     )
-#     # Access .content (not ['content'])
+#     # Access .content
 #     print(response.choices[0].message.content)
 # else:
 #     print("DeepSeek client not available (missing API key).")
