@@ -56,7 +56,7 @@ except KeyError:
 # Initialize the DeepSeek (OpenAI-like) client if we have the key
 if OPENAI_API_KEY:
     # Create the client with your base_url
-    client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=OPENAI_API_KEY)
 else:
     client = None
 
@@ -347,7 +347,7 @@ def generate_learning_path(concept_text):
 
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",  # Using the DeepSeek model name
+            model="gpt-4o-mini",  # Using the DeepSeek model name
             messages=[{"role": "system", "content": prompt}],
             stream=False,
             max_tokens=1500
@@ -1010,7 +1010,7 @@ def teacher_dashboard():
                 with st.spinner("Generating exam questions... Please wait."):
                     try:
                         response = client.chat.completions.create(
-                            model="deepseek-chat",
+                            model="gpt-4o-mini",
                             messages=[{"role": "system", "content": prompt}],
                             max_tokens=4000,
                             stream=False
@@ -1134,7 +1134,7 @@ def get_gpt_response(user_input):
                     break
 
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model="gpt-4o-mini",
                 messages=conversation_history_formatted,
                 max_tokens=2000,
                 stream=False
@@ -1497,7 +1497,7 @@ if __name__ == "__main__":
 #
 # if client:
 #     response = client.chat.completions.create(
-#         model="deepseek-chat",
+#         model="gpt-4o-mini",
 #         messages=[
 #             {"role": "system", "content": "You are a helpful assistant"},
 #             {"role": "user", "content": "Hello"},
