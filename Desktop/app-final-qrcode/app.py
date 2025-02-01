@@ -28,7 +28,6 @@ import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
 
 # Import DeepSeek-style client from openai package
 try:
@@ -999,6 +998,10 @@ def teacher_dashboard():
                     f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
                     f"- Offer insights into common student difficulties and ways to address them.\n"
                     f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
+                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
+                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
+                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
+                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n"
                     f"- Do not provide final solutions, only the questions.\n\n"
                     f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
                     f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
@@ -1034,107 +1037,47 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
-# ------------------- 2J) CHAT FUNCTIONS WITH AUTO SCROLLING -------------------
-# New function to stream GPT responses chunk by chunk.
-def get_gpt_response_stream(user_input):
-    if not client:
-        yield "DeepSeek client not initialized."
-        return
+# ------------------- 2J) CHAT FUNCTIONS -------------------
+def add_initial_greeting():
+    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
-    system_prompt = get_system_prompt()
-    conversation_history = [{"role": "system", "content": system_prompt}]
-    conversation_history += [
-        {"role": role, "content": content}
-        for role, content in st.session_state.chat_history
-    ]
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=conversation_history,
-            max_tokens=2000,
-            stream=True
+        concept_list = st.session_state.auth_data.get('ConceptList', [])
+        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+
+        concept_options = "\n\n**📚 Available Concepts:**\n"
+        for concept in concept_list:
+            concept_options += f"- {concept['ConceptText']}\n"
+
+        weak_concepts_text = ""
+        if weak_concepts:
+            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
+            for concept in weak_concepts:
+                weak_concepts_text += f"- {concept['ConceptText']}\n"
+
+        st.session_state.available_concepts = {
+            concept['ConceptText']: concept['ConceptID'] for concept in concept_list
+        }
+
+        greeting_message = (
+            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+            f"I'm here to help you with {topic_name}.\n\n"
+            f"You can:\n"
+            f"1. Ask me questions about any concept\n"
+            f"2. Request learning resources (videos, notes, exercises)\n"
+            f"3. Get help understanding specific topics\n"
+            f"{concept_options}"
+            f"{weak_concepts_text}\n\n"
+            f"What would you like to discuss?"
         )
-        for chunk in response:
-            delta = chunk.choices[0].delta
-            yield delta.get("content", "")
-    except Exception as e:
-        yield f"Error: {e}"
+        st.session_state.chat_history.append(("assistant", greeting_message))
 
-# Modified handler so that the user message appears immediately
-# and then the assistant reply is built gradually.
 def handle_user_input(user_input):
     if user_input:
-        # Append the user message immediately.
         st.session_state.chat_history.append(("user", user_input))
-        # Create a placeholder for streaming assistant reply.
-        placeholder = st.empty()
-        assistant_reply = ""
-        # Stream the assistant reply in chunks.
-        for chunk in get_gpt_response_stream(user_input):
-            assistant_reply += chunk
-            placeholder.markdown(f"<div style='text-align:left; color:#000; background-color:#e0e7ff; padding:8px; border-radius:8px; margin-bottom:5px;'><b>EeeBee:</b> {assistant_reply}</div>", unsafe_allow_html=True)
-            time.sleep(0.05)  # slight delay to simulate streaming
-        # Append the full assistant reply to chat history.
-        st.session_state.chat_history.append(("assistant", assistant_reply))
+        get_gpt_response(user_input)
         st.rerun()
-
-# The chat display uses an HTML container that auto-scrolls.
-def display_chat(user_name: str):
-    chat_html = ""
-    for role, message in st.session_state.chat_history:
-        if role == "assistant":
-            chat_html += (
-                f"<div class='message assistant'><b>EeeBee:</b> {message}</div>"
-            )
-        else:
-            chat_html += (
-                f"<div class='message user'><b>{user_name}:</b> {message}</div>"
-            )
-    full_html = f"""
-    <html>
-      <head>
-        <style>
-          #chat-container {{
-            height: 400px; 
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 10px;
-            background-color: #f3f4f6;
-            border-radius: 10px;
-          }}
-          .message {{
-            margin-bottom: 5px;
-            padding: 8px;
-            border-radius: 8px;
-          }}
-          .assistant {{
-            text-align: left;
-            color: #000;
-            background-color: #e0e7ff;
-          }}
-          .user {{
-            text-align: left;
-            color: #fff;
-            background-color: #2563eb;
-          }}
-        </style>
-      </head>
-      <body>
-        <div id="chat-container">
-          {chat_html}
-        </div>
-        <script>
-          var chatContainer = document.getElementById("chat-container");
-          chatContainer.scrollTop = chatContainer.scrollHeight;
-        </script>
-      </body>
-    </html>
-    """
-    st.components.v1.html(full_html, height=420)
-
-    user_input = st.chat_input("Enter your question about the topic")
-    if user_input:
-        handle_user_input(user_input)
 
 def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
@@ -1165,10 +1108,82 @@ Student Mode Instructions:
 - Always provide the list of weak concepts as: [{weak_concepts_text}].
 - Encourage the student to solve problems step-by-step and think critically.
 - Avoid giving answers. Instead, ask guiding questions and offer hints.
-- Your job is to help the student reach the answers on their own.
+- You job is to make the student reach the answers on its own.
 - If asked for exam or practice questions, present them progressively, aligned with {branch_name} NCERT guidelines.
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
 """
+
+def get_gpt_response(user_input):
+    if not client:
+        st.error("DeepSeek client is not initialized. Check your API key.")
+        return
+    
+    system_prompt = get_system_prompt()
+    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
+    conversation_history_formatted += [
+        {"role": role, "content": content}
+        for role, content in st.session_state.chat_history
+    ]
+    try:
+        with st.spinner("EeeBee is thinking..."):
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
+            mentioned_concept = None
+            for concept in concept_list:
+                if concept['ConceptText'].lower() in user_input.lower():
+                    mentioned_concept = concept['ConceptText']
+                    break
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=conversation_history_formatted,
+                max_tokens=2000,
+                stream=False
+            )
+            # Dot-notation instead of subscript
+            gpt_response = response.choices[0].message.content.strip()
+
+            st.session_state.chat_history.append(("assistant", gpt_response))
+
+            # If user specifically requests resources for a concept
+            if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
+                resources = get_resources_for_concept(
+                    mentioned_concept,
+                    concept_list,
+                    st.session_state.topic_id
+                )
+                if resources:
+                    resource_message = format_resources_message(resources)
+                    st.session_state.chat_history.append(("assistant", resource_message))
+
+    except Exception as e:
+        st.error(f"Error in GPT response: {e}")
+
+def display_chat(user_name: str):
+    chat_container = st.container()
+    with chat_container:
+        chat_history_html = """
+        <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
+        padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
+        """
+        for role, message in st.session_state.chat_history:
+            if role == "assistant":
+                chat_history_html += (
+                    "<div style='text-align: left; color: #000; background-color: #e0e7ff;"
+                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
+                    f"<b>EeeBee:</b> {message}</div>"
+                )
+            else:
+                chat_history_html += (
+                    "<div style='text-align: left; color: #fff; background-color: #2563eb;"
+                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
+                    f"<b>{user_name}:</b> {message}</div>"
+                )
+        chat_history_html += "</div>"
+        st.markdown(chat_history_html, unsafe_allow_html=True)
+
+    user_input = st.chat_input("Enter your question about the topic")
+    if user_input:
+        handle_user_input(user_input)
 
 # ----------------------------------------------------------------------------
 # 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
@@ -1368,7 +1383,7 @@ def display_tabs_parallel():
     baseline_testing_placeholder = tab_containers[3].empty()
     
     if not st.session_state.baseline_data or not st.session_state.all_concepts:
-        with st.spinner("Loading data..."):
+        with st.spinner("EeeBee is waking up..."):
             load_data_parallel()
     
     with tab_containers[0]:
@@ -1425,41 +1440,6 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
-
-def add_initial_greeting():
-    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
-
-        concept_list = st.session_state.auth_data.get('ConceptList', [])
-        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
-
-        concept_options = "\n\n**📚 Available Concepts:**\n"
-        for concept in concept_list:
-            concept_options += f"- {concept['ConceptText']}\n"
-
-        weak_concepts_text = ""
-        if weak_concepts:
-            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
-            for concept in weak_concepts:
-                weak_concepts_text += f"- {concept['ConceptText']}\n"
-
-        st.session_state.available_concepts = {
-            concept['ConceptText']: concept['ConceptID'] for concept in concept_list
-        }
-
-        greeting_message = (
-            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-            f"I'm here to help you with {topic_name}.\n\n"
-            f"You can:\n"
-            f"1. Ask me questions about any concept\n"
-            f"2. Request learning resources (videos, notes, exercises)\n"
-            f"3. Get help understanding specific topics\n"
-            f"{concept_options}"
-            f"{weak_concepts_text}\n\n"
-            f"What would you like to discuss?"
-        )
-        st.session_state.chat_history.append(("assistant", greeting_message))
 
 def main_screen():
     user_info = st.session_state.auth_data['UserInfo'][0]
