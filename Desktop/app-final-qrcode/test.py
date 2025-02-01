@@ -1038,7 +1038,7 @@ def handle_user_input(user_input, streaming_placeholder):
             )
             time.sleep(0.05)
         st.session_state.chat_history.append(("assistant", assistant_reply))
-        st.experimental_rerun()
+        st.rerun()
 
 # The chat display now uses a container for messages with streaming updates appearing inside it.
 def display_chat(user_name: str):
