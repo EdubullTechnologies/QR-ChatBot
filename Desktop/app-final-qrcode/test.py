@@ -1056,7 +1056,9 @@ def get_gpt_response_stream(user_input):
         )
         for chunk in response:
             delta = chunk.choices[0].delta
-            yield delta.get("content", "")
+            # Updated: use the 'content' attribute from delta
+            text_chunk = getattr(delta, "content", "")
+            yield text_chunk
     except Exception as e:
         yield f"Error: {e}"
 
