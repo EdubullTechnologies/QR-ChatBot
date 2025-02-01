@@ -56,7 +56,6 @@ except KeyError:
 
 # Initialize the DeepSeek (OpenAI-like) client if we have the key
 if OPENAI_API_KEY:
-    # Create the client with your base_url
     client = OpenAI(api_key=OPENAI_API_KEY)
 else:
     client = None
@@ -267,14 +266,12 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         spaceAfter=6
     )
 
-    # Title
     story.append(Paragraph("Exam Questions", title_style))
     user_name_display = user_name if user_name else "Teacher"
     concept_text_display = concept_text if concept_text else "Selected Concept"
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    # Split questions by blank lines => sections
     sections = re.split(r'\n\n', questions.strip())
     for section in sections:
         lines = [line.strip() for line in section.split('\n') if line.strip()]
@@ -301,7 +298,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
                         if pre_text:
                             question_items.append(ListItem(Paragraph(pre_text, question_style)))
 
-                        # convert latex to image
                         img_buffer = latex_to_image(latex)
                         if img_buffer:
                             if display_math:
@@ -311,7 +307,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
                             question_items.append(ListItem(img))
                         last_index = match.end()
 
-                # leftover text
                 post_text = line[last_index:]
                 if post_text:
                     question_items.append(ListItem(Paragraph(post_text, question_style)))
@@ -353,7 +348,6 @@ def generate_learning_path(concept_text):
             stream=False,
             max_tokens=1500
         )
-        # NOTE: Use dot-notation to access the message content
         gpt_response = response.choices[0].message.content.strip()
         return gpt_response
     except Exception as e:
@@ -471,7 +465,6 @@ def display_learning_path_with_resources(concept_text, learning_path, concept_li
                     exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
                     st.markdown(f"- [{exercise.get('ExerciseTitle', 'Practice Exercise')}]({exercise_url})")
 
-        # Download Button
         pdf_bytes = generate_learning_path_pdf(
             learning_path,
             concept_text,
@@ -546,17 +539,14 @@ def generate_all_concepts_pdf(concepts, user_name):
         spaceAfter=6
     )
 
-    # Title
     story.append(Paragraph("All Concepts", title_style))
     user_name_display = user_name if user_name else "User"
     story.append(Paragraph(f"User: {user_name_display}", subtitle_style))
     story.append(Spacer(1, 12))
 
-    # Table Headers
     headers = ["Concept ID", "Concept Text", "Topic ID", "Status"]
     table_data = [headers]
 
-    # Table Rows
     for concept in concepts:
         row = [
             str(concept.get("ConceptID", "")),
@@ -566,7 +556,6 @@ def generate_all_concepts_pdf(concepts, user_name):
         ]
         table_data.append(row)
 
-    # Create Table
     table = Table(table_data, repeatRows=1, colWidths=[1.2*inch, 3*inch, 1.2*inch, 1*inch])
     table_style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), '#4CAF50'),
@@ -670,13 +659,11 @@ def baseline_testing_report():
         user_id = user_info.get('UserID')
         org_code = user_info.get('OrgCode', '012')
         
-        # Get subject_id from session state
         subject_id = st.session_state.subject_id
         if not subject_id:
             st.error("Subject ID not available")
             return
 
-        # Fetch Baseline Data Early
         st.session_state.baseline_data = fetch_baseline_data(
             org_code=org_code,
             subject_id=subject_id,
@@ -688,15 +675,11 @@ def baseline_testing_report():
         st.warning("No baseline data available.")
         return
 
-    # Unpack needed sections
     u_list = baseline_data.get("u_list", [])
     s_skills = baseline_data.get("s_skills", [])
     concept_wise_data = baseline_data.get("concept_wise_data", [])
     taxonomy_list = baseline_data.get("taxonomy_list", [])
 
-    # ----------------------------------------------------------------
-    # A) Student Summary
-    # ----------------------------------------------------------------
     if u_list:
         user_summary = u_list[0]
         st.markdown("### Overall Performance Summary")
@@ -720,19 +703,14 @@ def baseline_testing_report():
         duration_mm = user_summary.get("DurationMM", 0)
         col3.metric("Time Taken", f"{duration_hh}h {duration_mm}m")
 
-    # ----------------------------------------------------------------
-    # B) Skill-wise Performance (NO TABLE, HORIZONTAL BAR)
-    # ----------------------------------------------------------------
     st.markdown("---")
     st.markdown("### Skill-wise Performance")
     if s_skills:
         df_skills = pd.DataFrame(s_skills)
-
         skill_chart = alt.Chart(df_skills).mark_bar().encode(
             x=alt.X('RightAnswerPercent:Q', title='Correct %', scale=alt.Scale(domain=[0, 100])),
             y=alt.Y('SubjectSkillName:N', sort='-x'),
-            tooltip=['SubjectSkillName:N', 'TotalQuestion:Q', 
-                     'RightAnswerCount:Q', 'RightAnswerPercent:Q']
+            tooltip=['SubjectSkillName:N', 'TotalQuestion:Q', 'RightAnswerCount:Q', 'RightAnswerPercent:Q']
         ).properties(
             width=700,
             height=400,
@@ -742,9 +720,6 @@ def baseline_testing_report():
     else:
         st.info("No skill-wise data available.")
 
-    # ----------------------------------------------------------------
-    # C) Concept-wise Data
-    # ----------------------------------------------------------------
     st.markdown("---")
     st.markdown("### Concept-wise Performance")
     if concept_wise_data:
@@ -753,16 +728,12 @@ def baseline_testing_report():
         df_concepts["Concept Status"] = df_concepts["RightAnswerPercent"].apply(
             lambda x: "✅" if x == 100.0 else "❌"
         )
-        df_concepts.rename(columns={"ConceptText": "Concept Name", 
-                                    "BranchName": "Class"}, inplace=True)
+        df_concepts.rename(columns={"ConceptText": "Concept Name", "BranchName": "Class"}, inplace=True)
         df_display = df_concepts[["S.No.", "Concept Name","Concept Status", "Class"]]
         st.dataframe(df_display, hide_index=True)
     else:
         st.info("No concept-wise data available.")
 
-    # ----------------------------------------------------------------
-    # D) Bloom’s Taxonomy Performance
-    # ----------------------------------------------------------------
     st.markdown("---")
     st.markdown("### Bloom’s Taxonomy Performance")
     if taxonomy_list:
@@ -784,16 +755,12 @@ def baseline_testing_report():
 # ------------------- 2I) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
     st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
-    
-    # Fetch all concepts from session state
     all_concepts = st.session_state.all_concepts
     if not all_concepts:
         st.warning("No concepts found.")
         return
     
-    # Updated table structure
     col_widths = [3, 1, 1.5, 1.5]
-    
     headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
     header_columns = st.columns(col_widths)
     for idx, header in enumerate(headers):
@@ -821,12 +788,10 @@ def display_all_concepts_tab():
             formatted_resources = "-"
         return (concept, formatted_resources)
     
-    # Parallelize
     with ThreadPoolExecutor(max_workers=10) as executor:
         future_to_concept = {executor.submit(fetch_resources, c): c for c in concepts_to_fetch}
         for future in as_completed(future_to_concept):
             concept, remedial = future.result()
-            
             concept_text = concept['concept_text']
             status = concept['status']
             status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
@@ -836,14 +801,12 @@ def display_all_concepts_tab():
             row_columns = st.columns(col_widths)
             row_columns[0].markdown(concept_text)
             row_columns[1].markdown(status_html, unsafe_allow_html=True)
-            
             with row_columns[2]:
                 if remedial != "-":
                     with st.expander("🧠 Remedial Resources"):
                         st.markdown(remedial)
                 else:
                     st.markdown("-")
-            
             with row_columns[3]:
                 if status in ["Weak", "Not-Attended"]:
                     st.button("Previous GAP", key=f"gap_{concept['concept_id']}", on_click=show_gap_message)
@@ -940,7 +903,6 @@ def teacher_dashboard():
             })
         df = pd.DataFrame(df)
 
-        # Main bar chart
         df_long = df.melt('Concept', var_name='Category', value_name='Count')
         chart = alt.Chart(df_long).mark_bar().encode(
             x='Concept:N',
@@ -964,7 +926,6 @@ def teacher_dashboard():
 
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
-        # Bloom's Level
         bloom_level = st.radio(
             "Select Bloom's Taxonomy Level for the Questions",
             [
@@ -974,9 +935,9 @@ def teacher_dashboard():
                 "L4 (Analyze)",
                 "L5 (Evaluate)"
             ],
-            index=3  # Default to L4
+            index=3
         )
-        bloom_short = bloom_level.split()[0]  # e.g. "L4"
+        bloom_short = bloom_level.split()[0]
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
@@ -1012,7 +973,6 @@ def teacher_dashboard():
                             max_tokens=4000,
                             stream=False
                         )
-                        # Use dot-notation to access the content
                         questions = response.choices[0].message.content.strip()
                         st.session_state.exam_questions = questions
                         st.success("Exam questions generated successfully!")
@@ -1035,7 +995,7 @@ def teacher_dashboard():
                         st.error(f"Error generating exam questions: {e}")
 
 # ------------------- 2J) CHAT FUNCTIONS WITH AUTO SCROLLING -------------------
-# New function to stream GPT responses chunk by chunk.
+# Stream GPT responses chunk by chunk.
 def get_gpt_response_stream(user_input):
     if not client:
         yield "DeepSeek client not initialized."
@@ -1056,87 +1016,50 @@ def get_gpt_response_stream(user_input):
         )
         for chunk in response:
             delta = chunk.choices[0].delta
-            # Updated: use the 'content' attribute from delta
             text_chunk = getattr(delta, "content", "")
+            if text_chunk is None:
+                text_chunk = ""
             yield text_chunk
     except Exception as e:
         yield f"Error: {e}"
 
-# Modified handler so that the user message appears immediately
-# and then the assistant reply is built gradually.
-def handle_user_input(user_input):
+# Modified handler so that the user message appears immediately and streaming occurs within the chat container.
+def handle_user_input(user_input, streaming_placeholder):
     if user_input:
-        # Append the user message immediately.
         st.session_state.chat_history.append(("user", user_input))
-        # Create a placeholder for streaming assistant reply.
-        placeholder = st.empty()
         assistant_reply = ""
-        # Stream the assistant reply in chunks.
         for chunk in get_gpt_response_stream(user_input):
+            if chunk is None:
+                chunk = ""
             assistant_reply += chunk
-            placeholder.markdown(f"<div style='text-align:left; color:#000; background-color:#e0e7ff; padding:8px; border-radius:8px; margin-bottom:5px;'><b>EeeBee:</b> {assistant_reply}</div>", unsafe_allow_html=True)
-            time.sleep(0.05)  # slight delay to simulate streaming
-        # Append the full assistant reply to chat history.
+            streaming_placeholder.markdown(
+                f"<div style='text-align:left; color:#000; background-color:#e0e7ff; padding:8px; border-radius:8px; margin-bottom:5px;'><b>EeeBee:</b> {assistant_reply}</div>",
+                unsafe_allow_html=True
+            )
+            time.sleep(0.05)
         st.session_state.chat_history.append(("assistant", assistant_reply))
-        st.rerun()
+        st.experimental_rerun()
 
-# The chat display uses an HTML container that auto-scrolls.
+# The chat display now uses a container for messages with streaming updates appearing inside it.
 def display_chat(user_name: str):
-    chat_html = ""
-    for role, message in st.session_state.chat_history:
-        if role == "assistant":
-            chat_html += (
-                f"<div class='message assistant'><b>EeeBee:</b> {message}</div>"
-            )
-        else:
-            chat_html += (
-                f"<div class='message user'><b>{user_name}:</b> {message}</div>"
-            )
-    full_html = f"""
-    <html>
-      <head>
-        <style>
-          #chat-container {{
-            height: 400px; 
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 10px;
-            background-color: #f3f4f6;
-            border-radius: 10px;
-          }}
-          .message {{
-            margin-bottom: 5px;
-            padding: 8px;
-            border-radius: 8px;
-          }}
-          .assistant {{
-            text-align: left;
-            color: #000;
-            background-color: #e0e7ff;
-          }}
-          .user {{
-            text-align: left;
-            color: #fff;
-            background-color: #2563eb;
-          }}
-        </style>
-      </head>
-      <body>
-        <div id="chat-container">
-          {chat_html}
-        </div>
-        <script>
-          var chatContainer = document.getElementById("chat-container");
-          chatContainer.scrollTop = chatContainer.scrollHeight;
-        </script>
-      </body>
-    </html>
-    """
-    st.components.v1.html(full_html, height=420)
-
+    chat_container = st.container()
+    with chat_container:
+        for role, message in st.session_state.chat_history:
+            if role == "assistant":
+                st.markdown(
+                    f"<div style='text-align:left; color:#000; background-color:#e0e7ff; padding:8px; border-radius:8px; margin-bottom:5px;'><b>EeeBee:</b> {message}</div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f"<div style='text-align:left; color:#fff; background-color:#2563eb; padding:8px; border-radius:8px; margin-bottom:5px;'><b>{user_name}:</b> {message}</div>",
+                    unsafe_allow_html=True
+                )
+        # This placeholder will be updated with streaming reply text.
+        streaming_placeholder = st.empty()
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
-        handle_user_input(user_input)
+        handle_user_input(user_input, streaming_placeholder)
 
 def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
@@ -1526,7 +1449,6 @@ if __name__ == "__main__":
 #         ],
 #         stream=False
 #     )
-#     # Access .content (not ['content'])
 #     print(response.choices[0].message.content)
 # else:
 #     print("DeepSeek client not available (missing API key).")
