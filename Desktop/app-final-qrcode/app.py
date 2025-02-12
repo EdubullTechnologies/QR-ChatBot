@@ -1290,7 +1290,7 @@ def login_screen():
 
     st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
-    user_type_choice = st.radio("Select User Type", ["Student", "Teacher"])
+    user_type_choice = st.radio("Select User Type", ["Student", "Teacher"], key="user_type_choice")
     user_type_value = 2 if user_type_choice == "Teacher" else 3
 
     org_code = st.text_input("🏫 School Code", key="org_code")
