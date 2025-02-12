@@ -1315,6 +1315,16 @@ def login_screen():
     else:
         st.warning("Please provide ?E=... or ?T=... in the URL.")
         return
+        
+    # Conditionally display the user type selection:
+    if st.session_state.is_english_mode:
+        # For English mode, force Student login and hide the radio button.
+        st.markdown("**User Type:** Student")
+        user_type_value = 3  # 3 for Student
+    else:
+        # For non-English mode, allow the user to choose.
+        user_type_choice = st.radio("Select User Type", ["Student", "Teacher"])
+        user_type_value = 2 if user_type_choice == "Teacher" else 3
 
     if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
         if topic_id is None:
