@@ -900,7 +900,7 @@ def teacher_dashboard():
         return
 
     batch_options = {b['BatchName']: b for b in batches}
-    selected_batch_name = st.selectbox("Select a Batch:", list(batch_options.keys()))
+    selected_batch_name = st.selectbox("Select a Batch:", list(batch_options.keys()), key="batch_selector")
     selected_batch = batch_options.get(selected_batch_name)
     selected_batch_id = selected_batch["BatchID"]
     total_students = selected_batch.get("StudentCount", 0)
@@ -973,19 +973,20 @@ def teacher_dashboard():
                 "L4 (Analyze)",
                 "L5 (Evaluate)"
             ],
-            index=3  # Default to L4
+            index=3,
+            key="bloom_taxonomy_selector"
         )
         bloom_short = bloom_level.split()[0]  # e.g. "L4"
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()))
+        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
 
         if chosen_concept_text:
             chosen_concept_id = concept_list[chosen_concept_text]
             st.session_state.selected_teacher_concept_id = chosen_concept_id
             st.session_state.selected_teacher_concept_text = chosen_concept_text
 
-            if st.button("Generate Exam Questions"):
+            if st.button("Generate Exam Questions", key="generate_exam_btn"):
                 if not client:
                     st.error("DeepSeek client is not initialized. Check your API key.")
                     return
@@ -1001,8 +1002,7 @@ def teacher_dashboard():
                     f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
                     f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
                     f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
-                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n"
-                    f"- Do not provide final solutions, only the questions.\n\n"
+                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
                     f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
                     f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
                 )
@@ -1290,20 +1290,14 @@ def login_screen():
 
     st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
-    user_type_choice = st.radio("Select User Type", ["Student", "Teacher"], key="user_type_choice")
-    user_type_value = 2 if user_type_choice == "Teacher" else 3
-
-    org_code = st.text_input("🏫 School Code", key="org_code")
-    login_id = st.text_input("👤 Login ID", key="login_id")
-    password = st.text_input("🔒 Password", type="password", key="password")
-
+    # Read query parameters from URL
     query_params = st.experimental_get_query_params()
     E_params = query_params.get("E", [None])
     T_params = query_params.get("T", [None])
-
     E_value = E_params[0]
     T_value = T_params[0]
 
+    # Check for conflicting parameters or missing ones
     if E_value is not None and T_value is not None:
         st.warning("Provide either ?E=xx for English OR ?T=xx for Non-English, not both.")
     elif E_value is not None and T_value is None:
@@ -1315,20 +1309,23 @@ def login_screen():
     else:
         st.warning("Please provide ?E=... or ?T=... in the URL.")
         return
-        
+
     # Conditionally display the user type selection:
     if st.session_state.is_english_mode:
         # For English mode, force Student login and hide the radio button.
         st.markdown("**User Type:** Student")
         user_type_value = 3  # 3 for Student
     else:
-        # For non-English mode, allow the user to choose.
-        user_type_choice = st.radio("Select User Type", ["Student", "Teacher"])
+        user_type_choice = st.radio("Select User Type", ["Student", "Teacher"], key="user_type_selector")
         user_type_value = 2 if user_type_choice == "Teacher" else 3
 
-    if st.button("🚀 Login and Start Chatting!") and not st.session_state.is_authenticated:
+    org_code = st.text_input("🏫 School Code", key="org_code")
+    login_id = st.text_input("👤 Login ID", key="login_id")
+    password = st.text_input("🔒 Password", type="password", key="password")
+
+    if st.button("🚀 Login and Start Chatting!", key="login_button") and not st.session_state.get("is_authenticated", False):
         if topic_id is None:
-            st.warning("Please ensure correct E or T parameter is provided.")
+            st.warning("Please ensure a correct E or T parameter is provided.")
             return
 
         if not org_code or not login_id or not password:
@@ -1459,7 +1456,7 @@ def main_screen():
 
     col1, col2 = st.columns([9, 1])
     with col2:
-        if st.button("Logout"):
+        if st.button("Logout", key="logout_button"):
             st.session_state.clear()
             st.rerun()
 
@@ -1501,22 +1498,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# -----------------------------------------------------------------------------
-# Example snippet of a direct call to the DeepSeek ChatCompletion outside the app:
-#
-# if client:
-#     response = client.chat.completions.create(
-#         model="gpt-4o-mini",
-#         messages=[
-#             {"role": "system", "content": "You are a helpful assistant"},
-#             {"role": "user", "content": "Hello"},
-#         ],
-#         stream=False
-#     )
-#     # Access .content (not ['content'])
-#     print(response.choices[0].message.content)
-# else:
-#     print("DeepSeek client not available (missing API key).")
-# -----------------------------------------------------------------------------
