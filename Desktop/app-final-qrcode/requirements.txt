@@ -71,3 +71,4 @@ speechrecognition
 extra-streamlit-components
 streamlit_cookies_manager
 streamlit-aggrid
+plotly
