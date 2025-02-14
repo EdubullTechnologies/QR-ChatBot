@@ -69,6 +69,7 @@ API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
 API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"  # New API Endpoint for All Concepts
 API_STUDENT_INFO = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts_AND_Students"
+API_STUDENT_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Concepts_OF_Students"
 
 # Initialize session state variables
 if "auth_data" not in st.session_state:
@@ -1628,6 +1629,26 @@ def fetch_student_info(batch_id, topic_id, org_code):
         st.error(f"Error fetching student info: {e}")
         return None
 
+def fetch_student_concepts(user_id, topic_id, org_code):
+    """Fetch detailed concept information for a specific student"""
+    params = {
+        "UserID": user_id,
+        "TopicID": topic_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_STUDENT_CONCEPTS, json=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching student concepts: {e}")
+        return None
+
 def handle_teacher_commands(user_input: str):
     """Handle teacher-specific chat commands"""
     input_lower = user_input.lower()
@@ -1711,8 +1732,6 @@ def handle_teacher_commands(user_input: str):
                 
             response += "Just type a student's name to analyze their progress"
             return response
-        else:
-            return "Please select a class first. Type 'show classes' to see your classes"
     
     # Select student (checking if input matches any student name)
     if hasattr(st.session_state, 'current_batch_students'):
@@ -1723,21 +1742,58 @@ def handle_teacher_commands(user_input: str):
         if selected_student:
             st.session_state.selected_student = selected_student
             
+            # Fetch detailed concept information
+            student_concepts = fetch_student_concepts(
+                user_id=selected_student['UserID'],
+                topic_id=st.session_state.topic_id,
+                org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
+            )
+            
             # Calculate progress percentage
             progress = (selected_student['ClearedConceptCount'] / selected_student['TotalConceptCount'] * 100) if selected_student['TotalConceptCount'] > 0 else 0
             
-            return (
+            # Format concept lists
+            weak_concepts = []
+            cleared_concepts = []
+            
+            if student_concepts:
+                weak_concepts = [
+                    f"- {concept['ConceptText']}"
+                    for concept in student_concepts.get('WeakConcepts_List', [])
+                ]
+                cleared_concepts = [
+                    f"- {concept['ConceptText']}"
+                    for concept in student_concepts.get('ClearedConcepts_List', [])
+                ]
+            
+            # Build response message
+            response = (
                 f"Looking at {selected_student['FullName']}'s progress:\n\n"
                 f"📊 Overall Progress: {progress:.1f}%\n"
                 f"- Total Concepts: {selected_student['TotalConceptCount']}\n"
                 f"- Concepts Cleared: {selected_student['ClearedConceptCount']}\n"
                 f"- Weak Concepts: {selected_student['WeakConceptCount']}\n\n"
+            )
+            
+            if weak_concepts:
+                response += "🔍 Weak Concepts:\n" + "\n".join(weak_concepts) + "\n\n"
+            else:
+                response += "✅ No weak concepts identified\n\n"
+                
+            if cleared_concepts:
+                response += "✨ Cleared Concepts:\n" + "\n".join(cleared_concepts) + "\n\n"
+            else:
+                response += "⚠️ No concepts cleared yet\n\n"
+            
+            response += (
                 f"You can ask me about:\n"
-                f"- How they're doing in specific concepts\n"
-                f"- Where they need help\n"
-                f"- Teaching strategies that might help\n"
+                f"- Specific teaching strategies for their weak concepts\n"
+                f"- How to reinforce their understanding\n"
+                f"- Ways to help them progress faster\n"
                 f"- How they compare to the class"
             )
+            
+            return response
     
     return None
 
