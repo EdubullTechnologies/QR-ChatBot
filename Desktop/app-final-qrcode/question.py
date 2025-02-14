@@ -7,7 +7,7 @@ from io import BytesIO
 # Initialize Gemini
 def initialize_genai():
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    return genai.GenerativeModel('gemini-pro')
+    return genai.GenerativeModel('gemini-2.0-flash')
 
 # Updated constants
 CLASSES = list(range(6, 13))  # 6th to 12th
@@ -19,46 +19,58 @@ BLOOMS_LEVELS = [
     "Analyze",
     "Evaluate"
 ]
-
+DIFFICULTY_LEVELS = ["Easy", "Medium", "Hard"]
 
 def parse_questions(text: str) -> List[dict]:
-    """Parse the generated text into structured question data"""
-    # This is a simple parser - you might need to adjust based on actual output format
+    """Improved parser to better handle question format"""
     questions = []
     current_question = {}
     
-    for line in text.split('\n'):
+    lines = text.split('\n')
+    for line in lines:
         line = line.strip()
-        if line.startswith(('Question', 'Q', '1.', '2.', '3.', '4.', '5.')):
+        if not line:
+            continue
+            
+        if line.startswith('Question:'):
             if current_question:
                 questions.append(current_question)
-            current_question = {'question': line}
-        elif 'Bloom' in line:
-            current_question['blooms_level'] = line
-        elif 'Difficulty' in line:
-            current_question['difficulty'] = line
-            
+            current_question = {'question': line.replace('Question:', '').strip()}
+        elif line.startswith("Bloom's Level:"):
+            current_question['blooms_level'] = line.replace("Bloom's Level:", '').strip()
+        elif line.startswith('Difficulty:'):
+            current_question['difficulty'] = line.replace('Difficulty:', '').strip()
+    
+    # Add the last question
     if current_question:
         questions.append(current_question)
     
     return questions
 
 def get_questions(model, subject: str, class_num: str, chapter: str, 
-                 blooms_levels: List[str], num_questions: int = 5):
-    prompt = f"""Generate {num_questions} questions for CBSE NCERT Class {class_num} 
-    {subject}, Chapter: {chapter}. The questions should be of the following Bloom's 
-    taxonomy levels: {', '.join(blooms_levels)}. 
-
-    For each question, please provide:
-    1. The question
-    2. Bloom's Level: [level]
-    3. Difficulty: [Easy/Medium/Hard]
-
-    Format each question clearly with these three components.
+                 blooms_levels: List[str], difficulty_levels: List[str], 
+                 num_questions: int = 5):
+    """Updated to include difficulty levels"""
+    prompt = f"""Generate {num_questions} educational questions about {chapter} suitable for Class {class_num} 
+    {subject} students. 
+    
+    Requirements:
+    - Bloom's taxonomy levels: {', '.join(blooms_levels)}
+    - Difficulty levels: {', '.join(difficulty_levels)}
+    
+    For each question, provide in this exact format:
+    Question: [The question text]
+    Bloom's Level: [specific level]
+    Difficulty: [specific difficulty]
+    
+    Ensure each question clearly matches the requested difficulty and Bloom's level.
     """
     
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        response = model.generate_content(prompt)
+        return response.text if response.text else "Unable to generate questions. Please try again."
+    except Exception as e:
+        return f"Error generating questions: {str(e)}"
 
 def export_to_excel(questions_data: List[dict]) -> BytesIO:
     """Convert questions to Excel file"""
@@ -114,7 +126,6 @@ def main():
         
         # Get chapters dynamically using Gemini
         with st.spinner("Loading chapters..."):
-            # Use session state to store chapters and prevent reloading
             if 'chapters' not in st.session_state or \
                'last_class' not in st.session_state or \
                'last_subject' not in st.session_state or \
@@ -134,12 +145,19 @@ def main():
             default=["Remember", "Understand"]
         )
         
+        # Add difficulty selection
+        difficulty_selected = st.multiselect(
+            "Select Difficulty Levels",
+            DIFFICULTY_LEVELS,
+            default=["Easy", "Medium"]
+        )
+        
         num_questions = st.slider("Number of Questions", 1, 10, 5)
         
         generate = st.button("Generate Questions")
     
     # Generate and display questions
-    if generate and blooms_selected:
+    if generate and blooms_selected and difficulty_selected:  # Check for difficulty selection
         with st.spinner("Generating questions..."):
             questions_text = get_questions(
                 model,
@@ -147,6 +165,7 @@ def main():
                 str(class_num),
                 chapter,
                 blooms_selected,
+                difficulty_selected,
                 num_questions
             )
             
@@ -165,6 +184,8 @@ def main():
                     file_name=f"questions_{subject}_class{class_num}_{chapter}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+            else:
+                st.error("No questions were generated. Please try again.")
 
 if __name__ == "__main__":
     main()
