@@ -37,18 +37,20 @@ SCIENCE_QUESTION_TYPES = [
 ]
 
 def parse_questions(text: str) -> List[dict]:
-    """Enhanced parser to handle MCQ format and question types"""
+    """Parse the generated text into structured question data"""
     questions = []
     current_question = {}
     current_options = []
     
-    lines = text.split('\n')
-    for line in lines:
+    for line in text.split('\n'):
         line = line.strip()
         if not line:
-            continue
-            
-        if line.startswith('Question:'):
+            if current_question:
+                current_question['options'] = current_options
+                questions.append(current_question)
+                current_question = {}
+                current_options = []
+        elif line.startswith('Question:'):
             if current_question:
                 current_question['options'] = current_options
                 questions.append(current_question)
