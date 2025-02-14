@@ -110,11 +110,42 @@ def get_questions(model, subject: str, class_num: str, chapter: str,
         return f"Error generating questions: {str(e)}"
 
 def export_to_excel(questions_data: List[dict]) -> BytesIO:
-    """Convert questions to Excel file"""
-    df = pd.DataFrame(questions_data)
+    """Convert questions to Excel file with proper formatting"""
+    # Create a DataFrame with all the question details
+    df = pd.DataFrame({
+        'Question': [q.get('question', '') for q in questions_data],
+        'Option A': [q.get('options', [])[0].replace('a) ', '') if len(q.get('options', [])) > 0 else '' for q in questions_data],
+        'Option B': [q.get('options', [])[1].replace('b) ', '') if len(q.get('options', [])) > 1 else '' for q in questions_data],
+        'Option C': [q.get('options', [])[2].replace('c) ', '') if len(q.get('options', [])) > 2 else '' for q in questions_data],
+        'Option D': [q.get('options', [])[3].replace('d) ', '') if len(q.get('options', [])) > 3 else '' for q in questions_data],
+        'Correct Answer': [q.get('correct_answer', '') for q in questions_data],
+        "Bloom's Level": [q.get('blooms_level', '') for q in questions_data],
+        'Difficulty': [q.get('difficulty', '') for q in questions_data],
+        'Question Type': [q.get('question_type', '') for q in questions_data]
+    })
+    
+    # Create Excel file
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Questions')
+        
+        # Get the workbook and the worksheet
+        workbook = writer.book
+        worksheet = writer.sheets['Questions']
+        
+        # Auto-adjust columns width
+        for column in worksheet.columns:
+            max_length = 0
+            column = [cell for cell in column]
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            worksheet.column_dimensions[column[0].column_letter].width = adjusted_width
+    
     output.seek(0)
     return output
 
