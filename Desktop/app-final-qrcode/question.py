@@ -114,8 +114,18 @@ def main():
         
         # Get chapters dynamically using Gemini
         with st.spinner("Loading chapters..."):
-            chapters = get_chapters(model, str(class_num), subject)
-            chapter = st.selectbox("Select Chapter", chapters)
+            # Use session state to store chapters and prevent reloading
+            if 'chapters' not in st.session_state or \
+               'last_class' not in st.session_state or \
+               'last_subject' not in st.session_state or \
+               st.session_state.last_class != class_num or \
+               st.session_state.last_subject != subject:
+                
+                st.session_state.chapters = get_chapters(model, str(class_num), subject)
+                st.session_state.last_class = class_num
+                st.session_state.last_subject = subject
+            
+            chapter = st.selectbox("Select Chapter", st.session_state.chapters)
         
         # Multiple selection for Bloom's levels
         blooms_selected = st.multiselect(
