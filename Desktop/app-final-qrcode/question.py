@@ -7,7 +7,7 @@ from io import BytesIO
 # Initialize Gemini
 def initialize_genai():
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    return genai.GenerativeModel('gemini-2.0-flash')
+    return genai.GenerativeModel('gemini-pro')
 
 # Updated constants
 CLASSES = list(range(6, 13))  # 6th to 12th
@@ -71,23 +71,34 @@ def export_to_excel(questions_data: List[dict]) -> BytesIO:
 
 def get_chapters(model, class_num: str, subject: str) -> List[str]:
     """Get list of chapters for given class and subject using Gemini"""
-    prompt = f"""List all the chapters from NCERT {subject} textbook for Class {class_num}.
-    Please provide only the chapter names in a simple list format.
+    prompt = f"""Based on your knowledge, provide a general list of typical chapters that might be covered in {subject} for Class {class_num}.
+    Please provide only chapter names in a simple list format.
     For example:
     1. Chapter Name
     2. Chapter Name
-    etc."""
+    etc.
     
-    response = model.generate_content(prompt)
+    Note: This is a general list, not specific to any particular textbook."""
     
-    # Parse the response to get chapter names
-    chapters = []
-    for line in response.text.split('\n'):
-        line = line.strip()
-        if line and any(line.startswith(str(i) + '.') for i in range(1, 21)):  # Assuming max 20 chapters
-            chapter_name = line.split('.', 1)[1].strip()
-            chapters.append(chapter_name)
-    return chapters
+    try:
+        response = model.generate_content(prompt)
+        if not response.text:
+            # Fallback if no response
+            return ["Please enter chapter name manually"]
+        
+        # Parse the response to get chapter names
+        chapters = []
+        for line in response.text.split('\n'):
+            line = line.strip()
+            if line and any(line.startswith(str(i) + '.') for i in range(1, 21)):
+                chapter_name = line.split('.', 1)[1].strip()
+                chapters.append(chapter_name)
+        
+        return chapters if chapters else ["Please enter chapter name manually"]
+        
+    except Exception as e:
+        st.error(f"Error generating chapter list: {str(e)}")
+        return ["Please enter chapter name manually"]
 
 def main():
     st.title("NCERT Question Generator")
