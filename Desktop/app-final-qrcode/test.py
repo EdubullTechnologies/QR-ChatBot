@@ -313,7 +313,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
                                 img = RLImage(img_buffer, width=4*inch, height=1*inch)
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
-                            question_items.append(ListItem(img)
+                            question_items.append(ListItem(img))
                         last_index = match.end()
 
                 # leftover text
