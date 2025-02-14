@@ -21,10 +21,26 @@ BLOOMS_LEVELS = [
 ]
 DIFFICULTY_LEVELS = ["Easy", "Medium", "Hard"]
 
+# Add new constants for question types
+MATH_QUESTION_TYPES = [
+    "Numerical Problems",
+    "Word Problems",
+    "Logical Reasoning",
+    "Proof-Based Questions"
+]
+
+SCIENCE_QUESTION_TYPES = [
+    "Numerical Problems",
+    "Word Problems",
+    "Assertion and Reason",
+    "Process-Based Questions"
+]
+
 def parse_questions(text: str) -> List[dict]:
-    """Improved parser to better handle question format"""
+    """Enhanced parser to handle MCQ format and question types"""
     questions = []
     current_question = {}
+    current_options = []
     
     lines = text.split('\n')
     for line in lines:
@@ -34,36 +50,57 @@ def parse_questions(text: str) -> List[dict]:
             
         if line.startswith('Question:'):
             if current_question:
+                current_question['options'] = current_options
                 questions.append(current_question)
+                current_options = []
             current_question = {'question': line.replace('Question:', '').strip()}
+        elif line.startswith(('a)', 'b)', 'c)', 'd)')):
+            current_options.append(line)
+        elif line.startswith('Correct Answer:'):
+            current_question['correct_answer'] = line.replace('Correct Answer:', '').strip()
         elif line.startswith("Bloom's Level:"):
             current_question['blooms_level'] = line.replace("Bloom's Level:", '').strip()
         elif line.startswith('Difficulty:'):
             current_question['difficulty'] = line.replace('Difficulty:', '').strip()
+        elif line.startswith('Question Type:'):
+            current_question['question_type'] = line.replace('Question Type:', '').strip()
     
     # Add the last question
     if current_question:
+        current_question['options'] = current_options
         questions.append(current_question)
     
     return questions
 
 def get_questions(model, subject: str, class_num: str, chapter: str, 
-                 blooms_levels: List[str], difficulty_levels: List[str], 
-                 num_questions: int = 5):
-    """Updated to include difficulty levels"""
-    prompt = f"""Generate {num_questions} educational questions about {chapter} suitable for Class {class_num} 
+                 blooms_levels: List[str], difficulty_levels: List[str],
+                 question_types: List[str], num_questions: int = 5):
+    """Updated to include question types and MCQ format"""
+    prompt = f"""Generate {num_questions} multiple choice questions about {chapter} suitable for Class {class_num} 
     {subject} students. 
     
     Requirements:
     - Bloom's taxonomy levels: {', '.join(blooms_levels)}
     - Difficulty levels: {', '.join(difficulty_levels)}
+    - Question types: {', '.join(question_types)}
     
     For each question, provide in this exact format:
     Question: [The question text]
+    Options:
+    a) [option a]
+    b) [option b]
+    c) [option c]
+    d) [option d]
+    Correct Answer: [a/b/c/d]
     Bloom's Level: [specific level]
     Difficulty: [specific difficulty]
+    Question Type: [specific type]
     
-    Ensure each question clearly matches the requested difficulty and Bloom's level.
+    Ensure each question:
+    1. Is in MCQ format with 4 options
+    2. Matches the requested difficulty, Bloom's level, and question type
+    3. Has clear and distinct options
+    4. For numerical problems, include step-wise solution
     """
     
     try:
@@ -138,14 +175,20 @@ def main():
             
             chapter = st.selectbox("Select Chapter", st.session_state.chapters)
         
-        # Multiple selection for Bloom's levels
+        # Dynamic question type selection based on subject
+        question_types = MATH_QUESTION_TYPES if subject == "Mathematics" else SCIENCE_QUESTION_TYPES
+        question_types_selected = st.multiselect(
+            "Select Question Types",
+            question_types,
+            default=[question_types[0]]
+        )
+        
         blooms_selected = st.multiselect(
             "Select Bloom's Taxonomy Levels",
             BLOOMS_LEVELS,
             default=["Remember", "Understand"]
         )
         
-        # Add difficulty selection
         difficulty_selected = st.multiselect(
             "Select Difficulty Levels",
             DIFFICULTY_LEVELS,
@@ -157,7 +200,7 @@ def main():
         generate = st.button("Generate Questions")
     
     # Generate and display questions
-    if generate and blooms_selected and difficulty_selected:  # Check for difficulty selection
+    if generate and blooms_selected and difficulty_selected and question_types_selected:
         with st.spinner("Generating questions..."):
             questions_text = get_questions(
                 model,
@@ -166,6 +209,7 @@ def main():
                 chapter,
                 blooms_selected,
                 difficulty_selected,
+                question_types_selected,
                 num_questions
             )
             
