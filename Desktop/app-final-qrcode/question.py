@@ -7,7 +7,7 @@ from io import BytesIO
 # Initialize Gemini
 def initialize_genai():
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    return genai.GenerativeModel('gemini-pro')
+    return genai.GenerativeModel('gemini-2.0-flash')
 
 # Updated constants
 CLASSES = list(range(6, 13))  # 6th to 12th
