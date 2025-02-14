@@ -435,7 +435,7 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
                                 img = RLImage(img_buffer, width=4*inch, height=1*inch)
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
-                            story.append(img)
+                            story.append(img))
                         last_index = match.end()
 
                 post_text = line[last_index:]
@@ -1225,16 +1225,27 @@ def get_system_prompt():
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
 
     if st.session_state.is_teacher:
+        batches = st.session_state.auth_data.get("BatchList", [])
+        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
+        
         return f"""
 You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
-- Offer insights into common student difficulties and ways to address them.
-- Encourage a teaching methodology where students learn progressively.
+- Available batches:\n{batch_list}
+- When asked about batches, show the above list and ask to select one.
+- When a batch is selected, fetch and show the student list for that batch.
+- Keep track of the currently selected student for context.
+- If user wants to switch students, help them select a new one.
 - Keep all mathematical expressions within LaTeX delimiters.
-- Focus on helping teachers design effective teaching strategies and assessments.
+- Focus on helping teachers analyze student performance and design effective strategies.
+
+Commands to recognize:
+- "show batches" or "list batches" - Display available batches
+- "select batch [BatchName]" or "choose batch [BatchName]" - Select a specific batch
+- "show students" or "list students" - Show students in current batch
+- "select student [StudentName]" or "discuss [StudentName]" - Select a student to discuss
 """
     else:
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
@@ -1260,43 +1271,31 @@ def get_gpt_response(user_input):
         st.error("DeepSeek client is not initialized. Check your API key.")
         return
     
+    if st.session_state.is_teacher:
+        # First check if it's a command
+        command_response = handle_teacher_commands(user_input)
+        if command_response:
+            st.session_state.chat_history.append(("assistant", command_response))
+            return
+    
+    # Continue with normal GPT response for non-commands
     system_prompt = get_system_prompt()
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [
         {"role": role, "content": content}
         for role, content in st.session_state.chat_history
     ]
+    
     try:
         with st.spinner("EeeBee is thinking..."):
-            concept_list = st.session_state.auth_data.get('ConceptList', [])
-            mentioned_concept = None
-            for concept in concept_list:
-                if concept['ConceptText'].lower() in user_input.lower():
-                    mentioned_concept = concept['ConceptText']
-                    break
-
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=conversation_history_formatted,
                 max_tokens=2000,
                 stream=False
             )
-            # Dot-notation instead of subscript
             gpt_response = response.choices[0].message.content.strip()
-
             st.session_state.chat_history.append(("assistant", gpt_response))
-
-            # If user specifically requests resources for a concept
-            if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
-                resources = get_resources_for_concept(
-                    mentioned_concept,
-                    concept_list,
-                    st.session_state.topic_id
-                )
-                if resources:
-                    resource_message = format_resources_message(resources)
-                    st.session_state.chat_history.append(("assistant", resource_message))
-
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
 
@@ -1313,10 +1312,14 @@ def display_chat(user_name: str):
         """)
     
     with chat_container:
-        chat_history_html = """
-        <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
+        # Add unique key for chat container
+        chat_key = f"chat_container_{len(st.session_state.chat_history)}"
+        
+        chat_history_html = f"""
+        <div id="{chat_key}" style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
         padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
         """
+        
         for role, message in st.session_state.chat_history:
             if role == "assistant":
                 chat_history_html += (
@@ -1330,7 +1333,24 @@ def display_chat(user_name: str):
                     "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
                     f"<b>{user_name}:</b> {message}</div>"
                 )
+        
         chat_history_html += "</div>"
+        
+        # Add JavaScript for autoscroll
+        chat_history_html += f"""
+        <script>
+            function scrollToBottom() {{
+                var chatContainer = document.getElementById("{chat_key}");
+                if (chatContainer) {{
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }}
+            }}
+            // Call immediately and after a short delay to ensure content is loaded
+            scrollToBottom();
+            setTimeout(scrollToBottom, 100);
+        </script>
+        """
+        
         st.markdown(chat_history_html, unsafe_allow_html=True)
 
     user_input = st.chat_input("Enter your question about the topic")
@@ -1664,6 +1684,67 @@ def fetch_student_info(batch_id, topic_id, org_code):
     except Exception as e:
         st.error(f"Error fetching student info: {e}")
         return None
+
+def handle_teacher_commands(user_input: str):
+    """Handle teacher-specific chat commands"""
+    input_lower = user_input.lower()
+    
+    # Show batches
+    if "show batches" in input_lower or "list batches" in input_lower:
+        batches = st.session_state.auth_data.get("BatchList", [])
+        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
+        return f"Available batches:\n{batch_list}\n\nTo select a batch, type 'select batch [BatchName]'"
+    
+    # Select batch
+    if "select batch" in input_lower or "choose batch" in input_lower:
+        batch_name = user_input.split("batch")[-1].strip()
+        batches = st.session_state.auth_data.get("BatchList", [])
+        selected_batch = next((b for b in batches if b['BatchName'].lower() == batch_name.lower()), None)
+        
+        if selected_batch:
+            # Fetch student info
+            student_info = fetch_student_info(
+                selected_batch["BatchID"],
+                st.session_state.topic_id,
+                st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
+            )
+            
+            if student_info and student_info.get("Students"):
+                st.session_state.current_batch_students = student_info["Students"]
+                students_list = "\n".join([f"- {s['FullName']}" for s in student_info["Students"]])
+                return f"Selected batch: {batch_name}\n\nStudents in this batch:\n{students_list}\n\nTo discuss a student, type 'select student [StudentName]'"
+            else:
+                return "Unable to fetch student information for this batch."
+        else:
+            return f"Batch '{batch_name}' not found. Type 'show batches' to see available batches."
+    
+    # Show students in current batch
+    if "show students" in input_lower or "list students" in input_lower:
+        if hasattr(st.session_state, 'current_batch_students'):
+            students_list = "\n".join([f"- {s['FullName']}" for s in st.session_state.current_batch_students])
+            return f"Students in current batch:\n{students_list}\n\nTo discuss a student, type 'select student [StudentName]'"
+        else:
+            return "Please select a batch first. Type 'show batches' to see available batches."
+    
+    # Select student
+    if "select student" in input_lower or "discuss" in input_lower:
+        if not hasattr(st.session_state, 'current_batch_students'):
+            return "Please select a batch first. Type 'show batches' to see available batches."
+            
+        student_name = user_input.split("student")[-1].strip() if "select student" in input_lower else user_input.split("discuss")[-1].strip()
+        selected_student = next((s for s in st.session_state.current_batch_students if s['FullName'].lower() == student_name.lower()), None)
+        
+        if selected_student:
+            st.session_state.selected_student = selected_student
+            return f"Now discussing {selected_student['FullName']}:\n\n" + \
+                   f"- Total Concepts: {selected_student['TotalConceptCount']}\n" + \
+                   f"- Weak Concepts: {selected_student['WeakConceptCount']}\n" + \
+                   f"- Cleared Concepts: {selected_student['ClearedConceptCount']}\n\n" + \
+                   "What would you like to know about their progress?"
+        else:
+            return f"Student '{student_name}' not found. Type 'show students' to see available students."
+    
+    return None
 
 if __name__ == "__main__":
     main()
