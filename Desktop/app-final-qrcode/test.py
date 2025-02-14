@@ -1115,74 +1115,24 @@ def add_initial_greeting():
         topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
         if st.session_state.is_teacher:
-            # Get topic_id from URL parameter (T=...)
-            topic_id = st.session_state.topic_id
-            
-            # First, handle batch selection
             batches = st.session_state.auth_data.get("BatchList", [])
-            if batches:
-                batch_options = {b['BatchName']: b for b in batches}
-                selected_batch_name = st.selectbox(
-                    "Select a Batch to analyze:",
-                    list(batch_options.keys()),
-                    key="chat_batch_selector"
-                )
-                
-                if selected_batch_name:
-                    selected_batch = batch_options[selected_batch_name]
-                    batch_id = selected_batch["BatchID"]
-                    
-                    # Only fetch student info after batch is selected
-                    if batch_id:
-                        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
-                        org_code = user_info.get('OrgCode', '012')
-                        
-                        # Fetch student info with required parameters
-                        student_info = fetch_student_info(
-                            batch_id=batch_id,
-                            topic_id=topic_id,
-                            org_code=org_code
-                        )
-                        
-                        if student_info and student_info.get("Students"):
-                            # Now we can show student selection
-                            students = student_info["Students"]
-                            student_options = {
-                                f"{s['FullName']} (ID: {s['UserID']})": s 
-                                for s in students
-                            }
-                            
-                            selected_student_name = st.selectbox(
-                                "Select a student to discuss:",
-                                options=list(student_options.keys()),
-                                key="chat_student_selector"
-                            )
-                            
-                            if selected_student_name:
-                                selected_student = student_options[selected_student_name]
-                                st.session_state.selected_student = selected_student
-                                
-                                # Get concept data for the selected student
-                                concepts_data = student_info.get("Concepts", [])
-                                concepts_text = "\n".join([
-                                    f"- {c['ConceptText']}: {c['ClearedStudentCount']}/{c['AttendedStudentCount']} students cleared"
-                                    for c in concepts_data
-                                ])
-                                
-                                greeting_message = (
-                                    f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-                                    f"I'm here to help you analyze and support "
-                                    f"{selected_student['FullName']}'s progress in {topic_name}.\n\n"
-                                    f"Student Overview:\n"
-                                    f"- Total Concepts: {selected_student['TotalConceptCount']}\n"
-                                    f"- Weak Concepts: {selected_student['WeakConceptCount']}\n"
-                                    f"- Cleared Concepts: {selected_student['ClearedConceptCount']}\n\n"
-                                    f"Class Concepts Overview:\n{concepts_text}\n\n"
-                                    f"What would you like to know about {selected_student['FullName']}'s progress?"
-                                )
-                                st.session_state.chat_history.append(("assistant", greeting_message))
-                        else:
-                            st.error("Unable to fetch student information for this batch.")
+            batch_list = "\n".join([
+                f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
+                for b in batches
+            ])
+            
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
+                f"You are currently teaching the following classes:\n{batch_list}\n\n"
+                f"To get started:\n"
+                f"1. Type 'show batches' to see your classes\n"
+                f"2. Type 'select batch [BatchName]' to choose a class\n"
+                f"3. Then type 'show students' to see the student list\n"
+                f"4. Finally type 'select student [StudentName]' to analyze a specific student\n\n"
+                f"What would you like to do?"
+            )
+            st.session_state.chat_history.append(("assistant", greeting_message))
         else:
             # Existing student mode code
             concept_list = st.session_state.auth_data.get('ConceptList', [])
@@ -1692,8 +1642,11 @@ def handle_teacher_commands(user_input: str):
     # Show batches
     if "show batches" in input_lower or "list batches" in input_lower:
         batches = st.session_state.auth_data.get("BatchList", [])
-        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
-        return f"Available batches:\n{batch_list}\n\nTo select a batch, type 'select batch [BatchName]'"
+        batch_list = "\n".join([
+            f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
+            for b in batches
+        ])
+        return f"Your classes:\n{batch_list}\n\nTo select a class, type 'select batch [BatchName]'"
     
     # Select batch
     if "select batch" in input_lower or "choose batch" in input_lower:
@@ -1711,36 +1664,94 @@ def handle_teacher_commands(user_input: str):
             
             if student_info and student_info.get("Students"):
                 st.session_state.current_batch_students = student_info["Students"]
-                students_list = "\n".join([f"- {s['FullName']}" for s in student_info["Students"]])
-                return f"Selected batch: {batch_name}\n\nStudents in this batch:\n{students_list}\n\nTo discuss a student, type 'select student [StudentName]'"
+                st.session_state.current_batch_concepts = student_info.get("Concepts", [])
+                
+                # Calculate class statistics
+                total_students = len(student_info["Students"])
+                concepts = student_info.get("Concepts", [])
+                
+                # Prepare concept statistics
+                concept_stats = []
+                for concept in concepts:
+                    cleared_percent = (concept['ClearedStudentCount'] / concept['AttendedStudentCount'] * 100) if concept['AttendedStudentCount'] > 0 else 0
+                    concept_stats.append(
+                        f"- {concept['ConceptText']}: {concept['ClearedStudentCount']}/{concept['AttendedStudentCount']} "
+                        f"students cleared ({cleared_percent:.1f}%)"
+                    )
+                
+                concept_overview = "\n".join(concept_stats)
+                
+                return (
+                    f"Selected class: {batch_name}\n\n"
+                    f"Class Overview:\n"
+                    f"- Total Students: {total_students}\n"
+                    f"- Concepts Coverage:\n{concept_overview}\n\n"
+                    f"To see student list, type 'show students'"
+                )
             else:
-                return "Unable to fetch student information for this batch."
+                return "Unable to fetch student information for this class."
         else:
-            return f"Batch '{batch_name}' not found. Type 'show batches' to see available batches."
+            return f"Class '{batch_name}' not found. Type 'show batches' to see available classes."
     
     # Show students in current batch
     if "show students" in input_lower or "list students" in input_lower:
         if hasattr(st.session_state, 'current_batch_students'):
-            students_list = "\n".join([f"- {s['FullName']}" for s in st.session_state.current_batch_students])
-            return f"Students in current batch:\n{students_list}\n\nTo discuss a student, type 'select student [StudentName]'"
+            students = st.session_state.current_batch_students
+            # Group students by progress
+            all_cleared = []
+            partial_progress = []
+            no_progress = []
+            
+            for student in students:
+                if student['ClearedConceptCount'] == student['TotalConceptCount']:
+                    all_cleared.append(student['FullName'])
+                elif student['ClearedConceptCount'] > 0:
+                    partial_progress.append(
+                        f"- {student['FullName']} ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
+                    )
+                else:
+                    no_progress.append(student['FullName'])
+            
+            response = "Students in current class:\n\n"
+            
+            if all_cleared:
+                response += "✅ Completed all concepts:\n- " + "\n- ".join(all_cleared) + "\n\n"
+            if partial_progress:
+                response += "🔄 In progress:\n" + "\n".join(partial_progress) + "\n\n"
+            if no_progress:
+                response += "⚠️ No concepts cleared:\n- " + "\n- ".join(no_progress) + "\n\n"
+                
+            response += "To analyze a specific student, type 'select student [StudentName]'"
+            return response
         else:
-            return "Please select a batch first. Type 'show batches' to see available batches."
+            return "Please select a class first. Type 'show batches' to see available classes."
     
     # Select student
     if "select student" in input_lower or "discuss" in input_lower:
         if not hasattr(st.session_state, 'current_batch_students'):
-            return "Please select a batch first. Type 'show batches' to see available batches."
+            return "Please select a class first. Type 'show batches' to see available classes."
             
         student_name = user_input.split("student")[-1].strip() if "select student" in input_lower else user_input.split("discuss")[-1].strip()
         selected_student = next((s for s in st.session_state.current_batch_students if s['FullName'].lower() == student_name.lower()), None)
         
         if selected_student:
             st.session_state.selected_student = selected_student
-            return f"Now discussing {selected_student['FullName']}:\n\n" + \
-                   f"- Total Concepts: {selected_student['TotalConceptCount']}\n" + \
-                   f"- Weak Concepts: {selected_student['WeakConceptCount']}\n" + \
-                   f"- Cleared Concepts: {selected_student['ClearedConceptCount']}\n\n" + \
-                   "What would you like to know about their progress?"
+            
+            # Calculate progress percentage
+            progress = (selected_student['ClearedConceptCount'] / selected_student['TotalConceptCount'] * 100) if selected_student['TotalConceptCount'] > 0 else 0
+            
+            return (
+                f"Now analyzing {selected_student['FullName']}'s progress:\n\n"
+                f"📊 Overall Progress: {progress:.1f}%\n"
+                f"- Total Concepts: {selected_student['TotalConceptCount']}\n"
+                f"- Concepts Cleared: {selected_student['ClearedConceptCount']}\n"
+                f"- Weak Concepts: {selected_student['WeakConceptCount']}\n\n"
+                f"What would you like to know about their progress? You can ask about:\n"
+                f"- Specific concept performance\n"
+                f"- Learning gaps\n"
+                f"- Recommended interventions\n"
+                f"- Comparison with class average"
+            )
         else:
             return f"Student '{student_name}' not found. Type 'show students' to see available students."
     
