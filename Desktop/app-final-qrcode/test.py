@@ -1649,6 +1649,32 @@ def fetch_student_concepts(user_id, topic_id, org_code):
         st.error(f"Error fetching student concepts: {e}")
         return None
 
+def format_time(seconds):
+    """Convert seconds to a readable format"""
+    if seconds == 0:
+        return "N/A"
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+    if minutes > 0:
+        return f"{minutes}m {remaining_seconds}s"
+    return f"{remaining_seconds}s"
+
+def format_concept_details(concept):
+    """Format concept details with performance metrics"""
+    if concept['AttendedQuestion'] == 0:
+        return (
+            f"- {concept['ConceptText']}\n"
+            f"  📝 Not attempted any questions yet"
+        )
+    
+    return (
+        f"- {concept['ConceptText']}\n"
+        f"  📝 Questions: {concept['CorrectQuestion']}/{concept['AttendedQuestion']} correct "
+        f"({concept['AvgMarksPercent']}%)\n"
+        f"  ⏱️ Average time per question: {format_time(concept['AvgTimeTaken_SS'])}\n"
+        f"  ⌛ Total time spent: {format_time(concept['TotalTimeTaken_SS'])}"
+    )
+
 def handle_teacher_commands(user_input: str):
     """Handle teacher-specific chat commands"""
     input_lower = user_input.lower()
@@ -1752,45 +1778,66 @@ def handle_teacher_commands(user_input: str):
             # Calculate progress percentage
             progress = (selected_student['ClearedConceptCount'] / selected_student['TotalConceptCount'] * 100) if selected_student['TotalConceptCount'] > 0 else 0
             
-            # Format concept lists
-            weak_concepts = []
-            cleared_concepts = []
+            # Format concept details with performance metrics
+            weak_concepts_details = []
+            cleared_concepts_details = []
             
             if student_concepts:
-                weak_concepts = [
-                    f"- {concept['ConceptText']}"
+                weak_concepts_details = [
+                    format_concept_details(concept)
                     for concept in student_concepts.get('WeakConcepts_List', [])
                 ]
-                cleared_concepts = [
-                    f"- {concept['ConceptText']}"
+                cleared_concepts_details = [
+                    format_concept_details(concept)
                     for concept in student_concepts.get('ClearedConcepts_List', [])
                 ]
+            
+            # Calculate overall statistics
+            total_questions = 0
+            total_correct = 0
+            total_time = 0
+            attempted_concepts = 0
+            
+            for concept in student_concepts.get('WeakConcepts_List', []) + student_concepts.get('ClearedConcepts_List', []):
+                if concept['AttendedQuestion'] > 0:
+                    attempted_concepts += 1
+                    total_questions += concept['AttendedQuestion']
+                    total_correct += concept['CorrectQuestion']
+                    total_time += concept['TotalTimeTaken_SS']
             
             # Build response message
             response = (
                 f"Looking at {selected_student['FullName']}'s progress:\n\n"
-                f"📊 Overall Progress: {progress:.1f}%\n"
-                f"- Total Concepts: {selected_student['TotalConceptCount']}\n"
-                f"- Concepts Cleared: {selected_student['ClearedConceptCount']}\n"
-                f"- Weak Concepts: {selected_student['WeakConceptCount']}\n\n"
+                f"📊 Overall Performance:\n"
+                f"- Progress: {progress:.1f}%\n"
             )
             
-            if weak_concepts:
-                response += "🔍 Weak Concepts:\n" + "\n".join(weak_concepts) + "\n\n"
+            if attempted_concepts > 0:
+                avg_accuracy = (total_correct / total_questions * 100) if total_questions > 0 else 0
+                response += (
+                    f"- Overall Accuracy: {avg_accuracy:.1f}%\n"
+                    f"- Total Questions Attempted: {total_questions}\n"
+                    f"- Total Time Spent: {format_time(total_time)}\n"
+                )
+            
+            response += "\n🔍 Concepts Needing Attention:\n"
+            if weak_concepts_details:
+                response += "\n".join(weak_concepts_details) + "\n"
             else:
-                response += "✅ No weak concepts identified\n\n"
-                
-            if cleared_concepts:
-                response += "✨ Cleared Concepts:\n" + "\n".join(cleared_concepts) + "\n\n"
+                response += "✅ No weak concepts identified\n"
+            
+            response += "\n✨ Mastered Concepts:\n"
+            if cleared_concepts_details:
+                response += "\n".join(cleared_concepts_details) + "\n"
             else:
-                response += "⚠️ No concepts cleared yet\n\n"
+                response += "⚠️ No concepts cleared yet\n"
             
             response += (
-                f"You can ask me about:\n"
-                f"- Specific teaching strategies for their weak concepts\n"
-                f"- How to reinforce their understanding\n"
-                f"- Ways to help them progress faster\n"
-                f"- How they compare to the class"
+                f"\nYou can ask me about:\n"
+                f"- Specific teaching strategies for concepts they're struggling with\n"
+                f"- How to improve their accuracy and speed\n"
+                f"- Ways to help them progress in specific concepts\n"
+                f"- Detailed analysis of their performance in any concept"
             )
             
             return response
