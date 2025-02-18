@@ -28,6 +28,7 @@ import altair as alt
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import plotly.express as px
 
 # Import DeepSeek-style client from openai package
 try:
@@ -67,6 +68,8 @@ API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
 API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"  # New API Endpoint for All Concepts
+API_STUDENT_INFO = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts_AND_Students"
+API_STUDENT_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Concepts_OF_Students"
 
 # Initialize session state variables
 if "auth_data" not in st.session_state:
@@ -114,6 +117,10 @@ if "remedial_info" not in st.session_state:
     st.session_state.remedial_info = None
 if 'show_gap_message' not in st.session_state:
     st.session_state.show_gap_message = False
+if "selected_student" not in st.session_state:
+    st.session_state.selected_student = None
+if "student_info" not in st.session_state:
+    st.session_state.student_info = None
 
 # Define the show_gap_message function globally
 def show_gap_message():
@@ -760,10 +767,10 @@ def baseline_testing_report():
         st.info("No concept-wise data available.")
 
     # ----------------------------------------------------------------
-    # D) Bloom’s Taxonomy Performance
+    # D) Bloom's Taxonomy Performance
     # ----------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### Bloom’s Taxonomy Performance")
+    st.markdown("### Bloom's Taxonomy Performance")
     if taxonomy_list:
         df_taxonomy = pd.DataFrame(taxonomy_list)
         tax_chart = alt.Chart(df_taxonomy).mark_bar().encode(
@@ -1037,41 +1044,126 @@ def teacher_dashboard():
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
 
+    if selected_batch_id:
+        # Fetch student info when batch is selected
+        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+        org_code = user_info.get('OrgCode', '012')
+        
+        student_info = fetch_student_info(
+            selected_batch_id, 
+            st.session_state.topic_id,
+            org_code
+        )
+        
+        if student_info:
+            st.session_state.student_info = student_info
+            
+            # Display concept-wise analytics
+            st.subheader("📊 Concept-wise Analysis")
+            concepts_df = pd.DataFrame(student_info["Concepts"])
+            if not concepts_df.empty:
+                fig = px.bar(concepts_df, 
+                    x="ConceptText",
+                    y=["AttendedStudentCount", "ClearedStudentCount"],
+                    title="Concept Performance Overview",
+                    barmode="group"
+                )
+                st.plotly_chart(fig)
+            
+            # Student selection
+            st.subheader("👥 Student Selection")
+            students = student_info["Students"]
+            student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
+            
+            selected_student_name = st.selectbox(
+                "Select a student to view detailed analysis:",
+                options=list(student_options.keys())
+            )
+            
+            if selected_student_name:
+                selected_student = student_options[selected_student_name]
+                st.session_state.selected_student = selected_student
+                
+                # Display student analytics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Concepts", selected_student["TotalConceptCount"])
+                col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
+                col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
+                
+                # Calculate and display progress
+                progress = (selected_student["ClearedConceptCount"] / 
+                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
+                
+                st.progress(progress/100)
+                st.markdown(f"**Overall Progress:** {progress:.1f}%")
+                
+                # Add action buttons for the selected student
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Generate Learning Path", key=f"gen_path_{selected_student['UserID']}"):
+                        # Integrate with your existing learning path generation
+                        st.info("Generating personalized learning path...")
+                        
+                with col2:
+                    if st.button("View Detailed Report", key=f"view_report_{selected_student['UserID']}"):
+                        # Add detailed student report view
+                        st.info("Loading detailed student report...")
+
 # ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
     if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
         topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
-        concept_list = st.session_state.auth_data.get('ConceptList', [])
-        weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+        if st.session_state.is_teacher:
+            batches = st.session_state.auth_data.get("BatchList", [])
+            batch_list = "\n".join([
+                f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
+                for b in batches
+            ])
+            
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
+                f"You are currently teaching these classes:\n{batch_list}\n\n"
+                f"To get started:\n"
+                f"1. Type 'show classes' to see your classes\n"
+                f"2. Just type the class name you want to analyze (e.g., '10A')\n"
+                f"3. Type 'show students' to see all students in that class\n"
+                f"4. Type the student's name you want to analyze (e.g., 'John')\n\n"
+                f"What would you like to do?"
+            )
+            st.session_state.chat_history.append(("assistant", greeting_message))
+        else:
+            # Existing student mode code
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
+            weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+            concept_options = "\n\n**📚 Available Concepts:**\n"
+            for concept in concept_list:
+                concept_options += f"- {concept['ConceptText']}\n"
 
-        concept_options = "\n\n**📚 Available Concepts:**\n"
-        for concept in concept_list:
-            concept_options += f"- {concept['ConceptText']}\n"
+            weak_concepts_text = ""
+            if weak_concepts:
+                weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
+                for concept in weak_concepts:
+                    weak_concepts_text += f"- {concept['ConceptText']}\n"
 
-        weak_concepts_text = ""
-        if weak_concepts:
-            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
-            for concept in weak_concepts:
-                weak_concepts_text += f"- {concept['ConceptText']}\n"
+            st.session_state.available_concepts = {
+                concept['ConceptText']: concept['ConceptID'] for concept in concept_list
+            }
 
-        st.session_state.available_concepts = {
-            concept['ConceptText']: concept['ConceptID'] for concept in concept_list
-        }
-
-        greeting_message = (
-            f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-            f"I'm here to help you with {topic_name}.\n\n"
-            f"You can:\n"
-            f"1. Ask me questions about any concept\n"
-            f"2. Request learning resources (videos, notes, exercises)\n"
-            f"3. Get help understanding specific topics\n"
-            f"{concept_options}"
-            f"{weak_concepts_text}\n\n"
-            f"What would you like to discuss?"
-        )
-        st.session_state.chat_history.append(("assistant", greeting_message))
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you with {topic_name}.\n\n"
+                f"You can:\n"
+                f"1. Ask me questions about any concept\n"
+                f"2. Request learning resources (videos, notes, exercises)\n"
+                f"3. Get help understanding specific topics\n"
+                f"{concept_options}"
+                f"{weak_concepts_text}\n\n"
+                f"What would you like to discuss?"
+            )
+            st.session_state.chat_history.append(("assistant", greeting_message))
 
 def handle_user_input(user_input):
     if user_input:
@@ -1084,16 +1176,27 @@ def get_system_prompt():
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
 
     if st.session_state.is_teacher:
+        batches = st.session_state.auth_data.get("BatchList", [])
+        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
+        
         return f"""
 You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
-- Offer insights into common student difficulties and ways to address them.
-- Encourage a teaching methodology where students learn progressively.
+- Available batches:\n{batch_list}
+- When asked about batches, show the above list and ask to select one.
+- When a batch is selected, fetch and show the student list for that batch.
+- Keep track of the currently selected student for context.
+- If user wants to switch students, help them select a new one.
 - Keep all mathematical expressions within LaTeX delimiters.
-- Focus on helping teachers design effective teaching strategies and assessments.
+- Focus on helping teachers analyze student performance and design effective strategies.
+
+Commands to recognize:
+- "show classes" or "show batches" or "list classes" or "list batches" - Display available batches
+- "select batch [BatchName]" or "choose batch [BatchName]" - Select a specific batch
+- "show students" or "list students" - Show students in current batch
+- "select student [StudentName]" or "discuss [StudentName]" - Select a student to discuss
 """
     else:
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
@@ -1119,53 +1222,48 @@ def get_gpt_response(user_input):
         st.error("DeepSeek client is not initialized. Check your API key.")
         return
     
+    if st.session_state.is_teacher:
+        # First check if it's a command
+        command_response = handle_teacher_commands(user_input)
+        if command_response:
+            st.session_state.chat_history.append(("assistant", command_response))
+            return
+    
+    # Continue with normal GPT response for non-commands
     system_prompt = get_system_prompt()
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
     conversation_history_formatted += [
         {"role": role, "content": content}
         for role, content in st.session_state.chat_history
     ]
+    
     try:
         with st.spinner("EeeBee is thinking..."):
-            concept_list = st.session_state.auth_data.get('ConceptList', [])
-            mentioned_concept = None
-            for concept in concept_list:
-                if concept['ConceptText'].lower() in user_input.lower():
-                    mentioned_concept = concept['ConceptText']
-                    break
-
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=conversation_history_formatted,
                 max_tokens=2000,
                 stream=False
             )
-            # Dot-notation instead of subscript
             gpt_response = response.choices[0].message.content.strip()
-
             st.session_state.chat_history.append(("assistant", gpt_response))
-
-            # If user specifically requests resources for a concept
-            if mentioned_concept and any(x in user_input.lower() for x in ["resource", "video", "note", "exercise", "material"]):
-                resources = get_resources_for_concept(
-                    mentioned_concept,
-                    concept_list,
-                    st.session_state.topic_id
-                )
-                if resources:
-                    resource_message = format_resources_message(resources)
-                    st.session_state.chat_history.append(("assistant", resource_message))
-
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
 
 def display_chat(user_name: str):
     chat_container = st.container()
+    
+   
+    
     with chat_container:
-        chat_history_html = """
-        <div style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
+        # Add unique key for chat container
+        chat_key = f"chat_container_{len(st.session_state.chat_history)}"
+        
+        chat_history_html = f"""
+        <div id="{chat_key}" style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
         padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
         """
+        
         for role, message in st.session_state.chat_history:
             if role == "assistant":
                 chat_history_html += (
@@ -1179,7 +1277,24 @@ def display_chat(user_name: str):
                     "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
                     f"<b>{user_name}:</b> {message}</div>"
                 )
+        
         chat_history_html += "</div>"
+        
+        # Add JavaScript for autoscroll
+        chat_history_html += f"""
+        <script>
+            function scrollToBottom() {{
+                var chatContainer = document.getElementById("{chat_key}");
+                if (chatContainer) {{
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }}
+            }}
+            // Call immediately and after a short delay to ensure content is loaded
+            scrollToBottom();
+            setTimeout(scrollToBottom, 100);
+        </script>
+        """
+        
         st.markdown(chat_history_html, unsafe_allow_html=True)
 
     user_input = st.chat_input("Enter your question about the topic")
@@ -1437,8 +1552,6 @@ def display_learning_path_tab():
                             st.success(f"Learning path generated for {concept_text}!")
                         else:
                             st.error(f"Failed to generate learning path for {concept_text}.")
-                else:
-                    st.info(f"Learning path for {concept_text} is already generated.")
 
             if concept_id in st.session_state.student_learning_paths:
                 lp_data = st.session_state.student_learning_paths[concept_id]
@@ -1495,6 +1608,241 @@ def main():
         placeholder = st.empty()
         with placeholder.container():
             login_screen()
+
+def fetch_student_info(batch_id, topic_id, org_code):
+    """Fetch student information for a specific batch"""
+    params = {
+        "BatchID": batch_id,
+        "TopicID": topic_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_STUDENT_INFO, json=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching student info: {e}")
+        return None
+
+def fetch_student_concepts(user_id, topic_id, org_code):
+    """Fetch detailed concept information for a specific student"""
+    params = {
+        "UserID": user_id,
+        "TopicID": topic_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(API_STUDENT_CONCEPTS, json=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Error fetching student concepts: {e}")
+        return None
+
+def format_time(seconds):
+    """Convert seconds to a readable format"""
+    if seconds == 0:
+        return "N/A"
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+    if minutes > 0:
+        return f"{minutes}m {remaining_seconds}s"
+    return f"{remaining_seconds}s"
+
+def format_concept_details(concept):
+    """Format concept details with performance metrics"""
+    if concept['AttendedQuestion'] == 0:
+        return (
+            f"- {concept['ConceptText']}\n"
+            f"  📝 Not attempted any questions yet"
+        )
+    
+    return (
+        f"- {concept['ConceptText']}\n"
+        f"  📝 Questions: {concept['CorrectQuestion']}/{concept['AttendedQuestion']} correct "
+        f"({concept['AvgMarksPercent']}%)\n"
+        f"  ⏱️ Average time per question: {format_time(concept['AvgTimeTaken_SS'])}\n"
+        f"  ⌛ Total time spent: {format_time(concept['TotalTimeTaken_SS'])}"
+    )
+
+def handle_teacher_commands(user_input: str):
+    """Handle teacher-specific chat commands"""
+    input_lower = user_input.lower()
+    
+    # Show classes
+    if any(cmd in input_lower for cmd in ["show classes", "show batches", "list classes", "list batches"]):
+        batches = st.session_state.auth_data.get("BatchList", [])
+        batch_list = "\n".join([
+            f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
+            for b in batches
+        ])
+        return f"Your classes:\n{batch_list}\n\nJust type the class name you want to analyze (e.g., '10A')"
+    
+    # Select class (checking if input matches any batch name)
+    batches = st.session_state.auth_data.get("BatchList", [])
+    selected_batch = next((b for b in batches if b['BatchName'].lower() == input_lower), None)
+    if selected_batch:
+        # Fetch student info
+        student_info = fetch_student_info(
+            selected_batch["BatchID"],
+            st.session_state.topic_id,
+            st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
+        )
+        
+        if student_info and student_info.get("Students"):
+            st.session_state.current_batch_students = student_info["Students"]
+            st.session_state.current_batch_concepts = student_info.get("Concepts", [])
+            
+            # Calculate class statistics
+            total_students = len(student_info["Students"])
+            concepts = student_info.get("Concepts", [])
+            
+            # Prepare concept statistics
+            concept_stats = []
+            for concept in concepts:
+                cleared_percent = (concept['ClearedStudentCount'] / concept['AttendedStudentCount'] * 100) if concept['AttendedStudentCount'] > 0 else 0
+                concept_stats.append(
+                    f"- {concept['ConceptText']}: {concept['ClearedStudentCount']}/{concept['AttendedStudentCount']} "
+                    f"students cleared ({cleared_percent:.1f}%)"
+                )
+            
+            concept_overview = "\n".join(concept_stats)
+            
+            return (
+                f"Looking at class {selected_batch['BatchName']}:\n\n"
+                f"Class Overview:\n"
+                f"- Total Students: {total_students}\n"
+                f"- Concepts Coverage:\n{concept_overview}\n\n"
+                f"Type 'show students' to see all students in this class"
+            )
+        else:
+            return "I couldn't get the student information for this class. Please try again."
+    
+    # Show students in current class
+    if "show students" in input_lower or "list students" in input_lower:
+        if hasattr(st.session_state, 'current_batch_students'):
+            students = st.session_state.current_batch_students
+            # Group students by progress
+            all_cleared = []
+            partial_progress = []
+            no_progress = []
+            
+            for student in students:
+                if student['ClearedConceptCount'] == student['TotalConceptCount']:
+                    all_cleared.append(student['FullName'])
+                elif student['ClearedConceptCount'] > 0:
+                    partial_progress.append(
+                        f"- {student['FullName']} ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
+                    )
+                else:
+                    no_progress.append(student['FullName'])
+            
+            response = "Students in this class:\n\n"
+            
+            if all_cleared:
+                response += "✅ Completed all concepts:\n- " + "\n- ".join(all_cleared) + "\n\n"
+            if partial_progress:
+                response += "🔄 In progress:\n" + "\n".join(partial_progress) + "\n\n"
+            if no_progress:
+                response += "⚠️ No concepts cleared:\n- " + "\n- ".join(no_progress) + "\n\n"
+                
+            response += "Just type a student's name to analyze their progress"
+            return response
+    
+    # Select student (checking if input matches any student name)
+    if hasattr(st.session_state, 'current_batch_students'):
+        selected_student = next(
+            (s for s in st.session_state.current_batch_students 
+             if s['FullName'].lower() == input_lower), None)
+        
+        if selected_student:
+            st.session_state.selected_student = selected_student
+            
+            # Fetch detailed concept information
+            student_concepts = fetch_student_concepts(
+                user_id=selected_student['UserID'],
+                topic_id=st.session_state.topic_id,
+                org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
+            )
+            
+            # Calculate progress percentage
+            progress = (selected_student['ClearedConceptCount'] / selected_student['TotalConceptCount'] * 100) if selected_student['TotalConceptCount'] > 0 else 0
+            
+            # Format concept details with performance metrics
+            weak_concepts_details = []
+            cleared_concepts_details = []
+            
+            if student_concepts:
+                weak_concepts_details = [
+                    format_concept_details(concept)
+                    for concept in student_concepts.get('WeakConcepts_List', [])
+                ]
+                cleared_concepts_details = [
+                    format_concept_details(concept)
+                    for concept in student_concepts.get('ClearedConcepts_List', [])
+                ]
+            
+            # Calculate overall statistics
+            total_questions = 0
+            total_correct = 0
+            total_time = 0
+            attempted_concepts = 0
+            
+            for concept in student_concepts.get('WeakConcepts_List', []) + student_concepts.get('ClearedConcepts_List', []):
+                if concept['AttendedQuestion'] > 0:
+                    attempted_concepts += 1
+                    total_questions += concept['AttendedQuestion']
+                    total_correct += concept['CorrectQuestion']
+                    total_time += concept['TotalTimeTaken_SS']
+            
+            # Build response message
+            response = (
+                f"Looking at {selected_student['FullName']}'s progress:\n\n"
+                f"📊 Overall Performance:\n"
+                f"- Progress: {progress:.1f}%\n"
+            )
+            
+            if attempted_concepts > 0:
+                avg_accuracy = (total_correct / total_questions * 100) if total_questions > 0 else 0
+                response += (
+                    f"- Overall Accuracy: {avg_accuracy:.1f}%\n"
+                    f"- Total Questions Attempted: {total_questions}\n"
+                    f"- Total Time Spent: {format_time(total_time)}\n"
+                )
+            
+            response += "\n🔍 Concepts Needing Attention:\n"
+            if weak_concepts_details:
+                response += "\n".join(weak_concepts_details) + "\n"
+            else:
+                response += "✅ No weak concepts identified\n"
+            
+            response += "\n✨ Mastered Concepts:\n"
+            if cleared_concepts_details:
+                response += "\n".join(cleared_concepts_details) + "\n"
+            else:
+                response += "⚠️ No concepts cleared yet\n"
+            
+            response += (
+                f"\nYou can ask me about:\n"
+                f"- Specific teaching strategies for concepts they're struggling with\n"
+                f"- How to improve their accuracy and speed\n"
+                f"- Ways to help them progress in specific concepts\n"
+                f"- Detailed analysis of their performance in any concept"
+            )
+            
+            return response
+    
+    return None
 
 if __name__ == "__main__":
     main()
