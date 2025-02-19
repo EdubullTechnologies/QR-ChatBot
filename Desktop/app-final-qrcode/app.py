@@ -1220,8 +1220,10 @@ Student Mode Instructions:
   - Offers a detailed analysis of current learning gaps,
   - Identifies previous learning gaps by specifying the class level where the concept was not mastered,
   - Provides actionable strategies for improvement to address both current and past gaps.
+- Note that since the student is currently in {branch_name}, any previous learning gaps should be attributed to classes before {branch_name}, while current gaps should be focused on topics from {branch_name}.
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
 """
+
 
 
 def get_gpt_response(user_input):
