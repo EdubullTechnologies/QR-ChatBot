@@ -1024,6 +1024,7 @@ def teacher_dashboard():
                 st.markdown(f"**Overall Progress:** {progress:.1f}%")
 
         # Bloom's Level
+        st.subheader("📝 Question Generation")
         bloom_level = st.radio(
             "Select Bloom's Taxonomy Level for the Questions",
             [
