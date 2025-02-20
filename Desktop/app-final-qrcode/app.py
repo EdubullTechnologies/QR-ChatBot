@@ -936,8 +936,6 @@ def teacher_dashboard():
                 st.error(f"Error fetching weak concepts: {e}")
                 st.session_state.teacher_weak_concepts = []
 
-    # Concept-wise Analysis Section
-    st.subheader("📊 Concept-wise Analysis")
     if st.session_state.teacher_weak_concepts:
         df = []
         for wc in st.session_state.teacher_weak_concepts:
@@ -970,80 +968,9 @@ def teacher_dashboard():
         final_chart = (chart + rule + text).interactive()
         st.altair_chart(final_chart, use_container_width=True)
 
-        # Additional graphs
-        total_attended = df["Attended"].sum()
-        total_cleared = df["Cleared"].sum()
-        total_not_cleared = total_attended - total_cleared
+        display_additional_graphs(st.session_state.teacher_weak_concepts)
 
-        # Donut chart for overall cleared vs not cleared
-        data_overall = pd.DataFrame({
-            'Category': ['Cleared', 'Not Cleared'],
-            'Count': [total_cleared, total_not_cleared]
-        })
-        donut_chart = alt.Chart(data_overall).mark_arc(innerRadius=50).encode(
-            theta='Count:Q',
-            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-            tooltip=['Category:N', 'Count:Q']
-        ).properties(
-            title='Overall Cleared vs Not Cleared Students'
-        )
-        st.altair_chart(donut_chart, use_container_width=True)
-
-        # Horizontal bar chart for concept-wise comparison
-        horizontal_bar = alt.Chart(df_long).mark_bar().encode(
-            x=alt.X('Count:Q'),
-            y=alt.Y('Concept:N', sort='-x', title='Concepts'),
-            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-            tooltip=['Concept:N', 'Category:N', 'Count:Q']
-        ).properties(
-            title='Attended vs Cleared per Concept (Horizontal View)',
-            width=600
-        )
-        st.altair_chart(horizontal_bar, use_container_width=True)
-
-    # Student Selection Section
-    st.markdown("---")
-    st.subheader("👥 Student Selection")
-    if selected_batch_id:
-        student_info = fetch_student_info(
-            selected_batch_id, 
-            st.session_state.topic_id,
-            org_code
-        )
-        
-        if student_info:
-            st.session_state.student_info = student_info
-            students = student_info["Students"]
-            student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
-            
-            selected_student_name = st.selectbox(
-                "Select a student to view detailed analysis:",
-                options=list(student_options.keys())
-            )
-            
-            if selected_student_name:
-                selected_student = student_options[selected_student_name]
-                st.session_state.selected_student = selected_student
-                
-                # Display student analytics
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Concepts", selected_student["TotalConceptCount"])
-                col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
-                col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
-                
-                # Calculate and display progress
-                progress = (selected_student["ClearedConceptCount"] / 
-                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
-                
-                st.progress(progress/100)
-                st.markdown(f"**Overall Progress:** {progress:.1f}%")
-
-    # Question Generation Section
-    st.markdown("---")
-    st.subheader("📝 Question Generation")
-    
-    if st.session_state.teacher_weak_concepts:
-        # Bloom's Level selection
+        # Bloom's Level
         bloom_level = st.radio(
             "Select Bloom's Taxonomy Level for the Questions",
             [
@@ -1056,7 +983,7 @@ def teacher_dashboard():
             index=3,
             key="bloom_taxonomy_selector"
         )
-        bloom_short = bloom_level.split()[0]
+        bloom_short = bloom_level.split()[0]  # e.g. "L4"
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
@@ -1116,6 +1043,61 @@ def teacher_dashboard():
                         )
                     except Exception as e:
                         st.error(f"Error generating exam questions: {e}")
+
+    if selected_batch_id:
+        # Fetch student info when batch is selected
+        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
+        org_code = user_info.get('OrgCode', '012')
+        
+        student_info = fetch_student_info(
+            selected_batch_id, 
+            st.session_state.topic_id,
+            org_code
+        )
+        
+        if student_info:
+            st.session_state.student_info = student_info
+            
+            # Display concept-wise analytics
+            st.subheader("📊 Concept-wise Analysis")
+            concepts_df = pd.DataFrame(student_info["Concepts"])
+            if not concepts_df.empty:
+                fig = px.bar(concepts_df, 
+                    x="ConceptText",
+                    y=["AttendedStudentCount", "ClearedStudentCount"],
+                    title="Concept Performance Overview",
+                    barmode="group"
+                )
+                st.plotly_chart(fig)
+            
+            # Student selection
+            st.subheader("👥 Student Selection")
+            students = student_info["Students"]
+            student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
+            
+            selected_student_name = st.selectbox(
+                "Select a student to view detailed analysis:",
+                options=list(student_options.keys())
+            )
+            
+            if selected_student_name:
+                selected_student = student_options[selected_student_name]
+                st.session_state.selected_student = selected_student
+                
+                # Display student analytics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Concepts", selected_student["TotalConceptCount"])
+                col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
+                col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
+                
+                # Calculate and display progress
+                progress = (selected_student["ClearedConceptCount"] / 
+                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
+                
+                st.progress(progress/100)
+                st.markdown(f"**Overall Progress:** {progress:.1f}%")
+                
+                
 
 # ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
@@ -1232,7 +1214,7 @@ Student Mode Instructions:
 - If the student asks for a test, deliver one multiple-choice question (MCQ) at a time.
 - Do not reveal any correct answers or explanations immediately after a response. Allow the student to complete the entire test first.
 - After the test is completed, provide a comprehensive report that:
-  - Shows the correct answers alongside the student's responses,
+  - Shows the correct answers alongside the student’s responses,
   - Highlights where errors occurred,
   - Offers a detailed analysis of current learning gaps,
   - Identifies previous learning gaps by specifying the class level where the concept was not mastered,
