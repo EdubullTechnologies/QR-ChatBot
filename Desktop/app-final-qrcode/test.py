@@ -435,7 +435,7 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
                                 img = RLImage(img_buffer, width=4*inch, height=1*inch)
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
-                            story.append(img)
+                            story.append(img))
                         last_index = match.end()
 
                 post_text = line[last_index:]
@@ -830,26 +830,6 @@ def display_additional_graphs(weak_concepts):
         title='Overall Cleared vs Not Cleared Students'
     )
     st.altair_chart(donut_chart, use_container_width=True)
-    df_long = df.melt(
-        id_vars='ConceptText',
-        value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
-        var_name='Category',
-        value_name='Count'
-    )
-    df_long['Category'] = df_long['Category'].replace({
-        'AttendedStudentCount': 'Attended',
-        'ClearedStudentCount': 'Cleared'
-    })
-    horizontal_bar = alt.Chart(df_long).mark_bar().encode(
-        x=alt.X('Count:Q'),
-        y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
-    ).properties(
-        title='Attended vs Cleared per Concept (Horizontal View)',
-        width=600
-    )
-    st.altair_chart(horizontal_bar, use_container_width=True)
 
 def teacher_dashboard():
     batches = st.session_state.auth_data.get("BatchList", [])
@@ -1159,11 +1139,9 @@ def load_data_parallel():
             st.error(f"Error fetching all concepts: {e}")
 
 def display_tabs_parallel():
-    # Wrap tabs in a sticky container
+    # Sticky tabs implementation
     with st.container():
-        st.markdown('<div class="sticky-tabs">', unsafe_allow_html=True)
         tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
-        st.markdown('</div>', unsafe_allow_html=True)
     
     # Load data if needed
     if not st.session_state.baseline_data or not st.session_state.all_concepts:
@@ -1172,8 +1150,6 @@ def display_tabs_parallel():
     
     # Display each tab's content
     with tab_containers[0]:
-        st.subheader("Chat with your EeeBee AI buddy")
-        add_initial_greeting()
         display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
     
     with tab_containers[1]:
@@ -1442,59 +1418,75 @@ def handle_teacher_commands(user_input: str):
             return response
     return None
 
-# Add custom CSS for Chat UI and Sticky Tabs
+# --- Custom CSS for Sticky Elements ---
 st.markdown("""
     <style>
-        .chat-container {
-            max-height: 500px;
-            overflow-y: auto;
-            padding: 1rem;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            background-color: #f3f4f6;
-        }
-        .chat-bubble {
-            margin: 0.5rem 0;
-            padding: 0.75rem 1rem;
-            border-radius: 15px;
-            max-width: 80%;
-            word-wrap: break-word;
-            font-family: sans-serif;
-            line-height: 1.4;
-        }
-        .chat-bubble.user {
-            background-color: #2563eb;
-            color: white;
-            margin-left: auto;
-        }
-        .chat-bubble.assistant {
-            background-color: #e0e7ff;
-            color: black;
-            margin-right: auto;
-        }
-        .sticky-tabs {
+        /* Sticky header container */
+        div[data-testid="stVerticalBlock"] > div:first-child {
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 1000;
             background: white;
-            padding: 0.5rem;
+            padding: 0.5rem 1rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Chat messages container */
+        div[data-testid="chatMessages"] {
+            max-height: 70vh;
+            overflow-y: auto;
+            padding-bottom: 100px; /* Space for input */
+        }
+        
+        /* Input container */
+        div[data-testid="stChatInput"] {
+            position: fixed;
+            bottom: 2rem;
+            left: 1rem;
+            right: 1rem;
+            background: white;
+            z-index: 1000;
+            padding: 1rem;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
         }
     </style>
 """, unsafe_allow_html=True)
 
 def display_chat(user_name: str):
-    # Display chat messages from history
-    for role, message in st.session_state.chat_history:
-        if role == "assistant":
-            st.chat_message("assistant", avatar="🤖").markdown(message)
-        else:
-            st.chat_message("user", avatar="👤").markdown(message)
+    # Create containers for different parts
+    header_container = st.container()
+    chat_container = st.container()
+    input_container = st.container()
     
-    # Accept user input
-    user_input = st.chat_input("Enter your question about the topic")
-    if user_input:
-        handle_user_input(user_input)
+    with header_container:
+        st.subheader("Chat with your EeeBee AI buddy")
+        add_initial_greeting()
+    
+    with chat_container:
+        # Display chat messages
+        for role, message in st.session_state.chat_history:
+            if role == "assistant":
+                st.chat_message("assistant", avatar="🤖").markdown(message)
+            else:
+                st.chat_message("user", avatar="👤").markdown(message)
+        
+        # Auto-scroll hack
+        st.markdown('<div id="bottom"></div>', unsafe_allow_html=True)
+    
+    with input_container:
+        # User input with auto-scroll
+        user_input = st.chat_input("Enter your question about the topic")
+        if user_input:
+            handle_user_input(user_input)
+            # Trigger scroll after input
+            st.markdown("""
+                <script>
+                    window.addEventListener('load', function() {
+                        var element = document.getElementById('bottom');
+                        element.scrollIntoView();
+                    });
+                </script>
+            """, unsafe_allow_html=True)
 
 def handle_user_input(user_input):
     # Add user message to chat history
@@ -1514,7 +1506,7 @@ def get_gpt_response(user_input):
     full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
 
     try:
-        # Create a message placeholder for streaming
+        # Create a message placeholder
         with st.chat_message("assistant", avatar="🤖"):
             message_placeholder = st.empty()
             streaming_response = ""
@@ -1529,8 +1521,9 @@ def get_gpt_response(user_input):
             # Final message without cursor
             message_placeholder.markdown(streaming_response)
         
-        # Add the complete response to chat history
+        # Add to history and scroll
         st.session_state.chat_history.append(("assistant", streaming_response))
+        st.rerun()
             
     except Exception as e:
         st.error(f"Error during streaming: {e}")
