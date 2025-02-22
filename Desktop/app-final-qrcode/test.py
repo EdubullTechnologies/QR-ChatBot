@@ -1485,12 +1485,12 @@ st.markdown("""
 
 def display_chat(user_name: str):
     # Create a container for the chat messages
-    chat_container = st.empty()
-    chat_history = st.session_state.chat_history
-
+    if "chat_container" not in st.session_state:
+        st.session_state.chat_container = st.empty()
+    
     # Build the HTML for the chat conversation
     chat_html = '<div class="chat-container" id="chatContainer">'
-    for role, message in chat_history:
+    for role, message in st.session_state.chat_history:
         if role == "assistant":
             chat_html += f'<div class="chat-bubble assistant"><strong>EeeBee:</strong> {message}</div>'
         else:
@@ -1504,7 +1504,7 @@ def display_chat(user_name: str):
         chatContainer.scrollTop = chatContainer.scrollHeight;
     </script>
     """
-    chat_container.markdown(chat_html, unsafe_allow_html=True)
+    st.session_state.chat_container.markdown(chat_html, unsafe_allow_html=True)
     
     # Use st.chat_input for user input
     user_input = st.chat_input("Enter your question about the topic")
@@ -1535,9 +1535,6 @@ def get_gpt_response(user_input):
         temp_idx = len(st.session_state.chat_history)
         st.session_state.chat_history.append(("assistant", ""))
         
-        # Create the chat display with current history
-        chat_container = st.empty()
-        
         # Stream the response
         for char in full_response:
             streaming_response += char
@@ -1560,7 +1557,7 @@ def get_gpt_response(user_input):
             </script>
             """
             
-            chat_container.markdown(chat_html, unsafe_allow_html=True)
+            st.session_state.chat_container.markdown(chat_html, unsafe_allow_html=True)
             time.sleep(0.01)
             
     except Exception as e:
