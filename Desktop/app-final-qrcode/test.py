@@ -142,7 +142,7 @@ def show_gap_message():
 
 # Streamlit page config
 st.set_page_config(
-    page_title="EeeBee AI Buddy",
+    page_title="EeeBee AI Buddy (Powered by Google Gemini)",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="auto"
@@ -348,7 +348,7 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
 
 def generate_learning_path(concept_text):
     """
-    Generates a learning path using Gemini. 
+    Generates a learning path using Google Gemini. 
     """
     if not client:
         st.error("Gemini client is not initialized. Check your API key.")
@@ -356,7 +356,7 @@ def generate_learning_path(concept_text):
 
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     prompt = (
-        f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
+        f"You are a highly experienced educational AI assistant powered by Google Gemini, specializing in the NCERT curriculum. "
         f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
         f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
         f"ensuring clarity, engagement, and curriculum alignment.\n\n"
@@ -1060,7 +1060,7 @@ def teacher_dashboard():
 
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
                 prompt = (
-                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                    f"You are a highly knowledgeable educational assistant named EeeBee, powered by Google Gemini, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
                     f"Teacher Mode Instructions:\n"
                     f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
                     f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
@@ -1174,7 +1174,7 @@ def get_system_prompt():
         batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
         
         return f"""
-You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, powered by Google Gemini, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
@@ -1203,7 +1203,7 @@ Commands to recognize:
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
 
         return f"""
-You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, powered by various Large Language Models and developed by iEdubull, specialized in {topic_name}.
 
 Student Mode Instructions:
 - The student is in {branch_name} and follows the NCERT curriculum.
@@ -1409,7 +1409,7 @@ def login_screen():
     except Exception as e:
         st.error(f"Error loading image: {e}")
 
-    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your EeeBee AI Buddy powered by Google Gemini!</h3>', unsafe_allow_html=True)
 
     # Read query parameters from URL
     query_params = st.experimental_get_query_params()
