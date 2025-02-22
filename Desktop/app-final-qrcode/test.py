@@ -1525,17 +1525,49 @@ def get_gpt_response(user_input):
     conversation_history_formatted = "\n".join([f"{role}: {content}" for role, content in st.session_state.chat_history])
     full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
 
-    response_placeholder = st.empty()
     streaming_response = ""
     
     try:
+        # Get the full response first
         full_response = generate_response(full_prompt)
+        
+        # Temporarily append a placeholder to chat history for streaming
+        temp_idx = len(st.session_state.chat_history)
+        st.session_state.chat_history.append(("assistant", ""))
+        
+        # Create the chat display with current history
+        chat_container = st.empty()
+        
+        # Stream the response
         for char in full_response:
             streaming_response += char
-            response_placeholder.markdown(f'<div class="chat-bubble assistant"><strong>EeeBee:</strong> {streaming_response}</div>', unsafe_allow_html=True)
+            # Update the last message in chat history
+            st.session_state.chat_history[temp_idx] = ("assistant", streaming_response)
+            
+            # Rebuild and display the entire chat
+            chat_html = '<div class="chat-container" id="chatContainer">'
+            for role, message in st.session_state.chat_history:
+                if role == "assistant":
+                    chat_html += f'<div class="chat-bubble assistant"><strong>EeeBee:</strong> {message}</div>'
+                else:
+                    chat_html += f'<div class="chat-bubble user"><strong>{st.session_state.auth_data["UserInfo"][0]["FullName"]}:</strong> {message}</div>'
+            chat_html += "</div>"
+            
+            chat_html += """
+            <script>
+                var chatContainer = document.getElementById("chatContainer");
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            </script>
+            """
+            
+            chat_container.markdown(chat_html, unsafe_allow_html=True)
             time.sleep(0.01)
+            
     except Exception as e:
         st.error(f"Error during streaming: {e}")
+        # Remove the temporary message if there was an error
+        if len(st.session_state.chat_history) > temp_idx:
+            st.session_state.chat_history.pop()
         return
 
     st.session_state.chat_history.append(("assistant", streaming_response))
