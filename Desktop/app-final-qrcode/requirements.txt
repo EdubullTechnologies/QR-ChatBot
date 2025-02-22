@@ -74,3 +74,4 @@ streamlit-aggrid
 plotly
 openpyxl
 google-generativeai
+google-genai
