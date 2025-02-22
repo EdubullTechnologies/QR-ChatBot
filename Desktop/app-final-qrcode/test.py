@@ -973,7 +973,6 @@ def teacher_dashboard():
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
     if selected_batch_id:
-        # Fetch student info when batch is selected
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
         org_code = user_info.get('OrgCode', '012')
         
@@ -986,7 +985,6 @@ def teacher_dashboard():
         if student_info:
             st.session_state.student_info = student_info
             
-            # Display concept-wise analytics
             st.subheader("📊 Concept-wise Analysis")
             concepts_df = pd.DataFrame(student_info["Concepts"])
             if not concepts_df.empty:
@@ -998,7 +996,6 @@ def teacher_dashboard():
                 )
                 st.plotly_chart(fig)
             
-            # Student selection
             st.subheader("👥 Student Selection")
             students = student_info["Students"]
             student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
@@ -1012,20 +1009,17 @@ def teacher_dashboard():
                 selected_student = student_options[selected_student_name]
                 st.session_state.selected_student = selected_student
                 
-                # Display student analytics
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Total Concepts", selected_student["TotalConceptCount"])
                 col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
                 col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
                 
-                # Calculate and display progress
                 progress = (selected_student["ClearedConceptCount"] / 
                           selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
                 
                 st.progress(progress/100)
                 st.markdown(f"**Overall Progress:** {progress:.1f}%")
 
-        # Bloom's Level
         st.subheader("📝 Question Generation")
         bloom_level = st.radio(
             "Select Bloom's Taxonomy Level for the Questions",
@@ -1039,7 +1033,7 @@ def teacher_dashboard():
             index=3,
             key="bloom_taxonomy_selector"
         )
-        bloom_short = bloom_level.split()[0]  # e.g. "L4"
+        bloom_short = bloom_level.split()[0]
 
         concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
         chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
@@ -1092,17 +1086,14 @@ def teacher_dashboard():
 
 # ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
-    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
+    # Only add the greeting if it hasn't been added before
+    if not st.session_state.get("greeting_added", False) and st.session_state.auth_data:
         user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
         topic_name = st.session_state.auth_data.get('TopicName', "Topic")
 
         if st.session_state.is_teacher:
             batches = st.session_state.auth_data.get("BatchList", [])
-            batch_list = "\n".join([
-                f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
-                for b in batches
-            ])
-            
+            batch_list = "\n".join([f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)" for b in batches])
             greeting_message = (
                 f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
                 f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
@@ -1117,24 +1108,11 @@ def add_initial_greeting():
                 f"2. Suggest instructional strategies you can use to enhance learning.\n\n"
                 f"What would you like to do?"
             )
-            st.session_state.chat_history.append(("assistant", greeting_message))
         else:
             concept_list = st.session_state.auth_data.get('ConceptList', [])
             weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
-            concept_options = "\n\n**📚 Available Concepts:**\n"
-            for concept in concept_list:
-                concept_options += f"- {concept['ConceptText']}\n"
-
-            weak_concepts_text = ""
-            if weak_concepts:
-                weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n"
-                for concept in weak_concepts:
-                    weak_concepts_text += f"- {concept['ConceptText']}\n"
-
-            st.session_state.available_concepts = {
-                concept['ConceptText']: concept['ConceptID'] for concept in concept_list
-            }
-
+            concept_options = "\n\n**📚 Available Concepts:**\n" + "\n".join([f"- {c['ConceptText']}" for c in concept_list])
+            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n" + "\n".join([f"- {c['ConceptText']}" for c in weak_concepts]) if weak_concepts else ""
             greeting_message = (
                 f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
                 f"I'm here to help you with {topic_name}.\n\n"
@@ -1146,7 +1124,8 @@ def add_initial_greeting():
                 f"{weak_concepts_text}\n\n"
                 f"What would you like to discuss?"
             )
-            st.session_state.chat_history.append(("assistant", greeting_message))
+        st.session_state.chat_history.append(("assistant", greeting_message))
+        st.session_state.greeting_added = True
 
 def handle_user_input(user_input):
     if user_input:
@@ -1217,13 +1196,11 @@ def get_gpt_response(user_input):
         return
     
     if st.session_state.is_teacher:
-        # First check if it's a command
         command_response = handle_teacher_commands(user_input)
         if command_response:
             st.session_state.chat_history.append(("assistant", command_response))
             return
     
-    # Combine system prompt and conversation history into one prompt
     system_prompt = get_system_prompt()
     conversation_history_formatted = "\n".join([f"{role}: {content}" for role, content in st.session_state.chat_history])
     full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
@@ -1653,7 +1630,6 @@ def handle_teacher_commands(user_input: str):
     """Handle teacher-specific chat commands"""
     input_lower = user_input.lower()
     
-    # Show classes
     if any(cmd in input_lower for cmd in ["show classes", "show batches", "list classes", "list batches"]):
         batches = st.session_state.auth_data.get("BatchList", [])
         batch_list = "\n".join([
@@ -1662,7 +1638,6 @@ def handle_teacher_commands(user_input: str):
         ])
         return f"Your classes:\n{batch_list}\n\nJust type the class name you want to analyze (e.g., '10A')"
     
-    # Select class (checking if input matches any batch name)
     batches = st.session_state.auth_data.get("BatchList", [])
     selected_batch = next((b for b in batches if b['BatchName'].lower() == input_lower), None)
     if selected_batch:
@@ -1699,7 +1674,6 @@ def handle_teacher_commands(user_input: str):
         else:
             return "I couldn't get the student information for this class. Please try again."
     
-    # Show students in current class
     if "show students" in input_lower or "list students" in input_lower:
         if hasattr(st.session_state, 'current_batch_students'):
             students = st.session_state.current_batch_students
@@ -1729,7 +1703,6 @@ def handle_teacher_commands(user_input: str):
             response += "Just type a student's name to analyze their progress"
             return response
     
-    # Select student (checking if input matches any student name)
     if hasattr(st.session_state, 'current_batch_students'):
         selected_student = next(
             (s for s in st.session_state.current_batch_students 
@@ -1811,4 +1784,3 @@ def handle_teacher_commands(user_input: str):
 
 if __name__ == "__main__":
     main()
-    # End of file.
