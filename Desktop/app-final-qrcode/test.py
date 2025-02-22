@@ -975,20 +975,7 @@ def teacher_dashboard():
                     st.error("Google GenAI client is not initialized. Check your API key.")
                     return
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                prompt = (
-                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
-                    f"Teacher Mode Instructions:\n"
-                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
-                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
-                    f"- Offer insights into common student difficulties and ways to address them.\n"
-                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
-                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
-                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
-                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
-                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
-                    f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
-                    f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
-                )
+                prompt = get_system_prompt()
                 with st.spinner("Generating exam questions... Please wait."):
                     questions = generate_response(prompt)
                     # Remove any leading "assistant:" if present
@@ -1567,6 +1554,40 @@ def add_initial_greeting():
         )
         
         st.session_state.chat_history.append(("assistant", greeting))
+
+def get_system_prompt():
+    """Generate the system prompt based on user type and context"""
+    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
+    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
+    
+    if st.session_state.is_teacher:
+        batches = st.session_state.auth_data.get("BatchList", [])
+        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
+        return f"""You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+
+Teacher Mode Instructions:
+- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
+- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
+- Offer insights into common student difficulties and ways to address them.
+- Encourage a teaching methodology where students learn progressively.
+- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
+- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).
+- Available batches:
+{batch_list}"""
+    else:
+        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
+        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none identified yet"
+        return f"""You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
+
+Student Mode Instructions:
+- You are helping a student in {branch_name} following the NCERT curriculum.
+- The student's weak concepts are: [{weak_concepts_text}].
+- Explain concepts clearly and simply, appropriate for {branch_name} level.
+- Use examples and analogies to make concepts more relatable.
+- Break down complex problems into simpler steps.
+- Encourage critical thinking through guiding questions.
+- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).
+- Be encouraging and supportive while maintaining accuracy."""
 
 if __name__ == "__main__":
     main()
