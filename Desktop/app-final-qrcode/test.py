@@ -1469,21 +1469,57 @@ def add_initial_greeting():
         st.session_state.greeting_added = True
 
 def display_chat(user_name):
-    # Update the CSS to remove the white box and improve tab accessibility
+    # Custom CSS for chat interface
     st.markdown("""
         <style>
-        /* Remove default white background */
         .stApp {
             background-color: transparent;
         }
         
         .chat-container {
-            height: calc(100vh - 300px);  /* Adjust height to leave space for tabs */
+            height: calc(100vh - 400px);
             overflow-y: auto;
             padding: 20px;
+            margin-bottom: 60px;  /* Space for input box */
+        }
+        
+        .user-message {
+            background-color: #f7f7f8;
+            padding: 15px;
             border-radius: 10px;
+            margin: 10px 0;
+            max-width: 90%;
+            margin-left: auto;
+            color: #000000;
+        }
+        
+        .assistant-message {
             background-color: #ffffff;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            max-width: 90%;
+            border: 1px solid #e5e5e5;
+            color: #000000;
+        }
+        
+        .message-content {
+            margin: 0;
+            line-height: 1.5;
+            color: #000000;
+        }
+        
+        .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        .message-container {
+            display: flex;
+            align-items: flex-start;
             margin-bottom: 20px;
         }
         
@@ -1494,6 +1530,10 @@ def display_chat(user_name):
             border-bottom: 1px solid #e5e5e5;
             padding-bottom: 10px;
             margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 100;
         }
         
         .stRadio label {
@@ -1507,11 +1547,106 @@ def display_chat(user_name):
             background-color: #f0f0f0;
         }
         
-        /* Rest of your existing CSS styles... */
+        /* Chat input container */
+        .input-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background-color: white;
+            border-top: 1px solid #e5e5e5;
+            z-index: 1000;
+        }
         </style>
     """, unsafe_allow_html=True)
+
+    # Create containers
+    chat_container = st.container()
+    input_container = st.container()
+
+    # Display chat history
+    with chat_container:
+        st.markdown('<div class="chat-container" id="chat-container">', unsafe_allow_html=True)
+        
+        for message in st.session_state.chat_history:
+            role, content = message
+            
+            if role == "user":
+                st.markdown(f"""
+                    <div class="message-container">
+                        <div class="user-message">
+                            <p class="message-content"><strong>You:</strong> {content}</p>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                # Check if content contains image markdown
+                if "![" in content and "](" in content and ")" in content:
+                    parts = content.split("![")
+                    formatted_content = parts[0]
+                    for part in parts[1:]:
+                        if "](" in part and ")" in part:
+                            img_title = part.split("](")[0]
+                            img_url = part.split("](")[1].split(")")[0]
+                            remaining_text = part.split(")")[1]
+                            formatted_content += f'<img src="{img_url}" alt="{img_title}" style="max-width: 100%; margin: 10px 0;"/>{remaining_text}'
+                else:
+                    formatted_content = content
+
+                st.markdown(f"""
+                    <div class="message-container">
+                        <img src="https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png" class="avatar"/>
+                        <div class="assistant-message">
+                            <p class="message-content">{formatted_content}</p>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Auto-scroll JavaScript
+    st.markdown("""
+        <script>
+            function scrollToBottom() {
+                var chatContainer = document.getElementById('chat-container');
+                if (chatContainer) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+            setTimeout(scrollToBottom, 100);
+        </script>
+    """, unsafe_allow_html=True)
+
+    # Chat input at the bottom
+    with input_container:
+        user_input = st.chat_input("Type your message here...")
     
-    # Rest of your existing display_chat code...
+    if user_input:
+        st.session_state.chat_history.append(("user", user_input))
+        
+        if st.session_state.is_teacher:
+            teacher_response = handle_teacher_commands(user_input)
+            if teacher_response:
+                st.session_state.chat_history.append(("assistant", teacher_response))
+                st.rerun()
+                return
+
+        prompt = (
+            f"You are EeeBee, an educational AI assistant specialized in {st.session_state.auth_data.get('TopicName', 'this topic')}. "
+            f"The user is a {'teacher' if st.session_state.is_teacher else 'student'} named {user_name}. "
+            f"Previous conversation:\n"
+            + "\n".join([f"{'User' if msg[0]=='user' else 'Assistant'}: {msg[1]}" for msg in st.session_state.chat_history[-5:]])
+            + f"\n\nUser's message: {user_input}\n\n"
+            "Provide a helpful, educational response. Use LaTeX for mathematical expressions (enclosed in $ or $$). "
+            "You can generate and include relevant images when explaining concepts. "
+            "Format image responses as markdown: ![title](image_url)"
+        )
+        
+        response = generate_response(prompt)
+        if response:
+            st.session_state.chat_history.append(("assistant", response))
+            st.rerun()
 
 if __name__ == "__main__":
     main()
