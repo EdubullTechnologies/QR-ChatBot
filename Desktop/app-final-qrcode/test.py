@@ -1490,18 +1490,118 @@ def add_initial_greeting():
 
 def display_chat(user_name):
     """
-    Display the chat interface and handle user interactions.
+    Display the chat interface with a modern ChatGPT-like design and auto-scroll.
     """
-    # Display chat history
-    for message in st.session_state.chat_history:
-        role, content = message
-        if role == "user":
-            st.markdown(f"**You:** {content}")
-        else:
-            st.markdown(f"**EeeBee:** {content}")
+    # Custom CSS for chat interface
+    st.markdown("""
+        <style>
+        .chat-container {
+            height: 600px;
+            overflow-y: auto;
+            padding: 20px;
+            border-radius: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .user-message {
+            background-color: #f7f7f8;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            max-width: 90%;
+            margin-left: auto;
+        }
+        .assistant-message {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            max-width: 90%;
+            border: 1px solid #e5e5e5;
+        }
+        .message-content {
+            margin: 0;
+            line-height: 1.5;
+        }
+        .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .message-container {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    # Chat input
-    user_input = st.chat_input("Type your message here...")
+    # Create a container for the chat history
+    chat_container = st.container()
+    
+    # Create a container for the input
+    input_container = st.container()
+
+    # Display chat history in the container
+    with chat_container:
+        st.markdown('<div class="chat-container" id="chat-container">', unsafe_allow_html=True)
+        
+        for message in st.session_state.chat_history:
+            role, content = message
+            
+            if role == "user":
+                st.markdown(f"""
+                    <div class="message-container">
+                        <div class="user-message">
+                            <p class="message-content"><strong>You:</strong> {content}</p>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                # Check if content contains image markdown
+                if "![" in content and "](" in content and ")" in content:
+                    # Split content into text and images
+                    parts = content.split("![")
+                    formatted_content = parts[0]
+                    for part in parts[1:]:
+                        if "](" in part and ")" in part:
+                            img_title = part.split("](")[0]
+                            img_url = part.split("](")[1].split(")")[0]
+                            remaining_text = part.split(")")[1]
+                            formatted_content += f'<img src="{img_url}" alt="{img_title}" style="max-width: 100%; margin: 10px 0;"/>{remaining_text}'
+                else:
+                    formatted_content = content
+
+                st.markdown(f"""
+                    <div class="message-container">
+                        <img src="https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png" class="avatar"/>
+                        <div class="assistant-message">
+                            <p class="message-content">{formatted_content}</p>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Add auto-scroll JavaScript
+    st.markdown("""
+        <script>
+            function scrollToBottom() {
+                var chatContainer = document.getElementById('chat-container');
+                if (chatContainer) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+            setTimeout(scrollToBottom, 100);
+        </script>
+    """, unsafe_allow_html=True)
+
+    # Chat input at the bottom
+    with input_container:
+        user_input = st.chat_input("Type your message here...")
     
     if user_input:
         # Add user message to chat history
@@ -1515,14 +1615,16 @@ def display_chat(user_name):
                 st.rerun()
                 return
 
-        # Generate AI response
+        # Generate AI response with image support
         prompt = (
             f"You are EeeBee, an educational AI assistant specialized in {st.session_state.auth_data.get('TopicName', 'this topic')}. "
             f"The user is a {'teacher' if st.session_state.is_teacher else 'student'} named {user_name}. "
             f"Previous conversation:\n"
             + "\n".join([f"{'User' if msg[0]=='user' else 'Assistant'}: {msg[1]}" for msg in st.session_state.chat_history[-5:]])
             + f"\n\nUser's message: {user_input}\n\n"
-            "Provide a helpful, educational response. Use LaTeX for mathematical expressions (enclosed in $ or $$)."
+            "Provide a helpful, educational response. Use LaTeX for mathematical expressions (enclosed in $ or $$). "
+            "You can generate and include relevant images when explaining concepts. "
+            "Format image responses as markdown: ![title](image_url)"
         )
         
         response = generate_response(prompt)
