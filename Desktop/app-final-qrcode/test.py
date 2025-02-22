@@ -1176,19 +1176,24 @@ def display_tabs_parallel():
     learning_path_placeholder = tab_containers[1].empty()
     all_concepts_placeholder = tab_containers[2].empty()
     baseline_testing_placeholder = tab_containers[3].empty()
+
     if not st.session_state.baseline_data or not st.session_state.all_concepts:
         with st.spinner("EeeBee is waking up..."):
             load_data_parallel()
+
     with tab_containers[0]:
         chat_placeholder.subheader("Chat with your EeeBee AI buddy")
         add_initial_greeting()
         display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
+
     with tab_containers[1]:
         learning_path_placeholder.subheader("Your Personalized Learning Path")
         display_learning_path_tab()
+
     with tab_containers[2]:
         all_concepts_placeholder.subheader("Gap Analyzer")
         display_all_concepts_tab()
+
     with tab_containers[3]:
         baseline_testing_placeholder.subheader("Baseline Testing Report")
         baseline_testing_report()
@@ -1511,6 +1516,7 @@ def display_chat(user_name):
             margin: 10px 0;
             max-width: 90%;
             margin-left: auto;
+            color: #000000;  /* Black text color */
         }
         .assistant-message {
             background-color: #ffffff;
@@ -1519,10 +1525,12 @@ def display_chat(user_name):
             margin: 10px 0;
             max-width: 90%;
             border: 1px solid #e5e5e5;
+            color: #000000;  /* Black text color */
         }
         .message-content {
             margin: 0;
             line-height: 1.5;
+            color: #000000;  /* Black text color */
         }
         .avatar {
             width: 30px;
@@ -1535,6 +1543,26 @@ def display_chat(user_name):
             display: flex;
             align-items: flex-start;
             margin-bottom: 20px;
+        }
+        /* Custom tab styling */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 2px;
+            background-color: #ffffff;
+            border-radius: 10px 10px 0 0;
+            padding: 10px 10px 0 10px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: #f7f7f8;
+            border-radius: 5px 5px 0 0;
+            gap: 2px;
+            padding: 10px 20px;
+            color: #000000;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #ffffff;
+            border-bottom: 2px solid #000000;
         }
         </style>
     """, unsafe_allow_html=True)
