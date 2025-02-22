@@ -1227,6 +1227,23 @@ def display_learning_path_tab():
                     st.session_state.topic_id
                 )
 
+def add_initial_greeting():
+    """Adds the initial greeting message if chat history is empty"""
+    if not st.session_state.chat_history:
+        initial_message = (
+            "Hi! I'm EeeBee, your AI learning buddy. 🤖\n\n"
+            "I can help you with:\n"
+            "- Explaining difficult concepts\n"
+            "- Generating practice questions\n"
+            "- Creating personalized learning paths\n"
+            "- Analyzing your knowledge gaps\n\n"
+            "Just ask me anything about your subject!"
+        )
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": initial_message
+        })
+
 def main_screen():
     user_info = st.session_state.auth_data['UserInfo'][0]
     user_name = user_info['FullName']
