@@ -1484,36 +1484,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def display_chat(user_name: str):
-    # Create a container for the chat messages
-    if "chat_container" not in st.session_state:
-        st.session_state.chat_container = st.empty()
-    
-    # Build the HTML for the chat conversation
-    chat_html = '<div class="chat-container" id="chatContainer">'
+    # Display chat messages from history
     for role, message in st.session_state.chat_history:
         if role == "assistant":
-            chat_html += f'<div class="chat-bubble assistant"><strong>EeeBee:</strong> {message}</div>'
+            st.chat_message("assistant", avatar="🤖").markdown(message)
         else:
-            chat_html += f'<div class="chat-bubble user"><strong>{user_name}:</strong> {message}</div>'
-    chat_html += "</div>"
+            st.chat_message("user", avatar="👤").markdown(message)
     
-    # Add JavaScript for auto-scrolling to bottom
-    chat_html += """
-    <script>
-        var chatContainer = document.getElementById("chatContainer");
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    </script>
-    """
-    st.session_state.chat_container.markdown(chat_html, unsafe_allow_html=True)
-    
-    # Use st.chat_input for user input
+    # Accept user input
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
         handle_user_input(user_input)
 
 def handle_user_input(user_input):
+    # Add user message to chat history
     st.session_state.chat_history.append(("user", user_input))
+    # Get AI response
     get_gpt_response(user_input)
+    # Rerun to update the chat UI
     st.rerun()
 
 def get_gpt_response(user_input):
@@ -1525,49 +1513,28 @@ def get_gpt_response(user_input):
     conversation_history_formatted = "\n".join([f"{role}: {content}" for role, content in st.session_state.chat_history])
     full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
 
-    streaming_response = ""
-    
     try:
-        # Get the full response first
-        full_response = generate_response(full_prompt)
+        # Create a message placeholder for streaming
+        with st.chat_message("assistant", avatar="🤖"):
+            message_placeholder = st.empty()
+            streaming_response = ""
+            
+            # Get and stream the response
+            full_response = generate_response(full_prompt)
+            for char in full_response:
+                streaming_response += char
+                message_placeholder.markdown(streaming_response + "▌")
+                time.sleep(0.01)
+            
+            # Final message without cursor
+            message_placeholder.markdown(streaming_response)
         
-        # Temporarily append a placeholder to chat history for streaming
-        temp_idx = len(st.session_state.chat_history)
-        st.session_state.chat_history.append(("assistant", ""))
-        
-        # Stream the response
-        for char in full_response:
-            streaming_response += char
-            # Update the last message in chat history
-            st.session_state.chat_history[temp_idx] = ("assistant", streaming_response)
-            
-            # Rebuild and display the entire chat
-            chat_html = '<div class="chat-container" id="chatContainer">'
-            for role, message in st.session_state.chat_history:
-                if role == "assistant":
-                    chat_html += f'<div class="chat-bubble assistant"><strong>EeeBee:</strong> {message}</div>'
-                else:
-                    chat_html += f'<div class="chat-bubble user"><strong>{st.session_state.auth_data["UserInfo"][0]["FullName"]}:</strong> {message}</div>'
-            chat_html += "</div>"
-            
-            chat_html += """
-            <script>
-                var chatContainer = document.getElementById("chatContainer");
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            </script>
-            """
-            
-            st.session_state.chat_container.markdown(chat_html, unsafe_allow_html=True)
-            time.sleep(0.01)
+        # Add the complete response to chat history
+        st.session_state.chat_history.append(("assistant", streaming_response))
             
     except Exception as e:
         st.error(f"Error during streaming: {e}")
-        # Remove the temporary message if there was an error
-        if len(st.session_state.chat_history) > temp_idx:
-            st.session_state.chat_history.pop()
         return
-
-    st.session_state.chat_history.append(("assistant", streaming_response))
 
 def add_initial_greeting():
     """Add initial greeting message to chat history if it doesn't exist"""
