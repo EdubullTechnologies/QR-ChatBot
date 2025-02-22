@@ -1,59 +1,48 @@
 import streamlit as st
-import time
-from google import genai
+import openai
 
-# Retrieve API key from Streamlit secrets
-api_key = st.secrets["google"]["api_key"]
+st.title("ChatGPT-like Clone")
 
-# Initialize the GenAI client with the secret API key
-client = genai.Client(api_key=api_key)
+# Set OpenAI API key from Streamlit secrets
+openai.api_key = st.secrets["openai"]["api_key"]
 
-def simulate_stream_response(prompt, chunk_size=20, delay=0.1):
-    """
-    Simulate streaming by splitting the full response text into chunks.
-    """
-    # Get the complete response from the API
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-    full_text = response.text
-    
-    # Yield partial text chunks to simulate streaming
-    for i in range(0, len(full_text), chunk_size):
-        yield full_text[:i+chunk_size]
-        time.sleep(delay)
+# Set a default model if not already defined
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = "gpt-4o"  # or "gpt-4" if preferred
 
-# Initialize session state to keep conversation history
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# Initialize chat history in session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-st.title("Chat with Gemini-2.0 Flash (Simulated Streaming)")
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# Form for user to submit their message
-with st.form(key="chat_form", clear_on_submit=True):
-    user_input = st.text_input("You:", placeholder="Type your message here...")
-    submit_button = st.form_submit_button(label="Send")
+# Accept user input
+if prompt := st.chat_input("What is up?"):
+    # Append user message to chat history and display it
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-if submit_button and user_input:
-    # Append the user's message to the chat history
-    st.session_state.chat_history.append({"role": "user", "message": user_input})
-    
-    # Create a placeholder for the assistant's simulated streaming response
-    placeholder = st.empty()
-    assistant_message = ""
-    
-    # Simulate streaming by iterating over response chunks
-    for partial in simulate_stream_response(user_input):
-        assistant_message = partial
-        placeholder.markdown(f"**Assistant:** {assistant_message}")
-    
-    # Once complete, save the full assistant message in chat history
-    st.session_state.chat_history.append({"role": "assistant", "message": assistant_message})
+    # Prepare to stream the assistant's response
+    assistant_response = ""
+    # Use a placeholder to update the response in real time
+    with st.chat_message("assistant"):
+        placeholder = st.empty()
+        # Create a streaming response using OpenAI's API
+        response = openai.ChatCompletion.create(
+            model=st.session_state["openai_model"],
+            messages=st.session_state.messages,
+            stream=True,
+        )
+        # Process each chunk in the streaming response
+        for chunk in response:
+            delta = chunk.choices[0].delta
+            if "content" in delta:
+                assistant_response += delta["content"]
+                placeholder.markdown(assistant_response)
 
-# Display the entire conversation history
-for chat in st.session_state.chat_history:
-    if chat["role"] == "user":
-        st.markdown(f"**You:** {chat['message']}")
-    else:
-        st.markdown(f"**Assistant:** {chat['message']}")
+    # Append the complete assistant message to chat history
+    st.session_state.messages.append({"role": "assistant", "content": assistant_response})
