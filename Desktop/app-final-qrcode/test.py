@@ -156,7 +156,7 @@ def generate_response(prompt):
             stream=True
         )
         for chunk in response:
-            yield chunk.text
+            yield chunk[0].text
     except Exception as e:
         st.error(f"Error generating response: {e}")
         return None
@@ -436,7 +436,7 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
                                 img = RLImage(img_buffer, width=4*inch, height=1*inch)
                             else:
                                 img = RLImage(img_buffer, width=2*inch, height=0.5*inch)
-                            story.append(img)
+                            story.append(img))
                         last_index = match.end()
 
                 post_text = line[last_index:]
