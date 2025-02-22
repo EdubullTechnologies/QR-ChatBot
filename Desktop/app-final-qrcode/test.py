@@ -1267,11 +1267,15 @@ def get_gpt_response(user_input):
         st.error(f"Error in GPT response: {e}")
 
 def display_chat(user_name: str):
-    # Display chat messages with modern styling
-    for message in st.session_state.chat_history:
-        role, content = message
-        with st.chat_message(role if role == "user" else "assistant"):
-            st.markdown(content)
+    # Initialize chat container first
+    chat_container = st.container()
+    
+    # Display messages in the container
+    with chat_container:
+        for message in st.session_state.chat_history:
+            role, content = message
+            with st.chat_message(role if role == "user" else "assistant"):
+                st.markdown(content)
 
     # Input at bottom with auto-scroll
     user_input = st.chat_input("Enter your question about the topic", key="chat_input")
@@ -1281,11 +1285,14 @@ def display_chat(user_name: str):
     # Auto-scroll script
     st.markdown("""
     <script>
-        function scrollToBottom() {
+        const scrollInterval = setInterval(() => {
             window.parent.document.querySelector('section[data-testid="stChatMessageContainer"]').scrollTop = 1000000;
-        }
-        window.addEventListener('load', scrollToBottom);
-        setTimeout(scrollToBottom, 100);
+        }, 100);
+        
+        // Cleanup when component unmounts
+        window.addEventListener('beforeunload', () => {
+            clearInterval(scrollInterval);
+        });
     </script>
     """, unsafe_allow_html=True)
 
