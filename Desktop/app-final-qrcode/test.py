@@ -37,6 +37,13 @@ except ImportError:
     st.error("Please install the openai library: pip3 install openai")
     raise
 
+# Replace OpenAI import with Google Gemini
+try:
+    from google import genai
+except ImportError:
+    st.error("Please install the google-generativeai library: pip3 install google-generativeai")
+    raise
+
 # ----------------------------------------------------------------------------
 # 1) BASIC SETUP
 # ----------------------------------------------------------------------------
@@ -54,10 +61,17 @@ except KeyError:
     st.error("API key for OpenAI/DeepSeek not found in secrets.")
     OPENAI_API_KEY = None
 
-# Initialize the DeepSeek (OpenAI-like) client if we have the key
-if OPENAI_API_KEY:
-    # Create the client with your base_url
-    client = OpenAI(api_key=OPENAI_API_KEY)
+# Replace OpenAI client initialization
+try:
+    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]  # Update secrets to use Google API key
+except KeyError:
+    st.error("API key for Google Gemini not found in secrets.")
+    GOOGLE_API_KEY = None
+
+# Initialize the Gemini client if we have the key
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    client = genai.GenerativeModel('gemini-2.0-flash')  # Updated to use gemini-2.0-flash model
 else:
     client = None
 
@@ -334,11 +348,10 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
 
 def generate_learning_path(concept_text):
     """
-    Generates a learning path using DeepSeek Chat. 
-    Replace the prompt/model as needed for your scenario.
+    Generates a learning path using Gemini. 
     """
     if not client:
-        st.error("DeepSeek client is not initialized. Check your API key.")
+        st.error("Gemini client is not initialized. Check your API key.")
         return None
 
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
@@ -353,15 +366,8 @@ def generate_learning_path(concept_text):
     )
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using the DeepSeek model name
-            messages=[{"role": "system", "content": prompt}],
-            stream=False,
-            max_tokens=1500
-        )
-        # NOTE: Use dot-notation to access the message content
-        gpt_response = response.choices[0].message.content.strip()
-        return gpt_response
+        response = client.generate_content(prompt)
+        return response.text.strip()
     except Exception as e:
         st.error(f"Error generating learning path: {e}")
         return None
@@ -970,80 +976,6 @@ def teacher_dashboard():
 
         display_additional_graphs(st.session_state.teacher_weak_concepts)
 
-        # Bloom's Level
-        bloom_level = st.radio(
-            "Select Bloom's Taxonomy Level for the Questions",
-            [
-                "L1 (Remember)",
-                "L2 (Understand)",
-                "L3 (Apply)",
-                "L4 (Analyze)",
-                "L5 (Evaluate)"
-            ],
-            index=3,
-            key="bloom_taxonomy_selector"
-        )
-        bloom_short = bloom_level.split()[0]  # e.g. "L4"
-
-        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
-
-        if chosen_concept_text:
-            chosen_concept_id = concept_list[chosen_concept_text]
-            st.session_state.selected_teacher_concept_id = chosen_concept_id
-            st.session_state.selected_teacher_concept_text = chosen_concept_text
-
-            if st.button("Generate Exam Questions", key="generate_exam_btn"):
-                if not client:
-                    st.error("DeepSeek client is not initialized. Check your API key.")
-                    return
-
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                prompt = (
-                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
-                    f"Teacher Mode Instructions:\n"
-                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
-                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
-                    f"- Offer insights into common student difficulties and ways to address them.\n"
-                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
-                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
-                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
-                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
-                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
-                    f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
-                    f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
-                )
-
-                with st.spinner("Generating exam questions... Please wait."):
-                    try:
-                        response = client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000,
-                            stream=False
-                        )
-                        # Use dot-notation to access the content
-                        questions = response.choices[0].message.content.strip()
-                        st.session_state.exam_questions = questions
-                        st.success("Exam questions generated successfully!")
-                        
-                        st.markdown("### 📝 Generated Exam Questions")
-                        st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
-                        
-                        pdf_bytes = generate_exam_questions_pdf(
-                            questions,
-                            chosen_concept_text,
-                            st.session_state.auth_data['UserInfo'][0]['FullName']
-                        )
-                        st.download_button(
-                            label="📥 Download Exam Questions as PDF",
-                            data=pdf_bytes,
-                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error generating exam questions: {e}")
-
     if selected_batch_id:
         # Fetch student info when batch is selected
         user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
@@ -1096,18 +1028,77 @@ def teacher_dashboard():
                 
                 st.progress(progress/100)
                 st.markdown(f"**Overall Progress:** {progress:.1f}%")
-                
-                # Add action buttons for the selected student
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Generate Learning Path", key=f"gen_path_{selected_student['UserID']}"):
-                        # Integrate with your existing learning path generation
-                        st.info("Generating personalized learning path...")
+
+        # Bloom's Level
+        st.subheader("📝 Question Generation")
+        bloom_level = st.radio(
+            "Select Bloom's Taxonomy Level for the Questions",
+            [
+                "L1 (Remember)",
+                "L2 (Understand)",
+                "L3 (Apply)",
+                "L4 (Analyze)",
+                "L5 (Evaluate)"
+            ],
+            index=3,
+            key="bloom_taxonomy_selector"
+        )
+        bloom_short = bloom_level.split()[0]  # e.g. "L4"
+
+        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
+        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
+
+        if chosen_concept_text:
+            chosen_concept_id = concept_list[chosen_concept_text]
+            st.session_state.selected_teacher_concept_id = chosen_concept_id
+            st.session_state.selected_teacher_concept_text = chosen_concept_text
+
+            if st.button("Generate Exam Questions", key="generate_exam_btn"):
+                if not client:
+                    st.error("Gemini client is not initialized. Check your API key.")
+                    return
+
+                branch_name = st.session_state.auth_data.get("BranchName", "their class")
+                prompt = (
+                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                    f"Teacher Mode Instructions:\n"
+                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
+                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
+                    f"- Offer insights into common student difficulties and ways to address them.\n"
+                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
+                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
+                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
+                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
+                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
+                    f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
+                    f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
+                )
+
+                with st.spinner("Generating exam questions... Please wait."):
+                    try:
+                        response = client.generate_content(prompt)
+                        gemini_response = response.text.strip()
+                        st.session_state.exam_questions = gemini_response
+                        st.success("Exam questions generated successfully!")
                         
-                with col2:
-                    if st.button("View Detailed Report", key=f"view_report_{selected_student['UserID']}"):
-                        # Add detailed student report view
-                        st.info("Loading detailed student report...")
+                        st.markdown("### 📝 Generated Exam Questions")
+                        st.markdown(gemini_response.replace("\n", "<br>"), unsafe_allow_html=True)
+                        
+                        pdf_bytes = generate_exam_questions_pdf(
+                            gemini_response,
+                            chosen_concept_text,
+                            st.session_state.auth_data['UserInfo'][0]['FullName']
+                        )
+                        st.download_button(
+                            label="📥 Download Exam Questions as PDF",
+                            data=pdf_bytes,
+                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                            mime="application/pdf"
+                        )
+                    except Exception as e:
+                        st.error(f"Error generating exam questions: {e}")
+                
+                
 
 # ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
@@ -1131,6 +1122,9 @@ def add_initial_greeting():
                 f"2. Just type the class name you want to analyze (e.g., '10A')\n"
                 f"3. Type 'show students' to see all students in that class\n"
                 f"4. Type the student's name you want to analyze (e.g., 'John')\n\n"
+                f"Suggested Action Plan:\n"
+                f"1. Create a custom lesson plan tailored to your class's performance.\n"
+                f"2. Suggest instructional strategies you can use to enhance learning.\n\n"
                 f"What would you like to do?"
             )
             st.session_state.chat_history.append(("assistant", greeting_message))
@@ -1188,38 +1182,54 @@ Teacher Mode Instructions:
 - When asked about batches, show the above list and ask to select one.
 - When a batch is selected, fetch and show the student list for that batch.
 - Keep track of the currently selected student for context.
-- If user wants to switch students, help them select a new one.
+- If the user wants to switch students, help them select a new one.
 - Keep all mathematical expressions within LaTeX delimiters.
 - Focus on helping teachers analyze student performance and design effective strategies.
+- Generate a custom lesson plan tailored to your class's performance.
+- Suggest targeted instructional strategies to address students' learning gaps and enhance classroom engagement.
 
 Commands to recognize:
-- "show classes" or "show batches" or "list classes" or "list batches" - Display available batches
-- "select batch [BatchName]" or "choose batch [BatchName]" - Select a specific batch
-- "show students" or "list students" - Show students in current batch
-- "select student [StudentName]" or "discuss [StudentName]" - Select a student to discuss
+- "show classes" or "show batches" or "list classes" or "list batches" - Display available batches.
+- "select batch [BatchName]" or "choose batch [BatchName]" - Select a specific batch.
+- "show students" or "list students" - Show students in the current batch.
+- "select student [StudentName]" or "discuss [StudentName]" - Select a student to discuss.
+- "generate lesson plan" - Create a customized lesson plan based on class performance.
+- "suggest strategies" - Provide instructional strategies to improve student outcomes.
 """
+
+
     else:
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
 
         return f"""
-You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
 
 Student Mode Instructions:
-- The student is in {branch_name}, following the NCERT curriculum.
-- The student's weak concepts include: {weak_concepts_text}.
-- Always provide the list of weak concepts as: [{weak_concepts_text}].
-- Only talk about {topic_name} and nothing else.
-- Encourage the student to solve problems step-by-step and think critically.
-- Avoid giving answers. Instead, ask guiding questions and offer hints.
-- You job is to make the student reach the answers on its own.
-- If asked for exam or practice questions, present them progressively, aligned with {branch_name} NCERT guidelines.
+- The student is in {branch_name} and follows the NCERT curriculum.
+- The student's weak concepts are: {weak_concepts_text}. Always display this list as: [{weak_concepts_text}].
+- Focus exclusively on {topic_name} in your discussions.
+- Encourage the student to work through problems step-by-step and think critically.
+- Do not provide direct answers; instead, ask guiding questions and offer hints so the student can arrive at the solution independently.
+- When a student requests exam or practice questions, present them progressively in alignment with {branch_name} NCERT guidelines.
+- If the student asks for a test, deliver one multiple-choice question (MCQ) at a time.
+- Do not reveal any correct answers or explanations immediately after a response. Allow the student to complete the entire test first.
+- After the test is completed, provide a comprehensive report that:
+  - Shows the correct answers alongside the student's responses,
+  - Highlights where errors occurred,
+  - Offers a detailed analysis of current learning gaps,
+  - Identifies previous learning gaps by specifying the class level where the concept was not mastered,
+  - Provides actionable strategies for improvement to address both current and past gaps.
+- Note: Since you are currently in {branch_name} (for example, if you are in Class 8), any previous learning gaps should refer to concepts taught in earlier classes (such as Class 6th or Class 7th), while current gaps should focus on topics from {branch_name}.
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
 """
 
+
+
+
 def get_gpt_response(user_input):
     if not client:
-        st.error("DeepSeek client is not initialized. Check your API key.")
+        st.error("Gemini client is not initialized. Check your API key.")
         return
     
     if st.session_state.is_teacher:
@@ -1229,26 +1239,22 @@ def get_gpt_response(user_input):
             st.session_state.chat_history.append(("assistant", command_response))
             return
     
-    # Continue with normal GPT response for non-commands
+    # Continue with normal Gemini response for non-commands
     system_prompt = get_system_prompt()
-    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-    conversation_history_formatted += [
-        {"role": role, "content": content}
-        for role, content in st.session_state.chat_history
-    ]
+    
+    # Format conversation history for Gemini
+    conversation_history = f"{system_prompt}\n\nConversation history:\n"
+    for role, content in st.session_state.chat_history:
+        conversation_history += f"{'User' if role == 'user' else 'Assistant'}: {content}\n"
+    conversation_history += f"\nUser: {user_input}\nAssistant:"
     
     try:
         with st.spinner("EeeBee is thinking..."):
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=conversation_history_formatted,
-                max_tokens=2000,
-                stream=False
-            )
-            gpt_response = response.choices[0].message.content.strip()
-            st.session_state.chat_history.append(("assistant", gpt_response))
+            response = client.generate_content(conversation_history)
+            gemini_response = response.text.strip()
+            st.session_state.chat_history.append(("assistant", gemini_response))
     except Exception as e:
-        st.error(f"Error in GPT response: {e}")
+        st.error(f"Error in Gemini response: {e}")
 
 def display_chat(user_name: str):
     chat_container = st.container()
