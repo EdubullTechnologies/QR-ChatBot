@@ -1553,35 +1553,20 @@ def get_gpt_response(user_input):
 
     st.session_state.chat_history.append(("assistant", streaming_response))
 
-def display_tabs_parallel():
-    # Wrap tabs in a sticky container
-    with st.container():
-        st.markdown('<div class="sticky-tabs">', unsafe_allow_html=True)
-        tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Load data if needed
-    if not st.session_state.baseline_data or not st.session_state.all_concepts:
-        with st.spinner("EeeBee is waking up..."):
-            load_data_parallel()
-    
-    # Display each tab's content
-    with tab_containers[0]:
-        st.subheader("Chat with your EeeBee AI buddy")
-        add_initial_greeting()
-        display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
-    
-    with tab_containers[1]:
-        st.subheader("Your Personalized Learning Path")
-        display_learning_path_tab()
-    
-    with tab_containers[2]:
-        st.subheader("Gap Analyzer")
-        display_all_concepts_tab()
-    
-    with tab_containers[3]:
-        st.subheader("Baseline Testing Report")
-        baseline_testing_report()
+def add_initial_greeting():
+    """Add initial greeting message to chat history if it doesn't exist"""
+    if not st.session_state.chat_history:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', 'this topic')
+        branch_name = st.session_state.auth_data.get('BranchName', 'your class')
+        
+        greeting = (
+            f"👋 Hello {user_name}! I'm EeeBee, your AI learning buddy for {topic_name}. "
+            f"I'm here to help you understand concepts, answer questions, and guide your learning journey for {branch_name}. "
+            "Feel free to ask me anything about the topic!"
+        )
+        
+        st.session_state.chat_history.append(("assistant", greeting))
 
 if __name__ == "__main__":
     main()
