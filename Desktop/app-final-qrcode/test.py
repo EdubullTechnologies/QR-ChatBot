@@ -1488,5 +1488,47 @@ def add_initial_greeting():
         st.session_state.chat_history.append(("assistant", greeting_message))
         st.session_state.greeting_added = True
 
+def display_chat(user_name):
+    """
+    Display the chat interface and handle user interactions.
+    """
+    # Display chat history
+    for message in st.session_state.chat_history:
+        role, content = message
+        if role == "user":
+            st.markdown(f"**You:** {content}")
+        else:
+            st.markdown(f"**EeeBee:** {content}")
+
+    # Chat input
+    user_input = st.chat_input("Type your message here...")
+    
+    if user_input:
+        # Add user message to chat history
+        st.session_state.chat_history.append(("user", user_input))
+        
+        # Handle teacher-specific commands first
+        if st.session_state.is_teacher:
+            teacher_response = handle_teacher_commands(user_input)
+            if teacher_response:
+                st.session_state.chat_history.append(("assistant", teacher_response))
+                st.rerun()
+                return
+
+        # Generate AI response
+        prompt = (
+            f"You are EeeBee, an educational AI assistant specialized in {st.session_state.auth_data.get('TopicName', 'this topic')}. "
+            f"The user is a {'teacher' if st.session_state.is_teacher else 'student'} named {user_name}. "
+            f"Previous conversation:\n"
+            + "\n".join([f"{'User' if msg[0]=='user' else 'Assistant'}: {msg[1]}" for msg in st.session_state.chat_history[-5:]])
+            + f"\n\nUser's message: {user_input}\n\n"
+            "Provide a helpful, educational response. Use LaTeX for mathematical expressions (enclosed in $ or $$)."
+        )
+        
+        response = generate_response(prompt)
+        if response:
+            st.session_state.chat_history.append(("assistant", response))
+            st.rerun()
+
 if __name__ == "__main__":
     main()
