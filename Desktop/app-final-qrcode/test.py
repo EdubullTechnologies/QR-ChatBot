@@ -28,7 +28,7 @@ if prompt := st.chat_input("What is up?"):
 
     # Prepare to stream the assistant's response
     assistant_response = ""
-    # Use a placeholder to update the response in real time
+    # Use a placeholder to update the response in reals time
     with st.chat_message("assistant"):
         placeholder = st.empty()
         # Create a streaming response using OpenAI's API
