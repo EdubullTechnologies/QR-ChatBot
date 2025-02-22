@@ -29,7 +29,6 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import plotly.express as px
-import time
 
 # ----------------------------------------------------------------------------
 # Replace OpenAI client with Google GenAI client
@@ -153,9 +152,11 @@ def generate_response(prompt):
     try:
         response = client.models.generate_content(
             model="gemini-2.0-flash",
-            contents=prompt
+            contents=prompt,
+            stream=True
         )
-        return response.text.strip()
+        for chunk in response:
+            yield chunk.text
     except Exception as e:
         st.error(f"Error generating response: {e}")
         return None
@@ -830,6 +831,26 @@ def display_additional_graphs(weak_concepts):
         title='Overall Cleared vs Not Cleared Students'
     )
     st.altair_chart(donut_chart, use_container_width=True)
+    df_long = df.melt(
+        id_vars='ConceptText',
+        value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
+        var_name='Category',
+        value_name='Count'
+    )
+    df_long['Category'] = df_long['Category'].replace({
+        'AttendedStudentCount': 'Attended',
+        'ClearedStudentCount': 'Cleared'
+    })
+    horizontal_bar = alt.Chart(df_long).mark_bar().encode(
+        x=alt.X('Count:Q'),
+        y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
+        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
+        tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
+    ).properties(
+        title='Attended vs Cleared per Concept (Horizontal View)',
+        width=600
+    )
+    st.altair_chart(horizontal_bar, use_container_width=True)
 
 def teacher_dashboard():
     batches = st.session_state.auth_data.get("BatchList", [])
@@ -955,7 +976,20 @@ def teacher_dashboard():
                     st.error("Google GenAI client is not initialized. Check your API key.")
                     return
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                prompt = get_system_prompt()
+                prompt = (
+                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                    f"Teacher Mode Instructions:\n"
+                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
+                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
+                    f"- Offer insights into common student difficulties and ways to address them.\n"
+                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
+                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
+                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
+                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
+                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
+                    f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
+                    f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
+                )
                 with st.spinner("Generating exam questions... Please wait."):
                     questions = generate_response(prompt)
                     # Remove any leading "assistant:" if present
@@ -1139,29 +1173,26 @@ def load_data_parallel():
             st.error(f"Error fetching all concepts: {e}")
 
 def display_tabs_parallel():
-    # Sticky tabs implementation
-    with st.container():
-        tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
-    
-    # Load data if needed
+    tab_containers = st.tabs(["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"])
+    chat_placeholder = tab_containers[0].empty()
+    learning_path_placeholder = tab_containers[1].empty()
+    all_concepts_placeholder = tab_containers[2].empty()
+    baseline_testing_placeholder = tab_containers[3].empty()
     if not st.session_state.baseline_data or not st.session_state.all_concepts:
         with st.spinner("EeeBee is waking up..."):
             load_data_parallel()
-    
-    # Display each tab's content
     with tab_containers[0]:
+        chat_placeholder.subheader("Chat with your EeeBee AI buddy")
+        add_initial_greeting()
         display_chat(st.session_state.auth_data['UserInfo'][0]['FullName'])
-    
     with tab_containers[1]:
-        st.subheader("Your Personalized Learning Path")
+        learning_path_placeholder.subheader("Your Personalized Learning Path")
         display_learning_path_tab()
-    
     with tab_containers[2]:
-        st.subheader("Gap Analyzer")
+        all_concepts_placeholder.subheader("Gap Analyzer")
         display_all_concepts_tab()
-    
     with tab_containers[3]:
-        st.subheader("Baseline Testing Report")
+        baseline_testing_placeholder.subheader("Baseline Testing Report")
         baseline_testing_report()
 
 def display_learning_path_tab():
@@ -1336,30 +1367,6 @@ def handle_teacher_commands(user_input: str):
             )
         else:
             return "I couldn't get the student information for this class. Please try again."
-    if "show students" in input_lower or "list students" in input_lower:
-        if hasattr(st.session_state, 'current_batch_students'):
-            students = st.session_state.current_batch_students
-            all_cleared = []
-            partial_progress = []
-            no_progress = []
-            for student in students:
-                if student['ClearedConceptCount'] == student['TotalConceptCount']:
-                    all_cleared.append(student['FullName'])
-                elif student['ClearedConceptCount'] > 0:
-                    partial_progress.append(
-                        f"- {student['FullName']} ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
-                    )
-                else:
-                    no_progress.append(student['FullName'])
-            response = "Students in this class:\n\n"
-            if all_cleared:
-                response += "✅ Completed all concepts:\n- " + "\n- ".join(all_cleared) + "\n\n"
-            if partial_progress:
-                response += "🔄 In progress:\n" + "\n".join(partial_progress) + "\n\n"
-            if no_progress:
-                response += "⚠️ No concepts cleared:\n- " + "\n- ".join(no_progress) + "\n\n"
-            response += "Just type a student's name to analyze their progress"
-            return response
     if hasattr(st.session_state, 'current_batch_students'):
         selected_student = next(
             (s for s in st.session_state.current_batch_students if s['FullName'].lower() == input_lower), None)
@@ -1418,165 +1425,79 @@ def handle_teacher_commands(user_input: str):
             return response
     return None
 
-# --- Custom CSS for Sticky Elements ---
-st.markdown("""
+def display_chat(user_name: str):
+    st.markdown("""
     <style>
-        /* Sticky header container */
-        div[data-testid="stVerticalBlock"] > div:first-child {
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            background: white;
-            padding: 0.5rem 1rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .stChatMessage {
+            max-width: 80%;
+            padding: 12px;
+            border-radius: 15px;
+            margin-bottom: 8px;
         }
-        
-        /* Chat messages container */
-        div[data-testid="chatMessages"] {
-            max-height: 70vh;
-            overflow-y: auto;
-            padding-bottom: 100px; /* Space for input */
+        [data-testid="stVerticalBlock"] > [style*="flex-direction: column"] > [data-testid="stVerticalBlock"] {
+            gap: 0.2rem;
         }
-        
-        /* Input container */
-        div[data-testid="stChatInput"] {
+        .stChatInput {
             position: fixed;
-            bottom: 2rem;
-            left: 1rem;
-            right: 1rem;
+            bottom: 20px;
+            width: calc(100% - 60px);
             background: white;
-            z-index: 1000;
-            padding: 1rem;
-            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+            z-index: 999;
         }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-def display_chat(user_name: str):
-    # Create containers for different parts
-    header_container = st.container()
-    chat_container = st.container()
-    input_container = st.container()
-    
-    with header_container:
-        st.subheader("Chat with your EeeBee AI buddy")
-        add_initial_greeting()
-    
-    with chat_container:
-        # Display chat messages
-        for role, message in st.session_state.chat_history:
-            if role == "assistant":
-                st.chat_message("assistant", avatar="🤖").markdown(message)
-            else:
-                st.chat_message("user", avatar="👤").markdown(message)
+    # Display chat messages
+    for msg in st.session_state.chat_history:
+        if msg["role"] == "user":
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(msg["content"])
+        else:
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown(msg["content"], unsafe_allow_html=True)
+
+    # Handle user input
+    if prompt := st.chat_input("Message EeeBee..."):
+        # Add user message to chat history
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
         
-        # Auto-scroll hack
-        st.markdown('<div id="bottom"></div>', unsafe_allow_html=True)
-    
-    with input_container:
-        # User input with auto-scroll
-        user_input = st.chat_input("Enter your question about the topic")
-        if user_input:
-            handle_user_input(user_input)
-            # Trigger scroll after input
-            st.markdown("""
-                <script>
-                    window.addEventListener('load', function() {
-                        var element = document.getElementById('bottom');
-                        element.scrollIntoView();
-                    });
-                </script>
-            """, unsafe_allow_html=True)
-
-def handle_user_input(user_input):
-    # Add user message to chat history
-    st.session_state.chat_history.append(("user", user_input))
-    # Get AI response
-    get_gpt_response(user_input)
-    # Rerun to update the chat UI
-    st.rerun()
-
-def get_gpt_response(user_input):
-    if not client:
-        st.error("Google GenAI client is not initialized. Check your API key.")
-        return
-    
-    system_prompt = get_system_prompt()
-    conversation_history_formatted = "\n".join([f"{role}: {content}" for role, content in st.session_state.chat_history])
-    full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
-
-    try:
-        # Create a message placeholder
+        # Display user message immediately
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt)
+        
+        # Create placeholder for streaming response
         with st.chat_message("assistant", avatar="🤖"):
-            message_placeholder = st.empty()
-            streaming_response = ""
+            response_placeholder = st.empty()
+            full_response = ""
             
-            # Get and stream the response
-            full_response = generate_response(full_prompt)
-            for char in full_response:
-                streaming_response += char
-                message_placeholder.markdown(streaming_response + "▌")
-                time.sleep(0.01)
+            # Stream the response
+            for chunk in generate_response(prompt):
+                full_response += chunk
+                response_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
             
-            # Final message without cursor
-            message_placeholder.markdown(streaming_response)
+            response_placeholder.markdown(full_response, unsafe_allow_html=True)
         
-        # Add to history and scroll
-        st.session_state.chat_history.append(("assistant", streaming_response))
-        st.rerun()
+        # Add assistant response to chat history
+        st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+
+    # Auto-scroll JavaScript
+    st.markdown("""
+    <script>
+        window.addEventListener('DOMContentLoaded', function() {
+            const scrollToBottom = () => {
+                const container = document.querySelector('[data-testid="stAppViewBlockContainer"]');
+                if (container) container.scrollTop = container.scrollHeight;
+            };
             
-    except Exception as e:
-        st.error(f"Error during streaming: {e}")
-        return
-
-def add_initial_greeting():
-    """Add initial greeting message to chat history if it doesn't exist"""
-    if not st.session_state.chat_history:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-        topic_name = st.session_state.auth_data.get('TopicName', 'this topic')
-        branch_name = st.session_state.auth_data.get('BranchName', 'your class')
-        
-        greeting = (
-            f"👋 Hello {user_name}! I'm EeeBee, your AI learning buddy for {topic_name}. "
-            f"I'm here to help you understand concepts, answer questions, and guide your learning journey for {branch_name}. "
-            "Feel free to ask me anything about the topic!"
-        )
-        
-        st.session_state.chat_history.append(("assistant", greeting))
-
-def get_system_prompt():
-    """Generate the system prompt based on user type and context"""
-    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    
-    if st.session_state.is_teacher:
-        batches = st.session_state.auth_data.get("BatchList", [])
-        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
-        return f"""You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
-
-Teacher Mode Instructions:
-- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.
-- Offer insights into common student difficulties and ways to address them.
-- Encourage a teaching methodology where students learn progressively.
-- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.
-- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).
-- Available batches:
-{batch_list}"""
-    else:
-        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
-        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none identified yet"
-        return f"""You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
-
-Student Mode Instructions:
-- You are helping a student in {branch_name} following the NCERT curriculum.
-- The student's weak concepts are: [{weak_concepts_text}].
-- Explain concepts clearly and simply, appropriate for {branch_name} level.
-- Use examples and analogies to make concepts more relatable.
-- Break down complex problems into simpler steps.
-- Encourage critical thinking through guiding questions.
-- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).
-- Be encouraging and supportive while maintaining accuracy."""
+            // Initial scroll
+            scrollToBottom();
+            
+            // MutationObserver to detect new messages
+            const observer = new MutationObserver(scrollToBottom);
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    </script>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
