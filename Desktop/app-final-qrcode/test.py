@@ -1009,167 +1009,6 @@ def teacher_dashboard():
                         mime="application/pdf"
                     )
 
-# ------------------- 2J) CHAT FUNCTIONS -------------------
-def add_initial_greeting():
-    # Only add the greeting if it hasn't been added before
-    if not st.session_state.get("greeting_added", False) and st.session_state.auth_data:
-        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
-        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
-        if st.session_state.is_teacher:
-            batches = st.session_state.auth_data.get("BatchList", [])
-            batch_list = "\n".join([f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)" for b in batches])
-            greeting_message = (
-                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-                f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
-                f"You are currently teaching these classes:\n{batch_list}\n\n"
-                f"To get started:\n"
-                f"1. Type 'show classes' to see your classes\n"
-                f"2. Just type the class name you want to analyze (e.g., '10A')\n"
-                f"3. Type 'show students' to see all students in that class\n"
-                f"4. Type the student's name you want to analyze (e.g., 'John')\n\n"
-                f"Suggested Action Plan:\n"
-                f"1. Create a custom lesson plan tailored to your class's performance.\n"
-                f"2. Suggest instructional strategies you can use to enhance learning.\n\n"
-                f"What would you like to do?"
-            )
-        else:
-            concept_list = st.session_state.auth_data.get('ConceptList', [])
-            weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
-            concept_options = "\n\n**📚 Available Concepts:**\n" + "\n".join([f"- {c['ConceptText']}" for c in concept_list])
-            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n" + "\n".join([f"- {c['ConceptText']}" for c in weak_concepts]) if weak_concepts else ""
-            greeting_message = (
-                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-                f"I'm here to help you with {topic_name}.\n\n"
-                f"You can:\n"
-                f"1. Ask me questions about any concept\n"
-                f"2. Request learning resources (videos, notes, exercises)\n"
-                f"3. Get help understanding specific topics\n"
-                f"{concept_options}"
-                f"{weak_concepts_text}\n\n"
-                f"What would you like to discuss?"
-            )
-        st.session_state.chat_history.append(("assistant", greeting_message))
-        st.session_state.greeting_added = True
-
-def handle_user_input(user_input):
-    if user_input:
-        st.session_state.chat_history.append(("user", user_input))
-        get_gpt_response(user_input)
-        st.rerun()
-
-def get_system_prompt():
-    topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
-    branch_name = st.session_state.auth_data.get('BranchName', 'their class')
-    if st.session_state.is_teacher:
-        batches = st.session_state.auth_data.get("BatchList", [])
-        batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
-        return f"""
-You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
-
-Teacher Mode Instructions:
-- The user is a teacher instructing {branch_name} students under the NCERT curriculum.
-- Available batches:\n{batch_list}
-- When asked about batches, show the above list and ask to select one.
-- When a batch is selected, fetch and show the student list for that batch.
-- Keep track of the currently selected student for context.
-- If the user wants to switch students, help them select a new one.
-- Keep all mathematical expressions within LaTeX delimiters.
-- Focus on helping teachers analyze student performance and design effective strategies.
-- Generate a custom lesson plan tailored to your class's performance.
-- Suggest targeted instructional strategies to address students' learning gaps and enhance classroom engagement.
-
-Commands to recognize:
-- "show classes" or "show batches" or "list classes" or "list batches" - Display available batches.
-- "select batch [BatchName]" or "choose batch [BatchName]" - Select a specific batch.
-- "show students" or "list students" - Show students in the current batch.
-- "select student [StudentName]" or "discuss [StudentName]" - Select a student to discuss.
-- "generate lesson plan" - Create a customized lesson plan based on class performance.
-- "suggest strategies" - Provide instructional strategies to improve student outcomes.
-"""
-    else:
-        weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
-        weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
-        return f"""
-You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
-
-Student Mode Instructions:
-- The student is in {branch_name} and follows the NCERT curriculum.
-- The student's weak concepts are: {weak_concepts_text}. Always display this list as: [{weak_concepts_text}].
-- Focus exclusively on {topic_name} in your discussions.
-- Encourage the student to work through problems step-by-step and think critically.
-- Do not provide direct answers; instead, ask guiding questions and offer hints so the student can arrive at the solution independently.
-- When a student requests exam or practice questions, present them progressively in alignment with {branch_name} NCERT guidelines.
-- If the student asks for a test, deliver one multiple-choice question (MCQ) at a time.
-- Do not reveal any correct answers or explanations immediately after a response. Allow the student to complete the entire test first.
-- After the test is completed, provide a comprehensive report that:
-  - Shows the correct answers alongside the student’s responses,
-  - Highlights where errors occurred,
-  - Offers a detailed analysis of current learning gaps,
-  - Identifies previous learning gaps by specifying the class level where the concept was not mastered,
-  - Provides actionable strategies for improvement to address both current and past gaps.
-- Note: Since you are currently in {branch_name} (for example, if you are in Class 8), any previous learning gaps should refer to concepts taught in earlier classes (such as Class 6th or Class 7th), while current gaps should focus on topics from {branch_name}.
-- All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
-"""
-
-def get_gpt_response(user_input):
-    if not client:
-        st.error("Google GenAI client is not initialized. Check your API key.")
-        return
-    if st.session_state.is_teacher:
-        command_response = handle_teacher_commands(user_input)
-        if command_response:
-            st.session_state.chat_history.append(("assistant", command_response))
-            return
-    system_prompt = get_system_prompt()
-    conversation_history_formatted = "\n".join([f"{role}: {content}" for role, content in st.session_state.chat_history])
-    full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
-    with st.spinner("EeeBee is thinking..."):
-        gpt_response = generate_response(full_prompt)
-        if gpt_response:
-            # Remove any leading "assistant:" from the generated text if present
-            if gpt_response.lower().startswith("assistant:"):
-                gpt_response = gpt_response[len("assistant:"):].strip()
-            st.session_state.chat_history.append(("assistant", gpt_response))
-
-def display_chat(user_name: str):
-    chat_container = st.container()
-    with chat_container:
-        chat_key = f"chat_container_{len(st.session_state.chat_history)}"
-        chat_history_html = f"""
-        <div id="{chat_key}" style="height: 400px; overflow-y: auto; border: 1px solid #ddd;
-        padding: 10px; background-color: #f3f4f6; border-radius: 10px;">
-        """
-        for role, message in st.session_state.chat_history:
-            if role == "assistant":
-                chat_history_html += (
-                    "<div style='text-align: left; color: #000; background-color: #e0e7ff;"
-                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
-                    f"<b>EeeBee:</b> {message}</div>"
-                )
-            else:
-                chat_history_html += (
-                    "<div style='text-align: left; color: #fff; background-color: #2563eb;"
-                    "padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
-                    f"<b>{user_name}:</b> {message}</div>"
-                )
-        chat_history_html += "</div>"
-        chat_history_html += f"""
-        <script>
-            function scrollToBottom() {{
-                var chatContainer = document.getElementById("{chat_key}");
-                if (chatContainer) {{
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                }}
-            }}
-            scrollToBottom();
-            setTimeout(scrollToBottom, 100);
-        </script>
-        """
-        st.markdown(chat_history_html, unsafe_allow_html=True)
-    user_input = st.chat_input("Enter your question about the topic")
-    if user_input:
-        handle_user_input(user_input)
-
 # ----------------------------------------------------------------------------
 # 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
 # ----------------------------------------------------------------------------
@@ -1607,6 +1446,47 @@ def handle_teacher_commands(user_input: str):
             )
             return response
     return None
+
+def add_initial_greeting():
+    # Only add the greeting if it hasn't been added before AND there's no existing chat history
+    if not st.session_state.get("greeting_added", False) and st.session_state.auth_data and not st.session_state.chat_history:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
+        if st.session_state.is_teacher:
+            batches = st.session_state.auth_data.get("BatchList", [])
+            batch_list = "\n".join([f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)" for b in batches])
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
+                f"You are currently teaching these classes:\n{batch_list}\n\n"
+                f"To get started:\n"
+                f"1. Type 'show classes' to see your classes\n"
+                f"2. Just type the class name you want to analyze (e.g., '10A')\n"
+                f"3. Type 'show students' to see all students in that class\n"
+                f"4. Type the student's name you want to analyze (e.g., 'John')\n\n"
+                f"Suggested Action Plan:\n"
+                f"1. Create a custom lesson plan tailored to your class's performance.\n"
+                f"2. Suggest instructional strategies you can use to enhance learning.\n\n"
+                f"What would you like to do?"
+            )
+        else:
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
+            weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+            concept_options = "\n\n**📚 Available Concepts:**\n" + "\n".join([f"- {c['ConceptText']}" for c in concept_list])
+            weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n" + "\n".join([f"- {c['ConceptText']}" for c in weak_concepts]) if weak_concepts else ""
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you with {topic_name}.\n\n"
+                f"You can:\n"
+                f"1. Ask me questions about any concept\n"
+                f"2. Request learning resources (videos, notes, exercises)\n"
+                f"3. Get help understanding specific topics\n"
+                f"{concept_options}"
+                f"{weak_concepts_text}\n\n"
+                f"What would you like to discuss?"
+            )
+        st.session_state.chat_history.append(("assistant", greeting_message))
+        st.session_state.greeting_added = True
 
 if __name__ == "__main__":
     main()
