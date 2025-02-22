@@ -30,18 +30,13 @@ from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import plotly.express as px
 
-# Import DeepSeek-style client from openai package
-try:
-    from openai import OpenAI
-except ImportError:
-    st.error("Please install the openai library: pip3 install openai")
-    raise
-
-# Replace OpenAI import with Google Gemini
+# ----------------------------------------------------------------------------
+# Replace OpenAI client with Google GenAI client
+# ----------------------------------------------------------------------------
 try:
     from google import genai
 except ImportError:
-    st.error("Please install the google-generativeai library: pip3 install google-generativeai")
+    st.error("Please install the google genai library: pip3 install google-genai")
     raise
 
 # ----------------------------------------------------------------------------
@@ -54,24 +49,16 @@ warnings.simplefilter("ignore", DeprecationWarning)
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Load OpenAI (DeepSeek) API Key (from Streamlit secrets)
+# Load GenAI API Key (from Streamlit secrets)
 try:
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+    GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
 except KeyError:
-    st.error("API key for OpenAI/DeepSeek not found in secrets.")
-    OPENAI_API_KEY = None
+    st.error("API key for Google GenAI not found in secrets.")
+    GENAI_API_KEY = None
 
-# Replace OpenAI client initialization
-try:
-    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]  # Update secrets to use Google API key
-except KeyError:
-    st.error("API key for Google Gemini not found in secrets.")
-    GOOGLE_API_KEY = None
-
-# Initialize the Gemini client if we have the key
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
-    client = genai.GenerativeModel('gemini-2.0-flash')  # Updated to use gemini-2.0-flash model
+# Initialize the GenAI client if we have the key
+if GENAI_API_KEY:
+    client = genai.Client(api_key=GENAI_API_KEY)
 else:
     client = None
 
@@ -142,7 +129,7 @@ def show_gap_message():
 
 # Streamlit page config
 st.set_page_config(
-    page_title="EeeBee AI Buddy (Powered by Google Gemini)",
+    page_title="EeeBee AI Buddy",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="auto"
@@ -157,6 +144,20 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# ----------------------------------------------------------------------------
+# Helper function for GenAI responses
+# ----------------------------------------------------------------------------
+def generate_response(prompt):
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text.strip()
+    except Exception as e:
+        st.error(f"Error generating response: {e}")
+        return None
 
 # ----------------------------------------------------------------------------
 # 2) HELPER FUNCTIONS
@@ -348,15 +349,15 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
 
 def generate_learning_path(concept_text):
     """
-    Generates a learning path using Google Gemini. 
+    Generates a learning path using Google GenAI.
     """
     if not client:
-        st.error("Gemini client is not initialized. Check your API key.")
+        st.error("Google GenAI client is not initialized. Check your API key.")
         return None
 
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     prompt = (
-        f"You are a highly experienced educational AI assistant powered by Google Gemini, specializing in the NCERT curriculum. "
+        f"You are a highly experienced educational AI assistant specializing in the NCERT curriculum. "
         f"A student in {branch_name} is struggling with the weak concept: '{concept_text}'. "
         f"Please create a structured, step-by-step learning path tailored to {branch_name} students, "
         f"ensuring clarity, engagement, and curriculum alignment.\n\n"
@@ -365,12 +366,7 @@ def generate_learning_path(concept_text):
         f"All math expressions must be in LaTeX."
     )
 
-    try:
-        response = client.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        st.error(f"Error generating learning path: {e}")
-        return None
+    return generate_response(prompt)
 
 def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer = io.BytesIO()
@@ -458,7 +454,7 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
     buffer.close()
     return pdf_bytes
 
-# ------------------- 2D) LEARNING PATH GENERATION -------------------
+# ------------------- 2D) LEARNING PATH GENERATION DISPLAY -------------------
 def display_learning_path_with_resources(concept_text, learning_path, concept_list, topic_id):
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
     with st.expander(f"📚 Learning Path for {concept_text} (Grade: {branch_name})", expanded=False):
@@ -1055,12 +1051,12 @@ def teacher_dashboard():
 
             if st.button("Generate Exam Questions", key="generate_exam_btn"):
                 if not client:
-                    st.error("Gemini client is not initialized. Check your API key.")
+                    st.error("Google GenAI client is not initialized. Check your API key.")
                     return
 
                 branch_name = st.session_state.auth_data.get("BranchName", "their class")
                 prompt = (
-                    f"You are a highly knowledgeable educational assistant named EeeBee, powered by Google Gemini, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
                     f"Teacher Mode Instructions:\n"
                     f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
                     f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
@@ -1075,30 +1071,24 @@ def teacher_dashboard():
                 )
 
                 with st.spinner("Generating exam questions... Please wait."):
-                    try:
-                        response = client.generate_content(prompt)
-                        gemini_response = response.text.strip()
-                        st.session_state.exam_questions = gemini_response
-                        st.success("Exam questions generated successfully!")
-                        
-                        st.markdown("### 📝 Generated Exam Questions")
-                        st.markdown(gemini_response.replace("\n", "<br>"), unsafe_allow_html=True)
-                        
-                        pdf_bytes = generate_exam_questions_pdf(
-                            gemini_response,
-                            chosen_concept_text,
-                            st.session_state.auth_data['UserInfo'][0]['FullName']
-                        )
-                        st.download_button(
-                            label="📥 Download Exam Questions as PDF",
-                            data=pdf_bytes,
-                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error generating exam questions: {e}")
-                
-                
+                    questions = generate_response(prompt)
+                    st.session_state.exam_questions = questions
+                    st.success("Exam questions generated successfully!")
+                    
+                    st.markdown("### 📝 Generated Exam Questions")
+                    st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
+                    
+                    pdf_bytes = generate_exam_questions_pdf(
+                        questions,
+                        chosen_concept_text,
+                        st.session_state.auth_data['UserInfo'][0]['FullName']
+                    )
+                    st.download_button(
+                        label="📥 Download Exam Questions as PDF",
+                        data=pdf_bytes,
+                        file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                        mime="application/pdf"
+                    )
 
 # ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
@@ -1129,7 +1119,6 @@ def add_initial_greeting():
             )
             st.session_state.chat_history.append(("assistant", greeting_message))
         else:
-            # Existing student mode code
             concept_list = st.session_state.auth_data.get('ConceptList', [])
             weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
             concept_options = "\n\n**📚 Available Concepts:**\n"
@@ -1174,7 +1163,7 @@ def get_system_prompt():
         batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
         
         return f"""
-You are a highly knowledgeable educational assistant named EeeBee, powered by Google Gemini, and specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
@@ -1196,14 +1185,12 @@ Commands to recognize:
 - "generate lesson plan" - Create a customized lesson plan based on class performance.
 - "suggest strategies" - Provide instructional strategies to improve student outcomes.
 """
-
-
     else:
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
 
         return f"""
-You are a highly knowledgeable educational assistant named EeeBee, powered by various Large Language Models and developed by iEdubull, specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
 
 Student Mode Instructions:
 - The student is in {branch_name} and follows the NCERT curriculum.
@@ -1215,7 +1202,7 @@ Student Mode Instructions:
 - If the student asks for a test, deliver one multiple-choice question (MCQ) at a time.
 - Do not reveal any correct answers or explanations immediately after a response. Allow the student to complete the entire test first.
 - After the test is completed, provide a comprehensive report that:
-  - Shows the correct answers alongside the student's responses,
+  - Shows the correct answers alongside the student’s responses,
   - Highlights where errors occurred,
   - Offers a detailed analysis of current learning gaps,
   - Identifies previous learning gaps by specifying the class level where the concept was not mastered,
@@ -1224,12 +1211,9 @@ Student Mode Instructions:
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
 """
 
-
-
-
 def get_gpt_response(user_input):
     if not client:
-        st.error("Gemini client is not initialized. Check your API key.")
+        st.error("Google GenAI client is not initialized. Check your API key.")
         return
     
     if st.session_state.is_teacher:
@@ -1239,30 +1223,20 @@ def get_gpt_response(user_input):
             st.session_state.chat_history.append(("assistant", command_response))
             return
     
-    # Continue with normal Gemini response for non-commands
+    # Combine system prompt and conversation history into one prompt
     system_prompt = get_system_prompt()
-    
-    # Format conversation history for Gemini
-    conversation_history = f"{system_prompt}\n\nConversation history:\n"
-    for role, content in st.session_state.chat_history:
-        conversation_history += f"{'User' if role == 'user' else 'Assistant'}: {content}\n"
-    conversation_history += f"\nUser: {user_input}\nAssistant:"
-    
-    try:
-        with st.spinner("EeeBee is thinking..."):
-            response = client.generate_content(conversation_history)
-            gemini_response = response.text.strip()
-            st.session_state.chat_history.append(("assistant", gemini_response))
-    except Exception as e:
-        st.error(f"Error in Gemini response: {e}")
+    conversation_history_formatted = "\n".join([f"{role}: {content}" for role, content in st.session_state.chat_history])
+    full_prompt = system_prompt + "\n" + conversation_history_formatted + "\nUser: " + user_input
+
+    with st.spinner("EeeBee is thinking..."):
+        gpt_response = generate_response(full_prompt)
+        if gpt_response:
+            st.session_state.chat_history.append(("assistant", gpt_response))
 
 def display_chat(user_name: str):
     chat_container = st.container()
     
-   
-    
     with chat_container:
-        # Add unique key for chat container
         chat_key = f"chat_container_{len(st.session_state.chat_history)}"
         
         chat_history_html = f"""
@@ -1286,7 +1260,6 @@ def display_chat(user_name: str):
         
         chat_history_html += "</div>"
         
-        # Add JavaScript for autoscroll
         chat_history_html += f"""
         <script>
             function scrollToBottom() {{
@@ -1295,7 +1268,6 @@ def display_chat(user_name: str):
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 }}
             }}
-            // Call immediately and after a short delay to ensure content is loaded
             scrollToBottom();
             setTimeout(scrollToBottom, 100);
         </script>
@@ -1409,16 +1381,14 @@ def login_screen():
     except Exception as e:
         st.error(f"Error loading image: {e}")
 
-    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your EeeBee AI Buddy powered by Google Gemini!</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
-    # Read query parameters from URL
     query_params = st.experimental_get_query_params()
     E_params = query_params.get("E", [None])
     T_params = query_params.get("T", [None])
     E_value = E_params[0]
     T_value = T_params[0]
 
-    # Check for conflicting parameters or missing ones
     if E_value is not None and T_value is not None:
         st.warning("Provide either ?E=xx for English OR ?T=xx for Non-English, not both.")
     elif E_value is not None and T_value is None:
@@ -1431,9 +1401,7 @@ def login_screen():
         st.warning("Please provide ?E=... or ?T=... in the URL.")
         return
 
-    # Conditionally display the user type selection:
     if st.session_state.is_english_mode:
-        # For English mode, force Student login and hide the radio button.
         st.markdown("**User Type:** Student")
         user_type_value = 3  # 3 for Student
     else:
@@ -1698,7 +1666,6 @@ def handle_teacher_commands(user_input: str):
     batches = st.session_state.auth_data.get("BatchList", [])
     selected_batch = next((b for b in batches if b['BatchName'].lower() == input_lower), None)
     if selected_batch:
-        # Fetch student info
         student_info = fetch_student_info(
             selected_batch["BatchID"],
             st.session_state.topic_id,
@@ -1709,11 +1676,9 @@ def handle_teacher_commands(user_input: str):
             st.session_state.current_batch_students = student_info["Students"]
             st.session_state.current_batch_concepts = student_info.get("Concepts", [])
             
-            # Calculate class statistics
             total_students = len(student_info["Students"])
             concepts = student_info.get("Concepts", [])
             
-            # Prepare concept statistics
             concept_stats = []
             for concept in concepts:
                 cleared_percent = (concept['ClearedStudentCount'] / concept['AttendedStudentCount'] * 100) if concept['AttendedStudentCount'] > 0 else 0
@@ -1738,7 +1703,6 @@ def handle_teacher_commands(user_input: str):
     if "show students" in input_lower or "list students" in input_lower:
         if hasattr(st.session_state, 'current_batch_students'):
             students = st.session_state.current_batch_students
-            # Group students by progress
             all_cleared = []
             partial_progress = []
             no_progress = []
@@ -1774,17 +1738,14 @@ def handle_teacher_commands(user_input: str):
         if selected_student:
             st.session_state.selected_student = selected_student
             
-            # Fetch detailed concept information
             student_concepts = fetch_student_concepts(
                 user_id=selected_student['UserID'],
                 topic_id=st.session_state.topic_id,
                 org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
             )
             
-            # Calculate progress percentage
             progress = (selected_student['ClearedConceptCount'] / selected_student['TotalConceptCount'] * 100) if selected_student['TotalConceptCount'] > 0 else 0
             
-            # Format concept details with performance metrics
             weak_concepts_details = []
             cleared_concepts_details = []
             
@@ -1798,7 +1759,6 @@ def handle_teacher_commands(user_input: str):
                     for concept in student_concepts.get('ClearedConcepts_List', [])
                 ]
             
-            # Calculate overall statistics
             total_questions = 0
             total_correct = 0
             total_time = 0
@@ -1811,7 +1771,6 @@ def handle_teacher_commands(user_input: str):
                     total_correct += concept['CorrectQuestion']
                     total_time += concept['TotalTimeTaken_SS']
             
-            # Build response message
             response = (
                 f"Looking at {selected_student['FullName']}'s progress:\n\n"
                 f"📊 Overall Performance:\n"
@@ -1852,3 +1811,4 @@ def handle_teacher_commands(user_input: str):
 
 if __name__ == "__main__":
     main()
+    # End of file.
