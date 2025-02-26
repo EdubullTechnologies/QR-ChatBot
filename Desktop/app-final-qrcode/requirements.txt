@@ -75,3 +75,7 @@ plotly
 openpyxl
 google-generativeai
 google-genai
+sounddevice
+soundfile
+scipy
+elevenlabs
