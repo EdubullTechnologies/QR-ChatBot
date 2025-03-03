@@ -1118,7 +1118,7 @@ def handle_user_input(user_input):
     if user_input:
         st.session_state.chat_history.append(("user", user_input))
         get_gpt_response(user_input)
-        st.experimental_rerun()
+        st.rerun()
 
 def display_chat(user_name: str):
     st.session_state.chat_placeholder = st.empty()
