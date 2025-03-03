@@ -1274,7 +1274,7 @@ def get_gpt_response(user_input):
                     st.session_state.chat_history[placeholder_index] = ("assistant", full_response)
                     
                     # Force a rerun to update the UI
-                    st.experimental_rerun()
+                    st.rerun()
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
         # If there's an error, add an error message to chat
