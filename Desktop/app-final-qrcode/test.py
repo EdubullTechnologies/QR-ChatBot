@@ -1247,18 +1247,38 @@ def get_gpt_response(user_input):
         for role, content in st.session_state.chat_history
     ]
     
+    # Add empty message placeholder for streaming
+    placeholder_index = len(st.session_state.chat_history)
+    st.session_state.chat_history.append(("assistant", ""))
+    
     try:
+        # Create a placeholder for the streaming response
         with st.spinner("EeeBee is thinking..."):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=conversation_history_formatted,
                 max_tokens=2000,
-                stream=False
+                stream=True  # Enable streaming
             )
-            gpt_response = response.choices[0].message.content.strip()
-            st.session_state.chat_history.append(("assistant", gpt_response))
+            
+            # Initialize an empty string for the full response
+            full_response = ""
+            
+            # Process the streaming response
+            for chunk in response:
+                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    
+                    # Update the last message in chat history
+                    st.session_state.chat_history[placeholder_index] = ("assistant", full_response)
+                    
+                    # Force a rerun to update the UI
+                    st.experimental_rerun()
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
+        # If there's an error, add an error message to chat
+        st.session_state.chat_history[placeholder_index] = ("assistant", f"I'm sorry, I encountered an error: {str(e)}")
 
 def display_chat(user_name: str):
     # Create a container for the chat
@@ -1266,7 +1286,7 @@ def display_chat(user_name: str):
     
     with chat_container:
         # Add unique key for chat container
-        chat_key = f"chat_container_{len(st.session_state.chat_history)}"
+        chat_key = f"chat_container_{id(st.session_state.chat_history)}"
         
         # Create a div with auto-scroll functionality
         chat_history_html = f"""
@@ -1277,23 +1297,26 @@ def display_chat(user_name: str):
         # Add messages with improved styling
         for role, message in st.session_state.chat_history:
             if role == "assistant":
+                # Escape any script tags in the message to prevent them from being executed
+                safe_message = message.replace("<script", "&lt;script").replace("</script>", "&lt;/script>")
                 chat_history_html += (
                     "<div style='text-align: left; color: #000; background-color: #e0e7ff;"
                     "padding: 12px; border-radius: 12px 12px 12px 0; margin: 8px 0; max-width: 85%; display: inline-block;'>"
-                    f"<b>EeeBee:</b><br>{message}</div><br clear='all'>"
+                    f"<b>EeeBee:</b><br>{safe_message}</div><br clear='all'>"
                 )
             else:
+                safe_message = message.replace("<script", "&lt;script").replace("</script>", "&lt;/script>")
                 chat_history_html += (
                     "<div style='text-align: left; color: #fff; background-color: #2563eb; float: right;"
                     "padding: 12px; border-radius: 12px 12px 0 12px; margin: 8px 0; max-width: 85%; display: inline-block;'>"
-                    f"<b>{user_name}:</b><br>{message}</div><br clear='all'>"
+                    f"<b>{user_name}:</b><br>{safe_message}</div><br clear='all'>"
                 )
         
         chat_history_html += "</div>"
         
-        # Add JavaScript for smooth auto-scrolling with animation
-        chat_history_html += f"""
-        <script>
+        # Add JavaScript for smooth auto-scrolling with animation in a separate component
+        js_code = f"""
+        <script type="text/javascript">
             function smoothScrollToBottom() {{
                 var chatContainer = document.getElementById("{chat_key}");
                 if (chatContainer) {{
@@ -1305,8 +1328,8 @@ def display_chat(user_name: str):
             }}
             
             // Call immediately and after a short delay to ensure content is loaded
-            smoothScrollToBottom();
             setTimeout(smoothScrollToBottom, 100);
+            setTimeout(smoothScrollToBottom, 500);
             
             // Set up a mutation observer to detect changes in the chat container
             const observer = new MutationObserver(function(mutations) {{
@@ -1314,13 +1337,18 @@ def display_chat(user_name: str):
             }});
             
             // Start observing the chat container for changes
+            var chatContainer = document.getElementById("{chat_key}");
             if (chatContainer) {{
                 observer.observe(chatContainer, {{ childList: true, subtree: true }});
             }}
         </script>
         """
         
+        # First render the chat history
         st.markdown(chat_history_html, unsafe_allow_html=True)
+        
+        # Then render the JavaScript in a separate component
+        st.components.v1.html(js_code, height=0)
 
     # Add a chat input at the bottom
     user_input = st.chat_input("Enter your question about the topic")
