@@ -56,7 +56,6 @@ except KeyError:
 
 # Initialize the DeepSeek (OpenAI-like) client if we have the key
 if OPENAI_API_KEY:
-    # Create the client with your base_url
     client = OpenAI(api_key=OPENAI_API_KEY)
 else:
     client = None
@@ -67,7 +66,7 @@ API_AUTH_URL_MATH_SCIENCE = "https://webapi.edubull.com/api/eProfessor/eProf_Org
 API_CONTENT_URL = "https://webapi.edubull.com/api/eProfessor/WeakConcept_Remedy_List_ByConceptID"
 API_TEACHER_WEAK_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts"
 API_BASELINE_REPORT = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Baseline_Report_Single_Student"
-API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"  # New API Endpoint for All Concepts
+API_ALL_CONCEPTS_URL = "https://webapi.edubull.com/api/eProfessor/eProf_Org_ConceptList_Single_Student"
 API_STUDENT_INFO = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Weak_Concepts_AND_Students"
 API_STUDENT_CONCEPTS = "https://webapi.edubull.com/api/eProfessor/eProf_Org_Teacher_Topic_Wise_Concepts_OF_Students"
 
@@ -108,11 +107,11 @@ if "available_concepts" not in st.session_state:
 if "baseline_data" not in st.session_state:
     st.session_state.baseline_data = None
 if "subject_id" not in st.session_state:
-    st.session_state.subject_id = None  # Default if unknown
+    st.session_state.subject_id = None
 if "user_id" not in st.session_state:
-    st.session_state.user_id = None  # Initialize UserID
+    st.session_state.user_id = None
 if "all_concepts" not in st.session_state:
-    st.session_state.all_concepts = []  # Initialize All Concepts
+    st.session_state.all_concepts = []
 if "remedial_info" not in st.session_state:
     st.session_state.remedial_info = None
 if 'show_gap_message' not in st.session_state:
@@ -122,7 +121,7 @@ if "selected_student" not in st.session_state:
 if "student_info" not in st.session_state:
     st.session_state.student_info = None
 
-# We'll use a placeholder for the chat container to update streaming responses.
+# We'll use a placeholder for the chat container (for streaming updates)
 if "chat_placeholder" not in st.session_state:
     st.session_state.chat_placeholder = None
 
@@ -154,9 +153,6 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # ------------------- 2A) LATEX TO IMAGE -------------------
 def latex_to_image(latex_code, dpi=300):
-    """
-    Converts LaTeX code to PNG and returns it as a BytesIO object.
-    """
     try:
         plt.figure(figsize=(0.01, 0.01))
         plt.text(0.5, 0.5, f"${latex_code}$", fontsize=12, ha='center', va='center')
@@ -201,9 +197,6 @@ def get_resources_for_concept(concept_text, concept_list, topic_id):
     return get_matching_resources(concept_text, concept_list, topic_id)
 
 def format_resources_message(resources):
-    """
-    Format resources data into a chat-friendly message.
-    """
     if not resources:
         return "No remedial resources available for this concept."
     message = ""
@@ -237,7 +230,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
                             topMargin=72, bottomMargin=18)
     story = []
     styles = getSampleStyleSheet()
-
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -270,13 +262,11 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
         alignment=TA_JUSTIFY,
         spaceAfter=6
     )
-
     story.append(Paragraph("Exam Questions", title_style))
     user_name_display = user_name if user_name else "Teacher"
     concept_text_display = concept_text if concept_text else "Selected Concept"
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
-
     sections = re.split(r'\n\n', questions.strip())
     for section in sections:
         lines = [line.strip() for line in section.split('\n') if line.strip()]
@@ -321,10 +311,6 @@ def generate_exam_questions_pdf(questions, concept_text, user_name):
     return pdf_bytes
 
 def generate_learning_path(concept_text):
-    """
-    Generates a learning path using DeepSeek Chat. 
-    Replace the prompt/model as needed for your scenario.
-    """
     if not client:
         st.error("DeepSeek client is not initialized. Check your API key.")
         return None
@@ -340,7 +326,7 @@ def generate_learning_path(concept_text):
     )
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using the DeepSeek model name
+            model="gpt-4o-mini",
             messages=[{"role": "system", "content": prompt}],
             stream=False,
             max_tokens=1500
@@ -358,7 +344,6 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
                             topMargin=72, bottomMargin=18)
     story = []
     styles = getSampleStyleSheet()
-
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -383,13 +368,11 @@ def generate_learning_path_pdf(learning_path, concept_text, user_name):
         alignment=TA_JUSTIFY,
         spaceAfter=6
     )
-
     story.append(Paragraph("Personalized Learning Path", title_style))
     user_name_display = user_name if user_name else "Student"
     concept_text_display = concept_text if concept_text else "Selected Concept"
     story.append(Paragraph(f"For {user_name_display} - {concept_text_display}", subtitle_style))
     story.append(Spacer(1, 12))
-
     sections = re.split(r'\n\n', learning_path.strip())
     for section in sections:
         lines = [line.strip() for line in section.split('\n') if line.strip()]
@@ -495,7 +478,6 @@ def generate_all_concepts_pdf(concepts, user_name):
                             topMargin=72, bottomMargin=18)
     story = []
     styles = getSampleStyleSheet()
-
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -528,15 +510,12 @@ def generate_all_concepts_pdf(concepts, user_name):
         alignment=TA_LEFT,
         spaceAfter=6
     )
-
     story.append(Paragraph("All Concepts", title_style))
     user_name_display = user_name if user_name else "User"
     story.append(Paragraph(f"User: {user_name_display}", subtitle_style))
     story.append(Spacer(1, 12))
-
     headers = ["Concept ID", "Concept Text", "Topic ID", "Status"]
     table_data = [headers]
-
     for concept in concepts:
         row = [
             str(concept.get("ConceptID", "")),
@@ -545,7 +524,6 @@ def generate_all_concepts_pdf(concepts, user_name):
             concept.get("ConceptStatus", "")
         ]
         table_data.append(row)
-
     table = Table(table_data, repeatRows=1, colWidths=[1.2*inch, 3*inch, 1.2*inch, 1*inch])
     table_style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), '#4CAF50'),
@@ -912,8 +890,7 @@ def teacher_dashboard():
                 col1.metric("Total Concepts", selected_student["TotalConceptCount"])
                 col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
                 col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
-                progress = (selected_student["ClearedConceptCount"] / 
-                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
+                progress = (selected_student["ClearedConceptCount"] / selected_student["TotalConceptCount"] * 100) if selected_student["TotalConceptCount"] > 0 else 0
                 st.progress(progress/100)
                 st.markdown(f"**Overall Progress:** {progress:.1f}%")
         st.subheader("📝 Question Generation")
@@ -983,8 +960,39 @@ def teacher_dashboard():
                         st.error(f"Error generating exam questions: {e}")
 
 # ------------------- 2J) CHAT FUNCTIONS WITH THEME, AUTO-SCROLL & STREAMING -------------------
+def add_initial_greeting():
+    """Adds an initial greeting to the chat history if none exists."""
+    if len(st.session_state.chat_history) == 0 and st.session_state.auth_data:
+        user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', "Topic")
+        if st.session_state.is_teacher:
+            batches = st.session_state.auth_data.get("BatchList", [])
+            batch_list = "\n".join([f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)" for b in batches])
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
+                f"You are currently teaching these classes:\n{batch_list}\n\n"
+                f"To get started, type 'show classes' to see your classes."
+            )
+            st.session_state.chat_history.append(("assistant", greeting_message))
+        else:
+            concept_list = st.session_state.auth_data.get('ConceptList', [])
+            weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+            concept_options = "\n\n**📚 Available Concepts:**\n" + "\n".join([f"- {concept['ConceptText']}" for concept in concept_list])
+            weak_concepts_text = ""
+            if weak_concepts:
+                weak_concepts_text = "\n\n**🎯 Your Current Learning Gaps:**\n" + "\n".join([f"- {concept['ConceptText']}" for concept in weak_concepts])
+            greeting_message = (
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
+                f"I'm here to help you with {topic_name}.\n\n"
+                f"You can ask questions, request learning resources, or discuss specific concepts.\n"
+                f"{concept_options}{weak_concepts_text}\n\n"
+                f"What would you like to discuss?"
+            )
+            st.session_state.chat_history.append(("assistant", greeting_message))
+
 def update_chat_display(partial_message):
-    """Rebuilds and updates the chat container HTML including the current streaming message."""
+    """Updates the chat container with the current conversation plus the streaming message."""
     user_name = st.session_state.auth_data['UserInfo'][0]['FullName']
     chat_html = '<div id="chat_container" style="height:400px; overflow-y:auto; border: 1px solid #ddd; padding:10px; background-color:#f3f4f6; border-radius:10px;">'
     for role, message in st.session_state.chat_history:
@@ -998,7 +1006,6 @@ def update_chat_display(partial_message):
                 "<div style='text-align: left; background-color: #2563eb; color: #fff; padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
                 f"<strong>{user_name}:</strong> {message}</div>"
             )
-    # Append the streaming assistant message
     if partial_message:
         chat_html += (
             "<div style='text-align: left; background-color: #e0e7ff; color: #000; padding: 8px; border-radius: 8px; margin-bottom: 5px;'>"
@@ -1031,7 +1038,6 @@ def get_gpt_response(user_input):
         for role, content in st.session_state.chat_history
     ]
     partial_message = ""
-    # Use the chat_placeholder defined in session state
     if st.session_state.chat_placeholder is None:
         st.session_state.chat_placeholder = st.empty()
     try:
@@ -1040,9 +1046,8 @@ def get_gpt_response(user_input):
                 model="gpt-4o",
                 messages=conversation_history_formatted,
                 max_tokens=2000,
-                stream=True  # Enable streaming
+                stream=True
             )
-            # Stream tokens as they arrive and update the UI
             for chunk in response:
                 token = chunk.choices[0].delta.get("content", "")
                 partial_message += token
@@ -1058,7 +1063,6 @@ def handle_user_input(user_input):
         st.experimental_rerun()
 
 def display_chat(user_name: str):
-    # Use a placeholder for the chat container so that it can be updated in streaming
     st.session_state.chat_placeholder = st.empty()
     update_chat_display("")
     user_input = st.chat_input("Enter your question about the topic")
@@ -1114,7 +1118,7 @@ def enhanced_login(org_code, login_id, password, topic_id, is_english_mode, user
             st.session_state.subject_id = subject_id
             user_info = auth_data.get("UserInfo", [{}])[0]
             st.session_state.user_id = user_info.get("UserID")
-            if user_type_value == 3:  # Student
+            if user_type_value == 3:
                 st.session_state.student_weak_concepts = auth_data.get("WeakConceptList", [])
         else:
             user_info = auth_data.get("UserInfo", [{}])[0]
