@@ -30,6 +30,14 @@ from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import plotly.express as px
 
+# Set page config first, before any other Streamlit commands
+st.set_page_config(
+    page_title="EeeBee AI Buddy",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded"  # This makes the sidebar expanded by default but collapsible
+)
+
 # Import DeepSeek-style client from openai package
 try:
     from openai import OpenAI
@@ -125,24 +133,6 @@ if "student_info" not in st.session_state:
 # Define the show_gap_message function globally
 def show_gap_message():
     st.session_state.show_gap_message = True
-
-# Streamlit page config
-st.set_page_config(
-    page_title="EeeBee AI Buddy",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
-
-# Hide default Streamlit UI
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
 # 2) HELPER FUNCTIONS
@@ -1674,13 +1664,5 @@ def add_custom_css():
 
 # Call the custom CSS function at the beginning of the app
 if __name__ == "__main__":
-    # Set page config to enable the collapsible sidebar
-    st.set_page_config(
-        page_title="EeeBee AI Buddy",
-        page_icon="🤖",
-        layout="wide",
-        initial_sidebar_state="expanded"  # This makes the sidebar expanded by default but collapsible
-    )
-    
     add_custom_css()
     main()
