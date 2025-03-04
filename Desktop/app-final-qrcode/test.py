@@ -1476,17 +1476,16 @@ def load_data_parallel():
 
 def display_tabs_parallel():
     # Create a sidebar for navigation
-    with st.sidebar:
-        st.title("Navigation")
-        tab_selection = st.radio(
-            "Choose a section:",
-            ["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"]
-        )
-        
-        # Add logout button to sidebar
-        if st.button("Logout", key="logout_button"):
-            st.session_state.clear()
-            st.rerun()
+    st.sidebar.title("Navigation")
+    tab_selection = st.sidebar.radio(
+        "Choose a section:",
+        ["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"]
+    )
+    
+    # Add logout button to sidebar
+    if st.sidebar.button("Logout", key="logout_button"):
+        st.session_state.clear()
+        st.rerun()
     
     # Main content area
     if tab_selection == "💬 Chat":
@@ -1558,17 +1557,16 @@ def main_screen():
 
     if st.session_state.is_teacher:
         # Create a sidebar for navigation in teacher mode
-        with st.sidebar:
-            st.title("Navigation")
-            tab_selection = st.radio(
-                "Choose a section:",
-                ["💬 Chat", "📊 Teacher Dashboard"]
-            )
-            
-            # Add logout button to sidebar
-            if st.button("Logout", key="logout_button_teacher"):
-                st.session_state.clear()
-                st.rerun()
+        st.sidebar.title("Navigation")
+        tab_selection = st.sidebar.radio(
+            "Choose a section:",
+            ["💬 Chat", "📊 Teacher Dashboard"]
+        )
+        
+        # Add logout button to sidebar
+        if st.sidebar.button("Logout", key="logout_button_teacher"):
+            st.session_state.clear()
+            st.rerun()
         
         if tab_selection == "💬 Chat":
             st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -1600,69 +1598,5 @@ def main():
         with placeholder.container():
             login_screen()
 
-# Add custom CSS for auto-scrolling chat container and fixing color issues
-def add_custom_css():
-    st.markdown("""
-    <style>
-    /* Fix text color issues */
-    body {
-        color: #262730 !important;
-        background-color: #FFFFFF !important;
-    }
-    
-    /* Auto-scrolling for chat container */
-    [data-testid="stChatMessageContent"] {
-        color: #262730 !important;
-        background-color: #F0F2F6 !important;
-    }
-    
-    /* User message styling */
-    [data-testid="stChatMessage"] [data-testid="stChatMessageContent"]:has(div[data-testid="stMarkdownContainer"]:not(:has(div[data-testid="stImage"]))) {
-        background-color: #E0E7FF !important;
-        border-radius: 8px;
-    }
-    
-    /* Assistant message styling */
-    [data-testid="stChatMessage"][data-testid="stChatMessageContent"] {
-        background-color: #F0F2F6 !important;
-        border-radius: 8px;
-    }
-    
-    /* Make sure new messages are visible */
-    [data-testid="stChatMessage"] {
-        animation: fadeIn 0.3s ease-in-out;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    /* Improve sidebar styling */
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fa !important;
-        padding-top: 1rem;
-    }
-    
-    /* Improve radio button styling in sidebar */
-    .stRadio > div {
-        padding: 10px;
-    }
-    
-    .stRadio label {
-        font-weight: 500;
-        color: #262730 !important;
-    }
-    
-    /* Ensure chat container scrolls properly */
-    [data-testid="stChatContainer"] {
-        height: 70vh !important;
-        overflow-y: auto !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Call the custom CSS function at the beginning of the app
 if __name__ == "__main__":
-    add_custom_css()
     main()
