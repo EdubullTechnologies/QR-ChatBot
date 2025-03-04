@@ -1163,44 +1163,238 @@ def process_pending_messages():
         user_input = st.session_state.chat_history[-1][1]
         get_gpt_response(user_input)
 
-def handle_teacher_commands(user_input):
-    """Handle teacher-specific commands and return a response if it's a command"""
-    user_input_lower = user_input.lower().strip()
+def format_time(seconds):
+    """Format seconds into a readable time string"""
+    if seconds < 60:
+        return f"{seconds} sec"
+    elif seconds < 3600:
+        minutes = seconds // 60
+        sec = seconds % 60
+        return f"{minutes} min {sec} sec"
+    else:
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        return f"{hours} hr {minutes} min"
+
+def format_concept_details(concept):
+    """Format concept details with performance metrics"""
+    if concept['AttendedQuestion'] == 0:
+        return (
+            f"- {concept['ConceptText']}\n"
+            f"  📝 Not attempted any questions yet"
+        )
     
-    # Show classes/batches command
-    if user_input_lower in ["show classes", "show batches", "list classes", "list batches"]:
-        batches = st.session_state.auth_data.get("BatchList", [])
-        if not batches:
-            return "You don't have any classes assigned to you."
+    return (
+        f"- {concept['ConceptText']}\n"
+        f"  📝 Questions: {concept['CorrectQuestion']}/{concept['AttendedQuestion']} correct "
+        f"({concept['AvgMarksPercent']}%)\n"
+        f"  ⏱️ Average time per question: {format_time(concept['AvgTimeTaken_SS'])}\n"
+        f"  ⌛ Total time spent: {format_time(concept['TotalTimeTaken_SS'])}"
+    )
+
+def fetch_student_concepts(user_id, topic_id, org_code):
+    """Fetch detailed concept information for a specific student"""
+    try:
+        payload = {
+            "OrgCode": org_code,
+            "UserID": user_id,
+            "TopicID": topic_id
+        }
         
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        logging.info(f"Fetching student concepts with payload: {payload}")
+        response = requests.post(API_STUDENT_CONCEPTS, json=payload, headers=headers)
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get("Status") == "Success":
+            return data
+        else:
+            error_msg = data.get('Message', 'Unknown error')
+            logging.error(f"API Error in fetch_student_concepts: {error_msg}")
+            st.error(f"API Error: {error_msg}")
+            return None
+    except Exception as e:
+        logging.error(f"Error fetching student concepts: {e}")
+        st.error(f"Error fetching student concepts: {str(e)}")
+        return None
+
+def handle_teacher_commands(user_input):
+    """Handle teacher-specific chat commands"""
+    input_lower = user_input.lower()
+    
+    # Show classes
+    if any(cmd in input_lower for cmd in ["show classes", "show batches", "list classes", "list batches"]):
+        batches = st.session_state.auth_data.get("BatchList", [])
         batch_list = "\n".join([
             f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
             for b in batches
         ])
-        return f"Here are your classes:\n{batch_list}\n\nType the name of a class to select it."
+        return f"Your classes:\n{batch_list}\n\nJust type the class name you want to analyze (e.g., '10A')"
     
-    # Select batch command
-    if user_input_lower.startswith("select batch ") or user_input_lower.startswith("choose batch "):
-        batch_name = user_input.split(" ", 2)[2].strip()
-        batches = st.session_state.auth_data.get("BatchList", [])
-        matching_batch = next((b for b in batches if b['BatchName'].lower() == batch_name.lower()), None)
+    # Select class (checking if input matches any batch name)
+    batches = st.session_state.auth_data.get("BatchList", [])
+    selected_batch = next((b for b in batches if b['BatchName'].lower() == input_lower), None)
+    
+    if selected_batch:
+        # Fetch student info
+        student_info = fetch_student_info(
+            selected_batch["BatchID"],
+            st.session_state.topic_id,
+            st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
+        )
         
-        if matching_batch:
-            st.session_state.selected_batch = matching_batch
-            return f"Selected batch: {matching_batch['BatchName']}. You can now type 'show students' to see the students in this class."
+        if student_info and student_info.get("Students"):
+            st.session_state.current_batch_students = student_info["Students"]
+            st.session_state.current_batch_concepts = student_info.get("Concepts", [])
+            
+            # Calculate class statistics
+            total_students = len(student_info["Students"])
+            concepts = student_info.get("Concepts", [])
+            
+            # Prepare concept statistics
+            concept_stats = []
+            for concept in concepts:
+                cleared_percent = (concept['ClearedStudentCount'] / concept['AttendedStudentCount'] * 100) if concept['AttendedStudentCount'] > 0 else 0
+                concept_stats.append(
+                    f"- {concept['ConceptText']}: {concept['ClearedStudentCount']}/{concept['AttendedStudentCount']} "
+                    f"students cleared ({cleared_percent:.1f}%)"
+                )
+            
+            concept_overview = "\n".join(concept_stats)
+            
+            return (
+                f"Looking at class {selected_batch['BatchName']}:\n\n"
+                f"Class Overview:\n"
+                f"- Total Students: {total_students}\n"
+                f"- Concepts Coverage:\n{concept_overview}\n\n"
+                f"Type 'show students' to see all students in this class"
+            )
         else:
-            return f"Batch '{batch_name}' not found. Please check the name and try again."
+            return "I couldn't get the student information for this class. Please try again."
     
-    # Show students command
-    if user_input_lower in ["show students", "list students"]:
-        if not hasattr(st.session_state, 'selected_batch'):
-            return "Please select a batch first by typing 'select batch [BatchName]'."
+    # Show students in current class
+    if "show students" in input_lower or "list students" in input_lower:
+        if hasattr(st.session_state, 'current_batch_students'):
+            students = st.session_state.current_batch_students
+            # Group students by progress
+            all_cleared = []
+            partial_progress = []
+            no_progress = []
+            
+            for student in students:
+                if student['ClearedConceptCount'] == student['TotalConceptCount']:
+                    all_cleared.append(student['FullName'])
+                elif student['ClearedConceptCount'] > 0:
+                    partial_progress.append(
+                        f"- {student['FullName']} ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
+                    )
+                else:
+                    no_progress.append(student['FullName'])
+            
+            response = "Students in this class:\n\n"
+            
+            if all_cleared:
+                response += "✅ Completed all concepts:\n- " + "\n- ".join(all_cleared) + "\n\n"
+            if partial_progress:
+                response += "🔄 In progress:\n" + "\n".join(partial_progress) + "\n\n"
+            if no_progress:
+                response += "⚠️ No concepts cleared:\n- " + "\n- ".join(no_progress) + "\n\n"
+                
+            response += "Just type a student's name to analyze their progress"
+            return response
+        else:
+            return "Please select a class first by typing the class name (e.g., '10A')"
+    
+    # Select student (checking if input matches any student name)
+    if hasattr(st.session_state, 'current_batch_students'):
+        selected_student = next(
+            (s for s in st.session_state.current_batch_students 
+             if s['FullName'].lower() == input_lower), None)
         
-        # Here you would fetch students for the selected batch
-        # For now, we'll return a placeholder
-        return f"Here are the students in {st.session_state.selected_batch['BatchName']}:\n- Student 1\n- Student 2\n- Student 3\n\nType a student's name to analyze their performance."
+        if selected_student:
+            st.session_state.selected_student = selected_student
+            
+            # Fetch detailed concept information
+            student_concepts = fetch_student_concepts(
+                user_id=selected_student['UserID'],
+                topic_id=st.session_state.topic_id,
+                org_code=st.session_state.auth_data['UserInfo'][0].get('OrgCode', '012')
+            )
+            
+            # Calculate progress percentage
+            progress = (selected_student['ClearedConceptCount'] / selected_student['TotalConceptCount'] * 100) if selected_student['TotalConceptCount'] > 0 else 0
+            
+            # Format concept details with performance metrics
+            weak_concepts_details = []
+            cleared_concepts_details = []
+            
+            if student_concepts:
+                weak_concepts_details = [
+                    format_concept_details(concept)
+                    for concept in student_concepts.get('WeakConcepts_List', [])
+                ]
+                cleared_concepts_details = [
+                    format_concept_details(concept)
+                    for concept in student_concepts.get('ClearedConcepts_List', [])
+                ]
+            
+            # Calculate overall statistics
+            total_questions = 0
+            total_correct = 0
+            total_time = 0
+            attempted_concepts = 0
+            
+            for concept in student_concepts.get('WeakConcepts_List', []) + student_concepts.get('ClearedConcepts_List', []):
+                if concept['AttendedQuestion'] > 0:
+                    attempted_concepts += 1
+                    total_questions += concept['AttendedQuestion']
+                    total_correct += concept['CorrectQuestion']
+                    total_time += concept['TotalTimeTaken_SS']
+            
+            # Build response message
+            response = (
+                f"Looking at {selected_student['FullName']}'s progress:\n\n"
+                f"📊 Overall Performance:\n"
+                f"- Progress: {progress:.1f}%\n"
+            )
+            
+            if attempted_concepts > 0:
+                avg_accuracy = (total_correct / total_questions * 100) if total_questions > 0 else 0
+                response += (
+                    f"- Overall Accuracy: {avg_accuracy:.1f}%\n"
+                    f"- Total Questions Attempted: {total_questions}\n"
+                    f"- Total Time Spent: {format_time(total_time)}\n"
+                )
+            
+            response += "\n🔍 Concepts Needing Attention:\n"
+            if weak_concepts_details:
+                response += "\n".join(weak_concepts_details) + "\n"
+            else:
+                response += "✅ No weak concepts identified\n"
+            
+            response += "\n✨ Mastered Concepts:\n"
+            if cleared_concepts_details:
+                response += "\n".join(cleared_concepts_details) + "\n"
+            else:
+                response += "⚠️ No concepts cleared yet\n"
+            
+            response += (
+                f"\nYou can ask me about:\n"
+                f"- Specific teaching strategies for concepts they're struggling with\n"
+                f"- How to improve their accuracy and speed\n"
+                f"- Ways to help them progress in specific concepts\n"
+                f"- Detailed analysis of their performance in any concept"
+            )
+            
+            return response
     
-    # If it's not a command, return None
     return None
 
 def get_system_prompt():
