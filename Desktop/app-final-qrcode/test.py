@@ -1287,15 +1287,10 @@ def get_gpt_response(user_input):
         conversation_history_formatted.append({"role": role, "content": content})
     
     # Create a placeholder for the assistant's response
-    placeholder = st.empty()
-    message_placeholder = placeholder.chat_message("assistant", avatar="🤖")
+    message_placeholder = st.chat_message("assistant", avatar="🤖")
     
     try:
         full_response = ""
-        # Display a thinking indicator
-        with message_placeholder:
-            thinking_container = st.empty()
-            thinking_container.markdown("*EeeBee is thinking...*")
         
         # Create a streaming response
         response = client.chat.completions.create(
@@ -1306,15 +1301,14 @@ def get_gpt_response(user_input):
         )
         
         # Process the streaming response
-        with message_placeholder:
-            response_container = st.empty()
-            
-            for chunk in response:
-                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                    content = chunk.choices[0].delta.content
-                    full_response += content
-                    # Update the displayed response
-                    response_container.markdown(full_response)
+        response_container = message_placeholder.empty()
+        
+        for chunk in response:
+            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                # Update the displayed response
+                response_container.markdown(full_response)
         
         # Add the complete response to chat history
         st.session_state.chat_history.append(("assistant", full_response))
