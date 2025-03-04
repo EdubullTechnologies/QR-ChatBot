@@ -986,7 +986,32 @@ def teacher_dashboard():
                 )
                 st.plotly_chart(fig)
             
-           
+            # Student selection
+            st.subheader("👥 Student Selection")
+            students = student_info["Students"]
+            student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
+            
+            selected_student_name = st.selectbox(
+                "Select a student to view detailed analysis:",
+                options=list(student_options.keys())
+            )
+            
+            if selected_student_name:
+                selected_student = student_options[selected_student_name]
+                st.session_state.selected_student = selected_student
+                
+                # Display student analytics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Concepts", selected_student["TotalConceptCount"])
+                col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
+                col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
+                
+                # Calculate and display progress
+                progress = (selected_student["ClearedConceptCount"] / 
+                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
+                
+                st.progress(progress/100)
+                st.markdown(f"**Overall Progress:** {progress:.1f}%")
 
         # Bloom's Level
         st.subheader("📝 Question Generation")
@@ -1079,22 +1104,22 @@ def add_initial_greeting():
             ])
             
             greeting_message = (
-                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy. "
-                f"I'm here to help you analyze your students' progress in {topic_name}.\n\n"
-                f"You are currently teaching these classes:\n{batch_list}\n\n"
-                f"To get started:\n"
-                f"1. Type 'show classes' to see your classes\n"
-                f"2. Just type the class name you want to analyze (e.g., '10A')\n"
-                f"3. Type 'show students' to see all students in that class\n"
-                f"4. Type the student's name you want to analyze (e.g., 'John')\n\n"
-                f"Suggested Action Plan:\n"
-                f"1. Create a custom lesson plan tailored to your class's performance.\n"
-                f"2. Suggest instructional strategies you can use to enhance learning.\n\n"
-                f"What would you like to do?"
+                f"Hello {user_name}! I'm your 🤖 EeeBee AI buddy for {topic_name}.\n\n"
+                f"Your classes:\n{batch_list}\n\n"
+                f"Quick Guide:\n"
+                f"1. Simply type a class name (e.g., 'Class-8 DB') to see class analysis and student list\n"
+                f"2. Then type any student's name to analyze their individual performance\n"
+                f"3. Or type 'show classes' anytime to see your class list again\n\n"
+                f"I can help you with:\n"
+                f"- Creating personalized lesson plans based on class performance\n"
+                f"- Suggesting targeted teaching strategies for specific concepts\n"
+                f"- Identifying which concepts need more attention in your class\n"
+                f"- Analyzing individual student progress and learning gaps\n\n"
+                f"Which class would you like to analyze first?"
             )
             st.session_state.chat_history.append(("assistant", greeting_message))
         else:
-            # Existing student mode code
+            # Existing student mode code remains unchanged
             concept_list = st.session_state.auth_data.get('ConceptList', [])
             weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
             concept_options = "\n\n**📚 Available Concepts:**\n"
