@@ -1841,11 +1841,15 @@ def display_learning_path_tab():
 
 def fetch_student_info(batch_id, topic_id, org_code):
     """
-    Fetch student information for a specific batch with detailed debugging
+    Fetch student information for a specific batch with exact parameters from test.py
     """
     try:
+        # Ensure parameters are in the correct format
+        batch_id = int(batch_id) if batch_id else 0
+        topic_id = int(topic_id) if topic_id else 0
+        
         payload = {
-            "OrgCode": org_code,
+            "OrgCode": str(org_code),
             "BatchID": batch_id,
             "TopicID": topic_id
         }
@@ -1856,52 +1860,76 @@ def fetch_student_info(batch_id, topic_id, org_code):
             "Accept": "application/json"
         }
         
-        # Log the full request details
-        logging.info(f"API URL: {API_STUDENT_INFO}")
-        logging.info(f"Request payload: {json.dumps(payload, indent=2)}")
-        logging.info(f"Request headers: {headers}")
+        # Log the request
+        logging.info(f"Fetching student info with payload: {payload}")
         
-        # Make the request
-        response = requests.post(API_STUDENT_INFO, json=payload, headers=headers)
+        # Make the request with a longer timeout
+        response = requests.post(
+            API_STUDENT_INFO, 
+            json=payload, 
+            headers=headers,
+            timeout=30  # Increase timeout to 30 seconds
+        )
         
-        # Log the full response
-        logging.info(f"Response status code: {response.status_code}")
-        logging.info(f"Response headers: {dict(response.headers)}")
+        # Log response status
+        logging.info(f"Response status: {response.status_code}")
         
-        # Try to get the response text, even if it's not valid JSON
+        # Check if the response is valid JSON
         try:
-            response_text = response.text
-            logging.info(f"Response text: {response_text[:1000]}...")  # First 1000 chars
-            
-            # Try to parse as JSON
             data = response.json()
-            logging.info(f"Parsed JSON status: {data.get('Status')}")
             
-            if data.get("Status") == "Success":
+            # Check if the response contains the expected data
+            if "Status" in data and data["Status"] == "Success":
+                logging.info("Successfully fetched student info")
                 return data
             else:
+                # Log the error details
                 error_msg = data.get('Message', 'Unknown error')
-                error_code = data.get('ErrorCode', 'No error code')
-                logging.error(f"API Error in fetch_student_info: {error_msg} (Code: {error_code})")
+                logging.error(f"API returned error: {error_msg}")
                 
-                # Display detailed error information
-                st.error(f"API Error: {error_msg} (Code: {error_code})")
-                st.error(f"Request details: BatchID={batch_id}, TopicID={topic_id}, OrgCode={org_code}")
+                # Try an alternative approach - sometimes the API works with different parameter formats
+                alt_payload = {
+                    "OrgCode": str(org_code),
+                    "BatchID": str(batch_id),  # Try string instead of int
+                    "TopicID": str(topic_id)   # Try string instead of int
+                }
+                
+                logging.info(f"Trying alternative payload: {alt_payload}")
+                
+                alt_response = requests.post(
+                    API_STUDENT_INFO, 
+                    json=alt_payload, 
+                    headers=headers,
+                    timeout=30
+                )
+                
+                alt_data = alt_response.json()
+                if "Status" in alt_data and alt_data["Status"] == "Success":
+                    logging.info("Successfully fetched student info with alternative payload")
+                    return alt_data
+                
+                # If both approaches fail, return a more helpful error message
+                st.error(f"API Error: {error_msg}")
+                st.error(f"Please check if BatchID={batch_id} and TopicID={topic_id} are valid")
                 return None
                 
-        except ValueError as json_err:
-            logging.error(f"Failed to parse JSON response: {json_err}")
-            logging.error(f"Raw response: {response.text[:500]}...")
-            st.error(f"Invalid API response format: {json_err}")
+        except ValueError as e:
+            logging.error(f"Invalid JSON response: {e}")
+            logging.error(f"Response text: {response.text[:500]}...")
+            st.error("The API returned an invalid response format")
             return None
             
-    except requests.exceptions.RequestException as req_err:
-        logging.error(f"Request failed: {req_err}")
-        st.error(f"API request failed: {req_err}")
+    except requests.exceptions.Timeout:
+        logging.error("API request timed out")
+        st.error("The request to fetch student information timed out. Please try again.")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error: {e}")
+        st.error(f"Network error: {str(e)}")
         return None
     except Exception as e:
-        logging.error(f"Unexpected error in fetch_student_info: {str(e)}")
-        st.error(f"Error fetching student info: {str(e)}")
+        logging.error(f"Unexpected error: {e}")
+        st.error(f"Error: {str(e)}")
         return None
 
 def main_screen():
