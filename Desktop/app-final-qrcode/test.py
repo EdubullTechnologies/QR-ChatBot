@@ -966,8 +966,9 @@ def teacher_dashboard():
         org_code = user_info.get('OrgCode', '012')
         
         student_info = fetch_student_info(
-            org_code=org_code,
-            batch_id=selected_batch_id
+            batch_id=selected_batch_id,
+            topic_id=st.session_state.topic_id,
+            org_code=org_code
         )
         
         if student_info:
@@ -1602,14 +1603,15 @@ def display_learning_path_tab():
                     st.session_state.topic_id
                 )
 
-def fetch_student_info(org_code, batch_id):
+def fetch_student_info(batch_id, topic_id, org_code):
     """
     Fetch student information for a specific batch
     """
     try:
         payload = {
             "OrgCode": org_code,
-            "BatchID": batch_id
+            "BatchID": batch_id,
+            "TopicID": topic_id
         }
         
         headers = {
@@ -1618,17 +1620,25 @@ def fetch_student_info(org_code, batch_id):
             "Accept": "application/json"
         }
         
+        logging.info(f"Fetching student info with payload: {payload}")
         response = requests.post(API_STUDENT_INFO, json=payload, headers=headers)
+        
+        # Log the response for debugging
+        logging.info(f"Student info API response status: {response.status_code}")
+        
         response.raise_for_status()
         
         data = response.json()
         if data.get("Status") == "Success":
             return data
         else:
-            st.error(f"API Error: {data.get('Message', 'Unknown error')}")
+            error_msg = data.get('Message', 'Unknown error')
+            logging.error(f"API Error in fetch_student_info: {error_msg}")
+            st.error(f"API Error: {error_msg}")
             return None
     except Exception as e:
-        st.error(f"Error fetching student info: {e}")
+        logging.error(f"Error fetching student info: {e}")
+        st.error(f"Error fetching student info: {str(e)}")
         return None
 
 def main_screen():
