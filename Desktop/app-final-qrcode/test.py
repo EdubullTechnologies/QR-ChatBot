@@ -966,9 +966,8 @@ def teacher_dashboard():
         org_code = user_info.get('OrgCode', '012')
         
         student_info = fetch_student_info(
-            selected_batch_id, 
-            st.session_state.topic_id,
-            org_code
+            org_code=org_code,
+            batch_id=selected_batch_id
         )
         
         if student_info:
@@ -1602,6 +1601,35 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
+
+def fetch_student_info(org_code, batch_id):
+    """
+    Fetch student information for a specific batch
+    """
+    try:
+        payload = {
+            "OrgCode": org_code,
+            "BatchID": batch_id
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        response = requests.post(API_STUDENT_INFO, json=payload, headers=headers)
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get("Status") == "Success":
+            return data
+        else:
+            st.error(f"API Error: {data.get('Message', 'Unknown error')}")
+            return None
+    except Exception as e:
+        st.error(f"Error fetching student info: {e}")
+        return None
 
 def main_screen():
     user_info = st.session_state.auth_data['UserInfo'][0]
