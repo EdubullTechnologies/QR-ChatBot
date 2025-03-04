@@ -1486,11 +1486,17 @@ def load_data_parallel():
 
 def display_tabs_parallel():
     # Create a sidebar for navigation
-    st.sidebar.title("Navigation")
-    tab_selection = st.sidebar.radio(
-        "Choose a section:",
-        ["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"]
-    )
+    with st.sidebar:
+        st.title("Navigation")
+        tab_selection = st.radio(
+            "Choose a section:",
+            ["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"]
+        )
+        
+        # Add logout button to sidebar
+        if st.button("Logout", key="logout_button"):
+            st.session_state.clear()
+            st.rerun()
     
     # Main content area
     if tab_selection == "💬 Chat":
@@ -1551,11 +1557,6 @@ def main_screen():
     user_name = user_info['FullName']
     topic_name = st.session_state.auth_data.get('TopicName')
 
-    # Add logout button to sidebar
-    if st.sidebar.button("Logout", key="logout_button"):
-        st.session_state.clear()
-        st.rerun()
-
     # Display header
     icon_img = "https://raw.githubusercontent.com/EdubullTechnologies/QR-ChatBot/master/Desktop/app-final-qrcode/assets/icon.png"
     st.markdown(
@@ -1567,11 +1568,17 @@ def main_screen():
 
     if st.session_state.is_teacher:
         # Create a sidebar for navigation in teacher mode
-        st.sidebar.title("Navigation")
-        tab_selection = st.sidebar.radio(
-            "Choose a section:",
-            ["💬 Chat", "📊 Teacher Dashboard"]
-        )
+        with st.sidebar:
+            st.title("Navigation")
+            tab_selection = st.radio(
+                "Choose a section:",
+                ["💬 Chat", "📊 Teacher Dashboard"]
+            )
+            
+            # Add logout button to sidebar
+            if st.button("Logout", key="logout_button_teacher"):
+                st.session_state.clear()
+                st.rerun()
         
         if tab_selection == "💬 Chat":
             st.subheader("Chat with your EeeBee AI buddy", anchor=None)
@@ -1603,15 +1610,32 @@ def main():
         with placeholder.container():
             login_screen()
 
-# Add custom CSS for auto-scrolling chat container
+# Add custom CSS for auto-scrolling chat container and fixing color issues
 def add_custom_css():
     st.markdown("""
     <style>
+    /* Fix text color issues */
+    body {
+        color: #262730 !important;
+        background-color: #FFFFFF !important;
+    }
+    
     /* Auto-scrolling for chat container */
-    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
-        max-height: 70vh;
-        overflow-y: auto;
-        padding-right: 10px;
+    [data-testid="stChatMessageContent"] {
+        color: #262730 !important;
+        background-color: #F0F2F6 !important;
+    }
+    
+    /* User message styling */
+    [data-testid="stChatMessage"] [data-testid="stChatMessageContent"]:has(div[data-testid="stMarkdownContainer"]:not(:has(div[data-testid="stImage"]))) {
+        background-color: #E0E7FF !important;
+        border-radius: 8px;
+    }
+    
+    /* Assistant message styling */
+    [data-testid="stChatMessage"][data-testid="stChatMessageContent"] {
+        background-color: #F0F2F6 !important;
+        border-radius: 8px;
     }
     
     /* Make sure new messages are visible */
@@ -1626,7 +1650,7 @@ def add_custom_css():
     
     /* Improve sidebar styling */
     [data-testid="stSidebar"] {
-        background-color: #f8f9fa;
+        background-color: #f8f9fa !important;
         padding-top: 1rem;
     }
     
@@ -1637,11 +1661,26 @@ def add_custom_css():
     
     .stRadio label {
         font-weight: 500;
+        color: #262730 !important;
+    }
+    
+    /* Ensure chat container scrolls properly */
+    [data-testid="stChatContainer"] {
+        height: 70vh !important;
+        overflow-y: auto !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # Call the custom CSS function at the beginning of the app
 if __name__ == "__main__":
+    # Set page config to enable the collapsible sidebar
+    st.set_page_config(
+        page_title="EeeBee AI Buddy",
+        page_icon="🤖",
+        layout="wide",
+        initial_sidebar_state="expanded"  # This makes the sidebar expanded by default but collapsible
+    )
+    
     add_custom_css()
     main()
