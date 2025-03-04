@@ -1211,41 +1211,56 @@ def format_concept_details(concept):
         f"  ⌛ Total time spent: {format_time(concept['TotalTimeTaken_SS'])}"
     )
 
-def fetch_student_concepts(user_id, topic_id, org_code):
-    """Fetch detailed concept information for a specific student"""
+def fetch_student_info(batch_id, topic_id, org_code):
+    """Fetch student information for a specific batch - exact implementation from test.py"""
+    params = {
+        "BatchID": batch_id,
+        "TopicID": topic_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
     try:
-        payload = {
-            "OrgCode": org_code,
-            "UserID": user_id,
-            "TopicID": topic_id
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        
-        logging.info(f"Fetching student concepts with payload: {payload}")
-        response = requests.post(API_STUDENT_CONCEPTS, json=payload, headers=headers)
-        
+        logging.info(f"Fetching student info with params: {params}")
+        response = requests.post(API_STUDENT_INFO, json=params, headers=headers)
         response.raise_for_status()
-        
         data = response.json()
-        if data.get("Status") == "Success":
-            return data
-        else:
-            error_msg = data.get('Message', 'Unknown error')
-            logging.error(f"API Error in fetch_student_concepts: {error_msg}")
-            st.error(f"API Error: {error_msg}")
-            return None
+        logging.info(f"Student info API response status: {data.get('Status', 'No status')}")
+        return data
+    except Exception as e:
+        logging.error(f"Error fetching student info: {e}")
+        st.error(f"Error fetching student info: {e}")
+        return None
+
+def fetch_student_concepts(user_id, topic_id, org_code):
+    """Fetch detailed concept information for a specific student - exact implementation from test.py"""
+    params = {
+        "UserID": user_id,
+        "TopicID": topic_id,
+        "OrgCode": org_code
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+    try:
+        logging.info(f"Fetching student concepts with params: {params}")
+        response = requests.post(API_STUDENT_CONCEPTS, json=params, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        logging.info(f"Student concepts API response status: {data.get('Status', 'No status')}")
+        return data
     except Exception as e:
         logging.error(f"Error fetching student concepts: {e}")
-        st.error(f"Error fetching student concepts: {str(e)}")
+        st.error(f"Error fetching student concepts: {e}")
         return None
 
 def handle_teacher_commands(user_input):
-    """Handle teacher-specific chat commands with automatic flow"""
+    """Handle teacher-specific chat commands - exact implementation from test.py"""
     input_lower = user_input.lower().strip()
     
     # Show classes
@@ -1838,99 +1853,6 @@ def display_learning_path_tab():
                     concept_list,
                     st.session_state.topic_id
                 )
-
-def fetch_student_info(batch_id, topic_id, org_code):
-    """
-    Fetch student information for a specific batch with exact parameters from test.py
-    """
-    try:
-        # Ensure parameters are in the correct format
-        batch_id = int(batch_id) if batch_id else 0
-        topic_id = int(topic_id) if topic_id else 0
-        
-        payload = {
-            "OrgCode": str(org_code),
-            "BatchID": batch_id,
-            "TopicID": topic_id
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        
-        # Log the request
-        logging.info(f"Fetching student info with payload: {payload}")
-        
-        # Make the request with a longer timeout
-        response = requests.post(
-            API_STUDENT_INFO, 
-            json=payload, 
-            headers=headers,
-            timeout=30  # Increase timeout to 30 seconds
-        )
-        
-        # Log response status
-        logging.info(f"Response status: {response.status_code}")
-        
-        # Check if the response is valid JSON
-        try:
-            data = response.json()
-            
-            # Check if the response contains the expected data
-            if "Status" in data and data["Status"] == "Success":
-                logging.info("Successfully fetched student info")
-                return data
-            else:
-                # Log the error details
-                error_msg = data.get('Message', 'Unknown error')
-                logging.error(f"API returned error: {error_msg}")
-                
-                # Try an alternative approach - sometimes the API works with different parameter formats
-                alt_payload = {
-                    "OrgCode": str(org_code),
-                    "BatchID": str(batch_id),  # Try string instead of int
-                    "TopicID": str(topic_id)   # Try string instead of int
-                }
-                
-                logging.info(f"Trying alternative payload: {alt_payload}")
-                
-                alt_response = requests.post(
-                    API_STUDENT_INFO, 
-                    json=alt_payload, 
-                    headers=headers,
-                    timeout=30
-                )
-                
-                alt_data = alt_response.json()
-                if "Status" in alt_data and alt_data["Status"] == "Success":
-                    logging.info("Successfully fetched student info with alternative payload")
-                    return alt_data
-                
-                # If both approaches fail, return a more helpful error message
-                st.error(f"API Error: {error_msg}")
-                st.error(f"Please check if BatchID={batch_id} and TopicID={topic_id} are valid")
-                return None
-                
-        except ValueError as e:
-            logging.error(f"Invalid JSON response: {e}")
-            logging.error(f"Response text: {response.text[:500]}...")
-            st.error("The API returned an invalid response format")
-            return None
-            
-    except requests.exceptions.Timeout:
-        logging.error("API request timed out")
-        st.error("The request to fetch student information timed out. Please try again.")
-        return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request error: {e}")
-        st.error(f"Network error: {str(e)}")
-        return None
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        st.error(f"Error: {str(e)}")
-        return None
 
 def main_screen():
     user_info = st.session_state.auth_data['UserInfo'][0]
