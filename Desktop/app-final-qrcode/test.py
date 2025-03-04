@@ -1226,8 +1226,8 @@ def fetch_student_concepts(user_id, topic_id, org_code):
         return None
 
 def handle_teacher_commands(user_input):
-    """Handle teacher-specific chat commands"""
-    input_lower = user_input.lower()
+    """Handle teacher-specific chat commands with automatic flow"""
+    input_lower = user_input.lower().strip()
     
     # Show classes
     if any(cmd in input_lower for cmd in ["show classes", "show batches", "list classes", "list batches"]):
@@ -1241,7 +1241,6 @@ def handle_teacher_commands(user_input):
     # Select class (checking if input matches any batch name)
     batches = st.session_state.auth_data.get("BatchList", [])
     selected_batch = next((b for b in batches if b['BatchName'].lower() == input_lower), None)
-    
     if selected_batch:
         # Fetch student info
         student_info = fetch_student_info(
@@ -1269,17 +1268,46 @@ def handle_teacher_commands(user_input):
             
             concept_overview = "\n".join(concept_stats)
             
+            # Automatically show students after selecting a class
+            students = student_info["Students"]
+            # Group students by progress
+            all_cleared = []
+            partial_progress = []
+            no_progress = []
+            
+            for student in students:
+                if student['ClearedConceptCount'] == student['TotalConceptCount']:
+                    all_cleared.append(student['FullName'])
+                elif student['ClearedConceptCount'] > 0:
+                    partial_progress.append(
+                        f"- {student['FullName']} ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
+                    )
+                else:
+                    no_progress.append(student['FullName'])
+            
+            student_list = "Students in this class:\n\n"
+            
+            if all_cleared:
+                student_list += "✅ Completed all concepts:\n- " + "\n- ".join(all_cleared) + "\n\n"
+            if partial_progress:
+                student_list += "🔄 In progress:\n" + "\n".join(partial_progress) + "\n\n"
+            if no_progress:
+                student_list += "⚠️ No concepts cleared:\n- " + "\n- ".join(no_progress) + "\n\n"
+                
+            student_list += "Just type a student's name to analyze their progress"
+            
+            # Combine class overview and student list
             return (
                 f"Looking at class {selected_batch['BatchName']}:\n\n"
                 f"Class Overview:\n"
                 f"- Total Students: {total_students}\n"
                 f"- Concepts Coverage:\n{concept_overview}\n\n"
-                f"Type 'show students' to see all students in this class"
+                f"{student_list}"
             )
         else:
             return "I couldn't get the student information for this class. Please try again."
     
-    # Show students in current class
+    # Show students in current class (still keep this command for convenience)
     if "show students" in input_lower or "list students" in input_lower:
         if hasattr(st.session_state, 'current_batch_students'):
             students = st.session_state.current_batch_students
