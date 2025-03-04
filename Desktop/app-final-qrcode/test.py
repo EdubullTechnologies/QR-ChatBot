@@ -1151,9 +1151,57 @@ def add_initial_greeting():
 
 def handle_user_input(user_input):
     if user_input:
+        # Add user message to chat history immediately
         st.session_state.chat_history.append(("user", user_input))
-        get_gpt_response(user_input)
+        # Force a rerun to show the user message before getting the response
         st.rerun()
+
+# This function will be called after the rerun when a user message is added
+def process_pending_messages():
+    # Check if the last message is from the user (needs a response)
+    if st.session_state.chat_history and st.session_state.chat_history[-1][0] == "user":
+        user_input = st.session_state.chat_history[-1][1]
+        get_gpt_response(user_input)
+
+def handle_teacher_commands(user_input):
+    """Handle teacher-specific commands and return a response if it's a command"""
+    user_input_lower = user_input.lower().strip()
+    
+    # Show classes/batches command
+    if user_input_lower in ["show classes", "show batches", "list classes", "list batches"]:
+        batches = st.session_state.auth_data.get("BatchList", [])
+        if not batches:
+            return "You don't have any classes assigned to you."
+        
+        batch_list = "\n".join([
+            f"- {b['BatchName']} ({b.get('StudentCount', 0)} students)"
+            for b in batches
+        ])
+        return f"Here are your classes:\n{batch_list}\n\nType the name of a class to select it."
+    
+    # Select batch command
+    if user_input_lower.startswith("select batch ") or user_input_lower.startswith("choose batch "):
+        batch_name = user_input.split(" ", 2)[2].strip()
+        batches = st.session_state.auth_data.get("BatchList", [])
+        matching_batch = next((b for b in batches if b['BatchName'].lower() == batch_name.lower()), None)
+        
+        if matching_batch:
+            st.session_state.selected_batch = matching_batch
+            return f"Selected batch: {matching_batch['BatchName']}. You can now type 'show students' to see the students in this class."
+        else:
+            return f"Batch '{batch_name}' not found. Please check the name and try again."
+    
+    # Show students command
+    if user_input_lower in ["show students", "list students"]:
+        if not hasattr(st.session_state, 'selected_batch'):
+            return "Please select a batch first by typing 'select batch [BatchName]'."
+        
+        # Here you would fetch students for the selected batch
+        # For now, we'll return a placeholder
+        return f"Here are the students in {st.session_state.selected_batch['BatchName']}:\n- Student 1\n- Student 2\n- Student 3\n\nType a student's name to analyze their performance."
+    
+    # If it's not a command, return None
+    return None
 
 def get_system_prompt():
     topic_name = st.session_state.auth_data.get('TopicName', 'Unknown Topic')
@@ -1214,9 +1262,6 @@ Student Mode Instructions:
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
 """
 
-
-
-
 def get_gpt_response(user_input):
     if not client:
         st.error("DeepSeek client is not initialized. Check your API key.")
@@ -1232,27 +1277,48 @@ def get_gpt_response(user_input):
     # Continue with normal GPT response for non-commands
     system_prompt = get_system_prompt()
     conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-    conversation_history_formatted += [
-        {"role": role, "content": content}
-        for role, content in st.session_state.chat_history
-    ]
+    
+    # Only include messages up to the current user message
+    for i, (role, content) in enumerate(st.session_state.chat_history):
+        if i == len(st.session_state.chat_history) - 1 and role == "user":
+            # This is the current user message we're responding to
+            conversation_history_formatted.append({"role": "user", "content": content})
+            break
+        conversation_history_formatted.append({"role": role, "content": content})
+    
+    # Create a placeholder for the assistant's response
+    placeholder = st.empty()
+    message_placeholder = placeholder.chat_message("assistant", avatar="🤖")
     
     try:
-        # Create a non-streaming response first
-        with st.spinner("EeeBee is thinking..."):
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=conversation_history_formatted,
-                max_tokens=2000,
-                stream=False  # Disable streaming for now
-            )
+        full_response = ""
+        # Display a thinking indicator
+        with message_placeholder:
+            thinking_container = st.empty()
+            thinking_container.markdown("*EeeBee is thinking...*")
+        
+        # Create a streaming response
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=conversation_history_formatted,
+            max_tokens=2000,
+            stream=True
+        )
+        
+        # Process the streaming response
+        with message_placeholder:
+            response_container = st.empty()
             
-            # Get the full response
-            gpt_response = response.choices[0].message.content.strip()
-            
-            # Add the response to chat history
-            st.session_state.chat_history.append(("assistant", gpt_response))
-            
+            for chunk in response:
+                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    # Update the displayed response
+                    response_container.markdown(full_response)
+        
+        # Add the complete response to chat history
+        st.session_state.chat_history.append(("assistant", full_response))
+        
     except Exception as e:
         st.error(f"Error in GPT response: {e}")
         # If there's an error, add an error message to chat
@@ -1272,11 +1338,13 @@ def display_chat(user_name: str):
                 with st.chat_message("user", avatar="👤"):
                     st.markdown(message)
     
+    # Process any pending messages (user messages that need responses)
+    process_pending_messages()
+    
     # Add a chat input at the bottom
     user_input = st.chat_input("Enter your question about the topic")
     if user_input:
         handle_user_input(user_input)
-        st.rerun()  # Force a rerun to update the UI immediately after user input
 
 # ----------------------------------------------------------------------------
 # 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
