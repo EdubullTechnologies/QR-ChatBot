@@ -1153,7 +1153,17 @@ def handle_user_input(user_input):
     if user_input:
         # Add user message to chat history immediately
         st.session_state.chat_history.append(("user", user_input))
-        # Force a rerun to show the user message before getting the response
+        
+        # Process the message right away instead of waiting for a rerun
+        # This ensures commands get an immediate response
+        if st.session_state.is_teacher:
+            command_response = handle_teacher_commands(user_input)
+            if command_response:
+                st.session_state.chat_history.append(("assistant", command_response))
+                st.rerun()
+                return
+        
+        # If it's not a command or not in teacher mode, force a rerun to process normally
         st.rerun()
 
 # This function will be called after the rerun when a user message is added
@@ -1161,6 +1171,15 @@ def process_pending_messages():
     # Check if the last message is from the user (needs a response)
     if st.session_state.chat_history and st.session_state.chat_history[-1][0] == "user":
         user_input = st.session_state.chat_history[-1][1]
+        
+        # Double-check if it's a teacher command (in case it wasn't caught earlier)
+        if st.session_state.is_teacher:
+            command_response = handle_teacher_commands(user_input)
+            if command_response:
+                st.session_state.chat_history.append(("assistant", command_response))
+                return
+        
+        # If not a command, get normal GPT response
         get_gpt_response(user_input)
 
 def format_time(seconds):
@@ -1489,12 +1508,7 @@ def get_gpt_response(user_input):
         st.error("DeepSeek client is not initialized. Check your API key.")
         return
     
-    if st.session_state.is_teacher:
-        # First check if it's a command
-        command_response = handle_teacher_commands(user_input)
-        if command_response:
-            st.session_state.chat_history.append(("assistant", command_response))
-            return
+    # Skip command checking here since we already did it in handle_user_input and process_pending_messages
     
     # Continue with normal GPT response for non-commands
     system_prompt = get_system_prompt()
@@ -1827,7 +1841,7 @@ def display_learning_path_tab():
 
 def fetch_student_info(batch_id, topic_id, org_code):
     """
-    Fetch student information for a specific batch
+    Fetch student information for a specific batch with detailed debugging
     """
     try:
         payload = {
@@ -1842,24 +1856,51 @@ def fetch_student_info(batch_id, topic_id, org_code):
             "Accept": "application/json"
         }
         
-        logging.info(f"Fetching student info with payload: {payload}")
+        # Log the full request details
+        logging.info(f"API URL: {API_STUDENT_INFO}")
+        logging.info(f"Request payload: {json.dumps(payload, indent=2)}")
+        logging.info(f"Request headers: {headers}")
+        
+        # Make the request
         response = requests.post(API_STUDENT_INFO, json=payload, headers=headers)
         
-        # Log the response for debugging
-        logging.info(f"Student info API response status: {response.status_code}")
+        # Log the full response
+        logging.info(f"Response status code: {response.status_code}")
+        logging.info(f"Response headers: {dict(response.headers)}")
         
-        response.raise_for_status()
-        
-        data = response.json()
-        if data.get("Status") == "Success":
-            return data
-        else:
-            error_msg = data.get('Message', 'Unknown error')
-            logging.error(f"API Error in fetch_student_info: {error_msg}")
-            st.error(f"API Error: {error_msg}")
+        # Try to get the response text, even if it's not valid JSON
+        try:
+            response_text = response.text
+            logging.info(f"Response text: {response_text[:1000]}...")  # First 1000 chars
+            
+            # Try to parse as JSON
+            data = response.json()
+            logging.info(f"Parsed JSON status: {data.get('Status')}")
+            
+            if data.get("Status") == "Success":
+                return data
+            else:
+                error_msg = data.get('Message', 'Unknown error')
+                error_code = data.get('ErrorCode', 'No error code')
+                logging.error(f"API Error in fetch_student_info: {error_msg} (Code: {error_code})")
+                
+                # Display detailed error information
+                st.error(f"API Error: {error_msg} (Code: {error_code})")
+                st.error(f"Request details: BatchID={batch_id}, TopicID={topic_id}, OrgCode={org_code}")
+                return None
+                
+        except ValueError as json_err:
+            logging.error(f"Failed to parse JSON response: {json_err}")
+            logging.error(f"Raw response: {response.text[:500]}...")
+            st.error(f"Invalid API response format: {json_err}")
             return None
+            
+    except requests.exceptions.RequestException as req_err:
+        logging.error(f"Request failed: {req_err}")
+        st.error(f"API request failed: {req_err}")
+        return None
     except Exception as e:
-        logging.error(f"Error fetching student info: {e}")
+        logging.error(f"Unexpected error in fetch_student_info: {str(e)}")
         st.error(f"Error fetching student info: {str(e)}")
         return None
 
