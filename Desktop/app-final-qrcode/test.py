@@ -846,58 +846,48 @@ def display_all_concepts_tab():
     
     # Add a section for remedial resources
     st.markdown("### 📚 Remedial Resources")
-    st.markdown("Select a weak concept to view remedial resources:")
+    st.markdown("Select a concept to view remedial resources:")
     
-    # Filter to show only weak concepts for remedial resources
-    weak_concepts = [c for c in concept_data if c["Status"] == "Weak"]
+    # Create a selectbox with all concepts
+    concept_names = [c["Concept"] for c in concept_data]
+    selected_concept = st.selectbox(
+        "Choose a concept:",
+        options=concept_names,
+        key="remedial_concept_selector"
+    )
     
-    if not weak_concepts:
-        st.info("No weak concepts identified. Great job!")
-    else:
-        # Create a selectbox with only weak concepts
-        weak_concept_names = [c["Concept"] for c in weak_concepts]
-        selected_concept = st.selectbox(
-            "Choose a concept:",
-            options=weak_concept_names,
-            key="remedial_concept_selector"
+    if selected_concept:
+        # Find the concept in the original data
+        selected_concept_obj = next(
+            (c for c in st.session_state.all_concepts if c.get('ConceptText') == selected_concept),
+            None
         )
         
-        if selected_concept:
-            # Find the concept ID for the selected concept
-            selected_concept_id = next(
-                (c["Concept ID"] for c in concept_data if c["Concept"] == selected_concept),
-                None
-            )
+        if selected_concept_obj:
+            # Display concept status
+            status = "Not Attempted"
+            if selected_concept_obj.get('AttendedQuestion', 0) > 0:
+                status = "Strong" if selected_concept_obj.get('AvgMarksPercent', 0) >= 70 else "Weak"
             
-            if selected_concept_id:
-                # Fetch remedial resources if not already fetched
-                if (st.session_state.remedial_info is None or 
-                    st.session_state.selected_concept_id != selected_concept_id):
-                    
-                    st.session_state.selected_concept_id = selected_concept_id
-                    
-                    with st.spinner("Fetching remedial resources..."):
-                        content_payload = {
-                            'TopicID': st.session_state.topic_id,
-                            'ConceptID': int(selected_concept_id)
-                        }
-                        headers = {
-                            "Content-Type": "application/json",
-                            "User-Agent": "Mozilla/5.0",
-                            "Accept": "application/json"
-                        }
-                        try:
-                            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
-                            response.raise_for_status()
-                            st.session_state.remedial_info = response.json()
-                        except Exception as e:
-                            st.error(f"Error fetching resources: {e}")
-                            st.session_state.remedial_info = None
+            status_color = {
+                "Strong": "green",
+                "Weak": "red",
+                "Not Attempted": "gray"
+            }[status]
+            
+            st.markdown(f"**Status:** <span style='color:{status_color};font-weight:bold'>{status}</span>", unsafe_allow_html=True)
+            
+            # Only show remedial resources for weak concepts
+            if status == "Weak":
+                # Get remedial resources
+                with st.spinner("Fetching remedial resources..."):
+                    resources = get_resources_for_concept(
+                        selected_concept,
+                        st.session_state.auth_data.get('ConceptList', []),
+                        st.session_state.topic_id
+                    )
                 
-                # Display remedial resources
-                if st.session_state.remedial_info:
-                    resources = st.session_state.remedial_info
-                    
+                if resources:
                     # Videos
                     if resources.get("Video_List"):
                         st.markdown("#### 🎥 Video Lectures")
@@ -926,6 +916,10 @@ def display_all_concepts_tab():
                         st.info("No remedial resources available for this concept.")
                 else:
                     st.info("No remedial resources available for this concept.")
+            elif status == "Not Attempted":
+                st.info("Please attempt questions on this concept to see remedial resources.")
+            else:  # Strong
+                st.success("Great job! You have a strong understanding of this concept.")
 
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
