@@ -779,72 +779,153 @@ def baseline_testing_report():
 
 # ------------------- 2I) ALL CONCEPTS TAB -------------------
 def display_all_concepts_tab():
-    st.markdown("### 📌 EeeBee is generating remedials according to your current gaps.")
-    
-    # Fetch all concepts from session state
-    all_concepts = st.session_state.all_concepts
-    if not all_concepts:
-        st.warning("No concepts found.")
+    """Display all concepts with their status and remedial resources"""
+    if not st.session_state.all_concepts:
+        st.info("Loading concepts data...")
         return
     
-    # Updated table structure
-    col_widths = [3, 1, 1.5, 1.5]
-    
-    headers = ["Concept Text", "Status", "Remedial", "Previous Learning GAP"]
-    header_columns = st.columns(col_widths)
-    for idx, header in enumerate(headers):
-        header_columns[idx].markdown(f"**{header}**")
-    
-    concepts_to_fetch = [
-        {
-            "concept_id": concept['ConceptID'],
-            "concept_text": concept['ConceptText'],
-            "topic_id": concept['TopicID'],
-            "status": concept['ConceptStatus']
-        }
-        for concept in all_concepts
-    ]
-    
-    @st.cache_data(show_spinner=False)
-    def cached_fetch_remedial_resources(topic_id, concept_id):
-        return fetch_remedial_resources(topic_id, concept_id)
-    
-    def fetch_resources(concept):
-        if concept['status'] in ["Weak", "Not-Attended"]:
-            resources = cached_fetch_remedial_resources(concept['topic_id'], concept['concept_id'])
-            formatted_resources = format_remedial_resources(resources)
+    # Create a DataFrame for better display
+    concept_data = []
+    for concept in st.session_state.all_concepts:
+        # Calculate status based on marks percent
+        if concept.get('AttendedQuestion', 0) == 0:
+            status = "Not Attempted"
+            status_color = "gray"
+        elif concept.get('AvgMarksPercent', 0) >= 70:
+            status = "Strong"
+            status_color = "green"
         else:
-            formatted_resources = "-"
-        return (concept, formatted_resources)
+            status = "Weak"
+            status_color = "red"
+        
+        concept_data.append({
+            "Concept ID": concept.get('ConceptID', ''),
+            "Concept": concept.get('ConceptText', 'Unknown'),
+            "Questions Attempted": f"{concept.get('CorrectQuestion', 0)}/{concept.get('AttendedQuestion', 0)}",
+            "Score": f"{concept.get('AvgMarksPercent', 0)}%",
+            "Time Spent": format_time(concept.get('TotalTimeTaken_SS', 0)),
+            "Status": status,
+            "Status Color": status_color
+        })
     
-    # Parallelize
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_concept = {executor.submit(fetch_resources, c): c for c in concepts_to_fetch}
-        for future in as_completed(future_to_concept):
-            concept, remedial = future.result()
+    df = pd.DataFrame(concept_data)
+    
+    # Create a styled table
+    st.markdown("### 🔍 Concept Status Analysis")
+    st.markdown("This analysis shows your performance across all concepts in this topic.")
+    
+    # Apply conditional formatting
+    def highlight_status(val):
+        if val == "Strong":
+            return 'background-color: #d4edda; color: #155724; font-weight: bold'
+        elif val == "Weak":
+            return 'background-color: #f8d7da; color: #721c24; font-weight: bold'
+        else:  # Not Attempted
+            return 'background-color: #e2e3e5; color: #383d41; font-style: italic'
+    
+    # Display the styled table
+    styled_df = df.style.applymap(
+        lambda x: highlight_status(x) if x in ["Strong", "Weak", "Not Attempted"] else '',
+        subset=['Status']
+    )
+    
+    st.dataframe(
+        styled_df,
+        column_config={
+            "Concept ID": None,  # Hide this column
+            "Concept": st.column_config.TextColumn("Concept"),
+            "Questions Attempted": st.column_config.TextColumn("Questions"),
+            "Score": st.column_config.TextColumn("Score"),
+            "Time Spent": st.column_config.TextColumn("Time Spent"),
+            "Status": st.column_config.TextColumn("Status"),
+            "Status Color": None  # Hide this column
+        },
+        hide_index=True,
+        use_container_width=True
+    )
+    
+    # Add a section for remedial resources
+    st.markdown("### 📚 Remedial Resources")
+    st.markdown("Select a weak concept to view remedial resources:")
+    
+    # Filter to show only weak concepts for remedial resources
+    weak_concepts = [c for c in concept_data if c["Status"] == "Weak"]
+    
+    if not weak_concepts:
+        st.info("No weak concepts identified. Great job!")
+    else:
+        # Create a selectbox with only weak concepts
+        weak_concept_names = [c["Concept"] for c in weak_concepts]
+        selected_concept = st.selectbox(
+            "Choose a concept:",
+            options=weak_concept_names,
+            key="remedial_concept_selector"
+        )
+        
+        if selected_concept:
+            # Find the concept ID for the selected concept
+            selected_concept_id = next(
+                (c["Concept ID"] for c in concept_data if c["Concept"] == selected_concept),
+                None
+            )
             
-            concept_text = concept['concept_text']
-            status = concept['status']
-            status_color = 'red' if status == 'Weak' else 'green' if status == 'Cleared' else 'orange'
-            status_icon = '🔴' if status == 'Weak' else '🟢' if status == 'Cleared' else '🟠'
-            status_html = f"<span style='color:{status_color};'>{status_icon} {status}</span>"
-            
-            row_columns = st.columns(col_widths)
-            row_columns[0].markdown(concept_text)
-            row_columns[1].markdown(status_html, unsafe_allow_html=True)
-            
-            with row_columns[2]:
-                if remedial != "-":
-                    with st.expander("🧠 Remedial Resources"):
-                        st.markdown(remedial)
+            if selected_concept_id:
+                # Fetch remedial resources if not already fetched
+                if (st.session_state.remedial_info is None or 
+                    st.session_state.selected_concept_id != selected_concept_id):
+                    
+                    st.session_state.selected_concept_id = selected_concept_id
+                    
+                    with st.spinner("Fetching remedial resources..."):
+                        content_payload = {
+                            'TopicID': st.session_state.topic_id,
+                            'ConceptID': int(selected_concept_id)
+                        }
+                        headers = {
+                            "Content-Type": "application/json",
+                            "User-Agent": "Mozilla/5.0",
+                            "Accept": "application/json"
+                        }
+                        try:
+                            response = requests.post(API_CONTENT_URL, json=content_payload, headers=headers)
+                            response.raise_for_status()
+                            st.session_state.remedial_info = response.json()
+                        except Exception as e:
+                            st.error(f"Error fetching resources: {e}")
+                            st.session_state.remedial_info = None
+                
+                # Display remedial resources
+                if st.session_state.remedial_info:
+                    resources = st.session_state.remedial_info
+                    
+                    # Videos
+                    if resources.get("Video_List"):
+                        st.markdown("#### 🎥 Video Lectures")
+                        for video in resources["Video_List"]:
+                            video_url = f"https://www.edubull.com/courses/videos/{video.get('LectureID', '')}"
+                            title = video.get('LectureTitle', 'Video Lecture')
+                            st.markdown(f"- [{title}]({video_url})")
+                    
+                    # Notes
+                    if resources.get("Notes_List"):
+                        st.markdown("#### 📄 Study Notes")
+                        for note in resources["Notes_List"]:
+                            note_url = f"{note.get('FolderName', '')}{note.get('PDFFileName', '')}"
+                            title = note.get('NotesTitle', 'Study Notes')
+                            st.markdown(f"- [{title}]({note_url})")
+                    
+                    # Exercises
+                    if resources.get("Exercise_List"):
+                        st.markdown("#### 📝 Practice Exercises")
+                        for exercise in resources["Exercise_List"]:
+                            exercise_url = f"{exercise.get('FolderName', '')}{exercise.get('ExerciseFileName', '')}"
+                            title = exercise.get('ExerciseTitle', 'Practice Exercise')
+                            st.markdown(f"- [{title}]({exercise_url})")
+                    
+                    if not (resources.get("Video_List") or resources.get("Notes_List") or resources.get("Exercise_List")):
+                        st.info("No remedial resources available for this concept.")
                 else:
-                    st.markdown("-")
-            
-            with row_columns[3]:
-                if status in ["Weak", "Not-Attended"]:
-                    st.button("Previous GAP", key=f"gap_{concept['concept_id']}", on_click=show_gap_message)
-                else:
-                    st.markdown("-")
+                    st.info("No remedial resources available for this concept.")
 
 # ----------------------------------------------------------------------------
 # 4) TEACHER DASHBOARD
