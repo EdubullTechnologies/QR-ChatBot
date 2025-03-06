@@ -1505,77 +1505,90 @@ Student Mode Instructions:
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$).
 """
 
-def get_gpt_response(user_input):
-    if not client:
-        st.error("DeepSeek client is not initialized. Check your API key.")
-        return
-    
-    # Skip command checking here since we already did it in handle_user_input and process_pending_messages
-    
-    # Continue with normal GPT response for non-commands
-    system_prompt = get_system_prompt()
-    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-    
-    # Only include messages up to the current user message
-    for i, (role, content) in enumerate(st.session_state.chat_history):
-        if i == len(st.session_state.chat_history) - 1 and role == "user":
-            # This is the current user message we're responding to
-            conversation_history_formatted.append({"role": "user", "content": content})
-            break
-        conversation_history_formatted.append({"role": role, "content": content})
-    
-    # Create a chat message for the assistant with a placeholder
-    with st.chat_message("assistant", avatar="🤖"):
-        message_placeholder = st.empty()
-        full_response = ""
-        
-        try:
-            # Create a streaming response
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=conversation_history_formatted,
-                max_tokens=2000,
-                stream=True
-            )
-            
-            # Process the streaming response
-            for chunk in response:
-                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                    content = chunk.choices[0].delta.content
-                    full_response += content
-                    # Update the displayed response with a blinking cursor
-                    message_placeholder.markdown(full_response + "▌")
-            
-            # Update the placeholder with the final response (no cursor)
-            message_placeholder.markdown(full_response)
-            
-            # Add the complete response to chat history
-            st.session_state.chat_history.append(("assistant", full_response))
-            
-        except Exception as e:
-            error_message = f"I'm sorry, I encountered an error: {str(e)}"
-            message_placeholder.markdown(error_message)
-            # If there's an error, add an error message to chat
-            st.session_state.chat_history.append(("assistant", error_message))
-
 def display_chat(user_name):
     """Display the chat interface with message history"""
-    # Display chat messages from history
-    for i, (role, content) in enumerate(st.session_state.chat_history[:-1]):  # Skip the last message if it's being processed
-        with st.chat_message(role, avatar="👤" if role == "user" else "🤖"):
-            st.markdown(content)
+    # Create a container for the chat history
+    chat_container = st.container()
+    
+    # Display all messages from history
+    with chat_container:
+        for role, content in st.session_state.chat_history:
+            with st.chat_message(role, avatar="👤" if role == "user" else "🤖"):
+                st.markdown(content)
     
     # Get user input
     if prompt := st.chat_input(f"Ask me anything about {st.session_state.auth_data.get('TopicName', 'your topic')}..."):
         # Add user message to chat history
         st.session_state.chat_history.append(("user", prompt))
         
-        # Display user message
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(prompt)
+        # Force a rerun to display the user message before processing
+        st.rerun()
+
+def process_pending_messages():
+    """Process any pending user messages that need responses"""
+    # Check if the last message is from the user and needs a response
+    if st.session_state.chat_history and st.session_state.chat_history[-1][0] == "user":
+        user_input = st.session_state.chat_history[-1][1]
         
-        # Process the message immediately
-        handle_user_input(prompt)
+        # Check if this is a teacher command
+        if st.session_state.is_teacher:
+            command_response = handle_teacher_commands(user_input)
+            if command_response:
+                # Add command response to chat history
+                st.session_state.chat_history.append(("assistant", command_response))
+                return
+        
+        # If not a command, get GPT response
+        get_gpt_response(user_input)
+
+def get_gpt_response(user_input):
+    if not client:
+        st.error("DeepSeek client is not initialized. Check your API key.")
+        return
+    
+    system_prompt = get_system_prompt()
+    conversation_history_formatted = [{"role": "system", "content": system_prompt}]
+    
+    # Format the conversation history for the API
+    for role, content in st.session_state.chat_history:
+        conversation_history_formatted.append({"role": role, "content": content})
+    
+    try:
+        # Create a streaming response
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=conversation_history_formatted,
+            max_tokens=2000,
+            stream=True
+        )
+        
+        # Create a placeholder for the streaming response
+        placeholder = st.empty()
+        full_response = ""
+        
+        # Process the streaming response
+        for chunk in response:
+            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                # Update the placeholder with the current response
+                with placeholder.container():
+                    with st.chat_message("assistant", avatar="🤖"):
+                        st.markdown(full_response + "▌")
+        
+        # Clear the placeholder
+        placeholder.empty()
+        
+        # Add the complete response to chat history
+        st.session_state.chat_history.append(("assistant", full_response))
+        
+        # Force a rerun to display the final response properly
+        st.rerun()
+        
+    except Exception as e:
+        error_message = f"I'm sorry, I encountered an error: {str(e)}"
+        st.session_state.chat_history.append(("assistant", error_message))
+        st.rerun()
 
 # ----------------------------------------------------------------------------
 # 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
@@ -1891,6 +1904,8 @@ def main_screen():
 def main():
     if st.session_state.is_authenticated:
         main_screen()
+        # Process any pending messages after rendering the UI
+        process_pending_messages()
         st.stop()
     else:
         placeholder = st.empty()
