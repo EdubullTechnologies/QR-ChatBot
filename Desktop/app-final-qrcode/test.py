@@ -1150,37 +1150,24 @@ def add_initial_greeting():
             st.session_state.chat_history.append(("assistant", greeting_message))
 
 def handle_user_input(user_input):
-    if user_input:
-        # Add user message to chat history immediately
-        st.session_state.chat_history.append(("user", user_input))
-        
-        # Process the message right away instead of waiting for a rerun
-        # This ensures commands get an immediate response
-        if st.session_state.is_teacher:
-            command_response = handle_teacher_commands(user_input)
-            if command_response:
-                st.session_state.chat_history.append(("assistant", command_response))
-                st.rerun()
-                return
-        
-        # If it's not a command or not in teacher mode, force a rerun to process normally
-        st.rerun()
-
-# This function will be called after the rerun when a user message is added
-def process_pending_messages():
-    # Check if the last message is from the user (needs a response)
-    if st.session_state.chat_history and st.session_state.chat_history[-1][0] == "user":
-        user_input = st.session_state.chat_history[-1][1]
-        
-        # Double-check if it's a teacher command (in case it wasn't caught earlier)
-        if st.session_state.is_teacher:
-            command_response = handle_teacher_commands(user_input)
-            if command_response:
-                st.session_state.chat_history.append(("assistant", command_response))
-                return
-        
-        # If not a command, get normal GPT response
-        get_gpt_response(user_input)
+    """Process user input and generate a response"""
+    if not user_input:
+        return
+    
+    # Check if this is a teacher command
+    if st.session_state.is_teacher:
+        command_response = handle_teacher_commands(user_input)
+        if command_response:
+            # Display the command response directly
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown(command_response)
+            
+            # Add to chat history
+            st.session_state.chat_history.append(("assistant", command_response))
+            return
+    
+    # If not a command, get GPT response
+    get_gpt_response(user_input)
 
 def format_time(seconds):
     """Format seconds into a readable time string"""
@@ -1571,27 +1558,24 @@ def get_gpt_response(user_input):
             # If there's an error, add an error message to chat
             st.session_state.chat_history.append(("assistant", error_message))
 
-def display_chat(user_name: str):
-    # Create a container for the chat
-    chat_container = st.container()
+def display_chat(user_name):
+    """Display the chat interface with message history"""
+    # Display chat messages from history
+    for i, (role, content) in enumerate(st.session_state.chat_history[:-1]):  # Skip the last message if it's being processed
+        with st.chat_message(role, avatar="👤" if role == "user" else "🤖"):
+            st.markdown(content)
     
-    with chat_container:
-        # Display each message in the chat history
-        for i, (role, message) in enumerate(st.session_state.chat_history):
-            if role == "assistant":
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.markdown(message)
-            else:
-                with st.chat_message("user", avatar="👤"):
-                    st.markdown(message)
-    
-    # Process any pending messages (user messages that need responses)
-    process_pending_messages()
-    
-    # Add a chat input at the bottom
-    user_input = st.chat_input("Enter your question about the topic")
-    if user_input:
-        handle_user_input(user_input)
+    # Get user input
+    if prompt := st.chat_input(f"Ask me anything about {st.session_state.auth_data.get('TopicName', 'your topic')}..."):
+        # Add user message to chat history
+        st.session_state.chat_history.append(("user", prompt))
+        
+        # Display user message
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt)
+        
+        # Process the message immediately
+        handle_user_input(prompt)
 
 # ----------------------------------------------------------------------------
 # 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
