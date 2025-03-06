@@ -996,32 +996,7 @@ def teacher_dashboard():
                 )
                 st.plotly_chart(fig)
             
-            # Student selection
-            st.subheader("👥 Student Selection")
-            students = student_info["Students"]
-            student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
-            
-            selected_student_name = st.selectbox(
-                "Select a student to view detailed analysis:",
-                options=list(student_options.keys())
-            )
-            
-            if selected_student_name:
-                selected_student = student_options[selected_student_name]
-                st.session_state.selected_student = selected_student
-                
-                # Display student analytics
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Concepts", selected_student["TotalConceptCount"])
-                col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
-                col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
-                
-                # Calculate and display progress
-                progress = (selected_student["ClearedConceptCount"] / 
-                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
-                
-                st.progress(progress/100)
-                st.markdown(f"**Overall Progress:** {progress:.1f}%")
+    
 
         # Bloom's Level
         st.subheader("📝 Question Generation")
