@@ -986,7 +986,32 @@ def teacher_dashboard():
                 )
                 st.plotly_chart(fig)
             
-           
+            # Student selection
+            st.subheader("👥 Student Selection")
+            students = student_info["Students"]
+            student_options = {f"{s['FullName']} (ID: {s['UserID']})": s for s in students}
+            
+            selected_student_name = st.selectbox(
+                "Select a student to view detailed analysis:",
+                options=list(student_options.keys())
+            )
+            
+            if selected_student_name:
+                selected_student = student_options[selected_student_name]
+                st.session_state.selected_student = selected_student
+                
+                # Display student analytics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Concepts", selected_student["TotalConceptCount"])
+                col2.metric("Weak Concepts", selected_student["WeakConceptCount"])
+                col3.metric("Cleared Concepts", selected_student["ClearedConceptCount"])
+                
+                # Calculate and display progress
+                progress = (selected_student["ClearedConceptCount"] / 
+                          selected_student["TotalConceptCount"]) * 100 if selected_student["TotalConceptCount"] > 0 else 0
+                
+                st.progress(progress/100)
+                st.markdown(f"**Overall Progress:** {progress:.1f}%")
 
         # Bloom's Level
         st.subheader("📝 Question Generation")
@@ -1512,37 +1537,39 @@ def get_gpt_response(user_input):
             break
         conversation_history_formatted.append({"role": role, "content": content})
     
-    # Create a placeholder for the assistant's response
-    message_placeholder = st.chat_message("assistant", avatar="🤖")
-    
-    try:
+    # Create a chat message for the assistant with a placeholder
+    with st.chat_message("assistant", avatar="🤖"):
+        message_placeholder = st.empty()
         full_response = ""
         
-        # Create a streaming response
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=conversation_history_formatted,
-            max_tokens=2000,
-            stream=True
-        )
-        
-        # Process the streaming response
-        response_container = message_placeholder.empty()
-        
-        for chunk in response:
-            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                content = chunk.choices[0].delta.content
-                full_response += content
-                # Update the displayed response
-                response_container.markdown(full_response)
-        
-        # Add the complete response to chat history
-        st.session_state.chat_history.append(("assistant", full_response))
-        
-    except Exception as e:
-        st.error(f"Error in GPT response: {e}")
-        # If there's an error, add an error message to chat
-        st.session_state.chat_history.append(("assistant", f"I'm sorry, I encountered an error: {str(e)}"))
+        try:
+            # Create a streaming response
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=conversation_history_formatted,
+                max_tokens=2000,
+                stream=True
+            )
+            
+            # Process the streaming response
+            for chunk in response:
+                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    # Update the displayed response with a blinking cursor
+                    message_placeholder.markdown(full_response + "▌")
+            
+            # Update the placeholder with the final response (no cursor)
+            message_placeholder.markdown(full_response)
+            
+            # Add the complete response to chat history
+            st.session_state.chat_history.append(("assistant", full_response))
+            
+        except Exception as e:
+            error_message = f"I'm sorry, I encountered an error: {str(e)}"
+            message_placeholder.markdown(error_message)
+            # If there's an error, add an error message to chat
+            st.session_state.chat_history.append(("assistant", error_message))
 
 def display_chat(user_name: str):
     # Create a container for the chat
