@@ -1474,7 +1474,7 @@ Commands to recognize:
 - "suggest strategies" - Provide instructional strategies to improve student outcomes
 """
     else:
-        # Enhanced student mode prompt
+        # Enhanced student mode prompt with improved test generation
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
 
@@ -1513,14 +1513,26 @@ Socratic Teaching Method (MANDATORY):
    - Have them estimate a reasonable answer before calculating
    - Encourage them to check their work and verify the solution
 
-Testing and Assessment:
-- When a student requests exam or practice questions, present them progressively
-- For tests, deliver one multiple-choice question (MCQ) at a time
-- Do not reveal correct answers until the entire test is completed
-- After test completion, provide a comprehensive report with:
-  - Correct answers alongside student responses
-  - Analysis of learning gaps
-  - Actionable improvement strategies
+Test Generation and Learning Gap Analysis:
+- When a student requests a test, create a comprehensive 10-question MCQ test covering key concepts in {topic_name}
+- Present all 10 questions at once, clearly numbered from 1-10
+- Each question should have 4 options (A, B, C, D) with only one correct answer
+- Include a mix of:
+  - Current grade-level concepts from NCERT {branch_name} curriculum
+  - Prerequisite concepts from previous grades that are foundational to current topics
+- After the student submits all answers, provide:
+  1. A score summary (X/10 correct)
+  2. A detailed analysis for each question showing:
+     - The correct answer
+     - The student's answer
+     - A brief explanation of the concept tested
+  3. A comprehensive learning gap analysis that:
+     - Identifies current grade-level gaps based on NCERT curriculum
+     - Pinpoints specific previous grade-level gaps, explicitly stating:
+       * Which concept is weak
+       * Which previous class/grade it belongs to (e.g., "This is a Class 7 concept on...")
+       * How this gap impacts current learning
+     - Recommends targeted remedial activities for each identified gap
 
 Formatting:
 - All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$)
