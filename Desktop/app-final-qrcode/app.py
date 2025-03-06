@@ -38,6 +38,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"  # This makes the sidebar expanded by default but collapsible
 )
 
+# Hide default Streamlit UI
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # Import DeepSeek-style client from openai package
 try:
     from openai import OpenAI
