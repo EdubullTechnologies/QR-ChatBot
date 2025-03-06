@@ -1500,7 +1500,8 @@ Socratic Teaching Method (MANDATORY):
 
 Test Generation and Learning Gap Analysis:
 - When a student requests a test, create a comprehensive 10-question MCQ test covering key concepts in {topic_name}
-- Present all 10 questions at once, clearly numbered from 1-10
+- Present 10 questions one by one, clearly numbered from 1-10
+- Present the next questions after the previous question has been attempted
 - Each question should have 4 options (A, B, C, D) with only one correct answer
 - Include a mix of:
   - Current grade-level concepts from NCERT {branch_name} curriculum
