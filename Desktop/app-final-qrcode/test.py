@@ -1554,41 +1554,38 @@ def get_gpt_response(user_input):
         conversation_history_formatted.append({"role": role, "content": content})
     
     try:
-        # Create a streaming response
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=conversation_history_formatted,
-            max_tokens=2000,
-            stream=True
-        )
-        
-        # Create a placeholder for the streaming response
-        placeholder = st.empty()
-        full_response = ""
-        
-        # Process the streaming response
-        for chunk in response:
-            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                content = chunk.choices[0].delta.content
-                full_response += content
-                # Update the placeholder with the current response
-                with placeholder.container():
-                    with st.chat_message("assistant", avatar="🤖"):
-                        st.markdown(full_response + "▌")
-        
-        # Clear the placeholder
-        placeholder.empty()
+        # Create a chat message container for the assistant
+        with st.chat_message("assistant", avatar="🤖"):
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            # Create a streaming response
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=conversation_history_formatted,
+                max_tokens=2000,
+                stream=True
+            )
+            
+            # Process the streaming response
+            for chunk in response:
+                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    # Update the placeholder with the current response
+                    message_placeholder.markdown(full_response + "▌")
+            
+            # Final update without the cursor
+            message_placeholder.markdown(full_response)
         
         # Add the complete response to chat history
         st.session_state.chat_history.append(("assistant", full_response))
         
-        # Force a rerun to display the final response properly
-        st.rerun()
-        
     except Exception as e:
         error_message = f"I'm sorry, I encountered an error: {str(e)}"
+        with st.chat_message("assistant", avatar="🤖"):
+            st.markdown(error_message)
         st.session_state.chat_history.append(("assistant", error_message))
-        st.rerun()
 
 # ----------------------------------------------------------------------------
 # 5) AUTHENTICATION SYSTEM WITH MODE-SPECIFIC HANDLING
