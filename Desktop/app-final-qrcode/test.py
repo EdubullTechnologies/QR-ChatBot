@@ -787,11 +787,14 @@ def display_all_concepts_tab():
     # Create a DataFrame for better display
     concept_data = []
     for concept in st.session_state.all_concepts:
-        # Calculate status based on marks percent
-        if concept.get('AttendedQuestion', 0) == 0:
+        # Calculate status based on marks percent and attempts
+        attended = concept.get('AttendedQuestion', 0)
+        avg_marks = concept.get('AvgMarksPercent', 0)
+        
+        if attended == 0:
             status = "Not Attempted"
             status_color = "gray"
-        elif concept.get('AvgMarksPercent', 0) >= 70:
+        elif avg_marks >= 70:
             status = "Strong"
             status_color = "green"
         else:
@@ -808,41 +811,88 @@ def display_all_concepts_tab():
             "Status Color": status_color
         })
     
-    df = pd.DataFrame(concept_data)
-    
     # Create a styled table
     st.markdown("### 🔍 Concept Status Analysis")
     st.markdown("This analysis shows your performance across all concepts in this topic.")
     
-    # Apply conditional formatting
-    def highlight_status(val):
-        if val == "Strong":
-            return 'background-color: #d4edda; color: #155724; font-weight: bold'
-        elif val == "Weak":
-            return 'background-color: #f8d7da; color: #721c24; font-weight: bold'
-        else:  # Not Attempted
-            return 'background-color: #e2e3e5; color: #383d41; font-style: italic'
+    # Create a custom HTML table with better styling
+    html_table = """
+    <style>
+    .concept-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .concept-table th {
+        background-color: #f0f2f6;
+        padding: 10px;
+        text-align: left;
+        border-bottom: 2px solid #ddd;
+    }
+    .concept-table td {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+    .status-strong {
+        background-color: #d4edda;
+        color: #155724;
+        font-weight: bold;
+        padding: 5px 10px;
+        border-radius: 4px;
+    }
+    .status-weak {
+        background-color: #f8d7da;
+        color: #721c24;
+        font-weight: bold;
+        padding: 5px 10px;
+        border-radius: 4px;
+    }
+    .status-not-attempted {
+        background-color: #e2e3e5;
+        color: #383d41;
+        font-style: italic;
+        padding: 5px 10px;
+        border-radius: 4px;
+    }
+    </style>
+    <table class="concept-table">
+        <thead>
+            <tr>
+                <th>Concept</th>
+                <th>Questions</th>
+                <th>Score</th>
+                <th>Time Spent</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+    """
     
-    # Display the styled table
-    styled_df = df.style.applymap(
-        lambda x: highlight_status(x) if x in ["Strong", "Weak", "Not Attempted"] else '',
-        subset=['Status']
-    )
+    for concept in concept_data:
+        status_class = ""
+        if concept["Status"] == "Strong":
+            status_class = "status-strong"
+        elif concept["Status"] == "Weak":
+            status_class = "status-weak"
+        else:
+            status_class = "status-not-attempted"
+        
+        html_table += f"""
+        <tr>
+            <td>{concept["Concept"]}</td>
+            <td>{concept["Questions Attempted"]}</td>
+            <td>{concept["Score"]}</td>
+            <td>{concept["Time Spent"]}</td>
+            <td><span class="{status_class}">{concept["Status"]}</span></td>
+        </tr>
+        """
     
-    st.dataframe(
-        styled_df,
-        column_config={
-            "Concept ID": None,  # Hide this column
-            "Concept": st.column_config.TextColumn("Concept"),
-            "Questions Attempted": st.column_config.TextColumn("Questions"),
-            "Score": st.column_config.TextColumn("Score"),
-            "Time Spent": st.column_config.TextColumn("Time Spent"),
-            "Status": st.column_config.TextColumn("Status"),
-            "Status Color": None  # Hide this column
-        },
-        hide_index=True,
-        use_container_width=True
-    )
+    html_table += """
+        </tbody>
+    </table>
+    """
+    
+    st.markdown(html_table, unsafe_allow_html=True)
     
     # Add a section for remedial resources
     st.markdown("### 📚 Remedial Resources")
@@ -865,15 +915,18 @@ def display_all_concepts_tab():
         
         if selected_concept_obj:
             # Display concept status
-            status = "Not Attempted"
-            if selected_concept_obj.get('AttendedQuestion', 0) > 0:
-                status = "Strong" if selected_concept_obj.get('AvgMarksPercent', 0) >= 70 else "Weak"
+            attended = selected_concept_obj.get('AttendedQuestion', 0)
+            avg_marks = selected_concept_obj.get('AvgMarksPercent', 0)
             
-            status_color = {
-                "Strong": "green",
-                "Weak": "red",
-                "Not Attempted": "gray"
-            }[status]
+            if attended == 0:
+                status = "Not Attempted"
+                status_color = "gray"
+            elif avg_marks >= 70:
+                status = "Strong"
+                status_color = "green"
+            else:
+                status = "Weak"
+                status_color = "red"
             
             st.markdown(f"**Status:** <span style='color:{status_color};font-weight:bold'>{status}</span>", unsafe_allow_html=True)
             
