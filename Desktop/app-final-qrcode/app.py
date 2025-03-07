@@ -1873,5 +1873,121 @@ def main():
         with placeholder.container():
             login_screen()
 
+def fetch_class_analysis(batch_id):
+    """Fetch class analysis data from API"""
+    try:
+        # Prepare the payload
+        payload = {
+            "OrgCode": st.session_state.auth_data['UserInfo'][0].get('OrgCode', ''),
+            "BatchID": batch_id,
+            "TopicID": st.session_state.topic_id
+        }
+        
+        # Make API request
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        # Use the API_STUDENT_INFO endpoint to get student information
+        response = requests.post(API_STUDENT_INFO, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data or "StudentList" not in data:
+            return None
+        
+        # Process the data
+        students = []
+        total_score = 0
+        for student in data.get("StudentList", []):
+            student_score = student.get("AvgMarksPercent", 0)
+            students.append({
+                "name": student.get("FullName", "Unknown"),
+                "id": student.get("UserID", ""),
+                "score": student_score
+            })
+            total_score += student_score
+        
+        avg_score = round(total_score / len(students)) if students else 0
+        
+        # Get concept information
+        concepts_covered = len(data.get("ConceptList", []))
+        
+        return {
+            "avg_score": avg_score,
+            "total_students": len(students),
+            "concepts_covered": concepts_covered,
+            "students": students
+        }
+        
+    except Exception as e:
+        logging.error(f"Error fetching class analysis: {e}")
+        return None
+
+def fetch_student_analysis(student_id):
+    """Fetch student analysis data from API"""
+    try:
+        # Prepare the payload
+        payload = {
+            "OrgCode": st.session_state.auth_data['UserInfo'][0].get('OrgCode', ''),
+            "UserID": student_id,
+            "TopicID": st.session_state.topic_id
+        }
+        
+        # Make API request
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json"
+        }
+        
+        # Use the API_STUDENT_CONCEPTS endpoint to get student concept information
+        response = requests.post(API_STUDENT_CONCEPTS, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data or "ConceptList" not in data:
+            return None
+        
+        # Process the data
+        concepts = []
+        total_score = 0
+        concepts_mastered = 0
+        
+        for concept in data.get("ConceptList", []):
+            concept_score = concept.get("AvgMarksPercent", 0)
+            is_mastered = concept_score >= 70
+            
+            if is_mastered:
+                concepts_mastered += 1
+                
+            concepts.append({
+                "name": concept.get("ConceptText", "Unknown"),
+                "score": concept_score,
+                "mastered": is_mastered
+            })
+            
+            total_score += concept_score
+        
+        avg_score = round(total_score / len(concepts)) if concepts else 0
+        
+        # Calculate time spent (in hours)
+        total_time_seconds = sum(concept.get("TotalTimeTaken_SS", 0) for concept in data.get("ConceptList", []))
+        time_spent_hours = round(total_time_seconds / 3600, 1)  # Convert seconds to hours
+        
+        return {
+            "avg_score": avg_score,
+            "concepts_mastered": concepts_mastered,
+            "total_concepts": len(concepts),
+            "time_spent": time_spent_hours,
+            "concepts": concepts
+        }
+        
+    except Exception as e:
+        logging.error(f"Error fetching student analysis: {e}")
+        return None
+
 if __name__ == "__main__":
     main()
