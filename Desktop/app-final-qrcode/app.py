@@ -1592,23 +1592,47 @@ Remember: Your goal is to develop the student's critical thinking and problem-so
 """
 
 def display_chat(user_name):
-    """Display the chat interface with message history"""
-    # Create a container for the chat history
-    chat_container = st.container()
-    
-    # Display all messages from history
-    with chat_container:
-        for role, content in st.session_state.chat_history:
-            with st.chat_message(role, avatar="👤" if role == "user" else "🤖"):
-                st.markdown(content)
+    """Display the chat interface and handle user input"""
+    # Display chat history
+    for role, message in st.session_state.chat_history:
+        with st.chat_message(role, avatar="🧑‍🎓" if role == "user" else "🤖"):
+            st.markdown(message)
     
     # Get user input
-    if prompt := st.chat_input(f"Ask me anything about {st.session_state.auth_data.get('TopicName', 'your topic')}..."):
+    user_input = st.chat_input("Ask me anything...", key="chat_input")
+    
+    # Process user input
+    if user_input:
         # Add user message to chat history
-        st.session_state.chat_history.append(("user", prompt))
+        st.session_state.chat_history.append(("user", user_input))
         
-        # Force a rerun to display the user message before processing
-        st.rerun()
+        # Display user message immediately
+        with st.chat_message("user", avatar="🧑‍🎓"):
+            st.markdown(user_input)
+        
+        # Create a placeholder for the assistant's response
+        with st.chat_message("assistant", avatar="🤖"):
+            message_placeholder = st.empty()
+            message_placeholder.markdown("Thinking...")
+            
+            # Check for teacher commands first
+            if st.session_state.is_teacher:
+                response = handle_teacher_commands(user_input)
+                if response:
+                    # Update the placeholder with the response
+                    message_placeholder.markdown(response)
+                    # Add to chat history
+                    st.session_state.chat_history.append(("assistant", response))
+                    return
+            
+            # If no teacher command matched or user is not a teacher, process as regular chat
+            response = get_ai_response(user_input, user_name)
+            
+            # Update the placeholder with the response
+            message_placeholder.markdown(response)
+            
+            # Add to chat history
+            st.session_state.chat_history.append(("assistant", response))
 
 def process_pending_messages():
     """Process any pending user messages that need responses"""
