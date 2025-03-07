@@ -1625,14 +1625,42 @@ def display_chat(user_name):
                     st.session_state.chat_history.append(("assistant", response))
                     return
             
-            # If no teacher command matched or user is not a teacher, process as regular chat
-            response = get_ai_response(user_input, user_name)
-            
-            # Update the placeholder with the response
-            message_placeholder.markdown(response)
-            
-            # Add to chat history
-            st.session_state.chat_history.append(("assistant", response))
+            # If no teacher command matched or user is not a teacher, get GPT response
+            try:
+                system_prompt = get_system_prompt()
+                conversation_history_formatted = [{"role": "system", "content": system_prompt}]
+                
+                # Format the conversation history for the API
+                for role, content in st.session_state.chat_history:
+                    conversation_history_formatted.append({"role": role, "content": content})
+                
+                # Create a streaming response
+                full_response = ""
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=conversation_history_formatted,
+                    max_tokens=2000,
+                    stream=True
+                )
+                
+                # Process the streaming response
+                for chunk in response:
+                    if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                        content = chunk.choices[0].delta.content
+                        full_response += content
+                        # Update the placeholder with the current response
+                        message_placeholder.markdown(full_response + "▌")
+                
+                # Final update without the cursor
+                message_placeholder.markdown(full_response)
+                
+                # Add the complete response to chat history
+                st.session_state.chat_history.append(("assistant", full_response))
+                
+            except Exception as e:
+                error_message = f"I'm sorry, I encountered an error: {str(e)}"
+                message_placeholder.markdown(error_message)
+                st.session_state.chat_history.append(("assistant", error_message))
 
 def process_pending_messages():
     """Process any pending user messages that need responses"""
