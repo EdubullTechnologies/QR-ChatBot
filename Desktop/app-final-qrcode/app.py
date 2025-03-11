@@ -860,7 +860,17 @@ def display_all_concepts_tab():
 # 4) TEACHER DASHBOARD
 # ----------------------------------------------------------------------------
 def display_additional_graphs(weak_concepts):
-    df = pd.DataFrame(weak_concepts.get("Concepts", []))
+    # Check if weak_concepts is a list (old API format) or dict (new API format)
+    if isinstance(weak_concepts, list):
+        # Handle the old API format (list of concepts)
+        concepts_data = weak_concepts
+        students_data = []  # No student data in old format
+    else:
+        # Handle the new API format (dict with Concepts and Students)
+        concepts_data = weak_concepts.get("Concepts", [])
+        students_data = weak_concepts.get("Students", [])
+    
+    df = pd.DataFrame(concepts_data)
     
     if df.empty:
         st.info("No concept data available to display.")
@@ -926,7 +936,7 @@ def display_additional_graphs(weak_concepts):
         st.altair_chart(time_chart, use_container_width=True)
     
     # 3. Student Progress Overview - Single visualization for student progress
-    students_df = pd.DataFrame(weak_concepts.get("Students", []))
+    students_df = pd.DataFrame(students_data)
     if not students_df.empty and "WeakConceptCount" in students_df.columns and "ClearedConceptCount" in students_df.columns:
         # Calculate progress percentage
         students_df["ProgressPercent"] = (students_df["ClearedConceptCount"] / students_df["TotalConceptCount"] * 100).fillna(0)
@@ -988,10 +998,19 @@ def teacher_dashboard():
         }
         with st.spinner("EeeBee is fetching concept data..."):
             try:
-                response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
+                # First try the new API endpoint that returns both concepts and students
+                response = requests.post(API_STUDENT_INFO, json=params, headers=headers)
                 response.raise_for_status()
-                weak_concepts = response.json()
-                st.session_state.teacher_weak_concepts = weak_concepts
+                data = response.json()
+                
+                # Check if the response has the expected structure
+                if "Concepts" in data and "Students" in data:
+                    st.session_state.teacher_weak_concepts = data
+                else:
+                    # Fall back to the old API endpoint
+                    response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
+                    response.raise_for_status()
+                    st.session_state.teacher_weak_concepts = response.json()
             except Exception as e:
                 st.error(f"Error fetching concept data: {e}")
                 st.session_state.teacher_weak_concepts = []
@@ -1004,21 +1023,28 @@ def teacher_dashboard():
             st.subheader("Class Performance Overview")
             
             # Display metrics at the top
-            concepts_data = st.session_state.teacher_weak_concepts.get("Concepts", [])
-            students_data = st.session_state.teacher_weak_concepts.get("Students", [])
+            # Check if teacher_weak_concepts is a list (old API format) or dict (new API format)
+            if isinstance(st.session_state.teacher_weak_concepts, list):
+                concepts_data = st.session_state.teacher_weak_concepts
+                students_data = []  # No student data in old format
+            else:
+                concepts_data = st.session_state.teacher_weak_concepts.get("Concepts", [])
+                students_data = st.session_state.teacher_weak_concepts.get("Students", [])
             
             # Calculate key metrics
             total_concepts = len(concepts_data)
             
-            # Calculate student progress metrics
-            students_with_weak_concepts = sum(1 for s in students_data if s.get("WeakConceptCount", 0) > 0)
-            students_with_cleared_concepts = sum(1 for s in students_data if s.get("ClearedConceptCount", 0) > 0)
-            
-            # Calculate average progress percentage
+            # Calculate student progress metrics if available
             if students_data:
-                avg_progress = sum(s.get("ClearedConceptCount", 0) / s.get("TotalConceptCount", 1) * 100 
+                students_with_weak_concepts = sum(1 for s in students_data if s.get("WeakConceptCount", 0) > 0)
+                students_with_cleared_concepts = sum(1 for s in students_data if s.get("ClearedConceptCount", 0) > 0)
+                
+                # Calculate average progress percentage
+                avg_progress = sum(s.get("ClearedConceptCount", 0) / max(s.get("TotalConceptCount", 1), 1) * 100 
                                   for s in students_data) / len(students_data)
             else:
+                students_with_weak_concepts = 0
+                students_with_cleared_concepts = 0
                 avg_progress = 0
             
             # Display metrics in columns
@@ -1057,7 +1083,12 @@ def teacher_dashboard():
             )
             bloom_short = bloom_level.split()[0]  # e.g. "L4"
 
-            concept_list = {c["ConceptText"]: c["ConceptID"] for c in st.session_state.teacher_weak_concepts.get("Concepts", [])}
+            # Handle both data formats for concept selection
+            if isinstance(st.session_state.teacher_weak_concepts, list):
+                concept_list = {c["ConceptText"]: c["ConceptID"] for c in st.session_state.teacher_weak_concepts}
+            else:
+                concept_list = {c["ConceptText"]: c["ConceptID"] for c in st.session_state.teacher_weak_concepts.get("Concepts", [])}
+                
             if concept_list:
                 chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
 
