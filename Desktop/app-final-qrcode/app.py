@@ -860,45 +860,105 @@ def display_all_concepts_tab():
 # 4) TEACHER DASHBOARD
 # ----------------------------------------------------------------------------
 def display_additional_graphs(weak_concepts):
-    df = pd.DataFrame(weak_concepts)
-    total_attended = df["AttendedStudentCount"].sum()
-    total_cleared = df["ClearedStudentCount"].sum()
-    total_not_cleared = total_attended - total_cleared
-
-    data_overall = pd.DataFrame({
-        'Category': ['Cleared', 'Not Cleared'],
-        'Count': [total_cleared, total_not_cleared]
-    })
-    donut_chart = alt.Chart(data_overall).mark_arc(innerRadius=50).encode(
-        theta='Count:Q',
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['Category:N', 'Count:Q']
-    ).properties(
-        title='Overall Cleared vs Not Cleared Students'
-    )
-    st.altair_chart(donut_chart, use_container_width=True)
-
-    df_long = df.melt(
-        id_vars='ConceptText',
-        value_vars=['AttendedStudentCount', 'ClearedStudentCount'],
-        var_name='Category',
-        value_name='Count'
-    )
-    df_long['Category'] = df_long['Category'].replace({
-        'AttendedStudentCount': 'Attended',
-        'ClearedStudentCount': 'Cleared'
-    })
-
-    horizontal_bar = alt.Chart(df_long).mark_bar().encode(
-        x=alt.X('Count:Q'),
-        y=alt.Y('ConceptText:N', sort='-x', title='Concepts'),
-        color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-        tooltip=['ConceptText:N', 'Category:N', 'Count:Q']
-    ).properties(
-        title='Attended vs Cleared per Concept (Horizontal View)',
-        width=600
-    )
-    st.altair_chart(horizontal_bar, use_container_width=True)
+    df = pd.DataFrame(weak_concepts.get("Concepts", []))
+    
+    if df.empty:
+        st.info("No concept data available to display.")
+        return
+    
+    # Create a more focused set of visualizations without repetition
+    
+    # 1. Concept Mastery Overview - Single visualization instead of multiple redundant ones
+    if "AttendedStudentCount" in df.columns and "ClearedStudentCount" in df.columns:
+        # Prepare data for visualization
+        df_viz = df[["ConceptText", "AttendedStudentCount", "ClearedStudentCount"]].copy()
+        
+        # Calculate not cleared count
+        df_viz["NotClearedCount"] = df_viz["AttendedStudentCount"] - df_viz["ClearedStudentCount"]
+        
+        # Create a stacked bar chart for better visualization
+        concept_chart = alt.Chart(df_viz).transform_fold(
+            ["ClearedStudentCount", "NotClearedCount"],
+            as_=["Status", "Count"]
+        ).mark_bar().encode(
+            y=alt.Y("ConceptText:N", sort="-x", title="Concepts"),
+            x=alt.X("Count:Q", title="Number of Students"),
+            color=alt.Color("Status:N", 
+                           scale=alt.Scale(domain=["ClearedStudentCount", "NotClearedCount"], 
+                                          range=["#4CAF50", "#FF9800"]),
+                           legend=alt.Legend(title="Status", 
+                                           labelExpr="datum.label == 'ClearedStudentCount' ? 'Cleared' : 'Not Cleared'")),
+            tooltip=["ConceptText:N", "Status:N", "Count:Q"]
+        ).properties(
+            title="Concept Mastery Overview",
+            width=600,
+            height=400
+        )
+        
+        st.altair_chart(concept_chart, use_container_width=True)
+    
+    # 2. Time Spent Analysis - Using data from concept and student status for teacher.txt
+    if "DurationTaken_SS" in df.columns:
+        # Create time spent visualization
+        time_df = df[["ConceptText", "DurationTaken_SS"]].copy()
+        
+        # Convert seconds to minutes for better readability
+        time_df["DurationMinutes"] = time_df["DurationTaken_SS"] / 60
+        
+        # Sort by duration for better visualization
+        time_df = time_df.sort_values("DurationMinutes", ascending=False)
+        
+        time_chart = alt.Chart(time_df).mark_bar().encode(
+            y=alt.Y("ConceptText:N", sort="-x", title="Concepts"),
+            x=alt.X("DurationMinutes:Q", title="Time Spent (minutes)"),
+            color=alt.Color("DurationMinutes:Q", 
+                           scale=alt.Scale(scheme="blues"),
+                           legend=alt.Legend(title="Minutes")),
+            tooltip=["ConceptText:N", 
+                    alt.Tooltip("DurationMinutes:Q", format=".2f", title="Minutes Spent"),
+                    alt.Tooltip("DurationTaken_SS:Q", title="Seconds")]
+        ).properties(
+            title="Time Spent per Concept",
+            width=600,
+            height=400
+        )
+        
+        st.altair_chart(time_chart, use_container_width=True)
+    
+    # 3. Student Progress Overview - Single visualization for student progress
+    students_df = pd.DataFrame(weak_concepts.get("Students", []))
+    if not students_df.empty and "WeakConceptCount" in students_df.columns and "ClearedConceptCount" in students_df.columns:
+        # Calculate progress percentage
+        students_df["ProgressPercent"] = (students_df["ClearedConceptCount"] / students_df["TotalConceptCount"] * 100).fillna(0)
+        
+        # Sort by progress for better visualization
+        students_df = students_df.sort_values("ProgressPercent", ascending=False)
+        
+        # Limit to top 15 students for better visualization
+        if len(students_df) > 15:
+            students_df = students_df.head(15)
+            title_suffix = " (Top 15)"
+        else:
+            title_suffix = ""
+        
+        student_chart = alt.Chart(students_df).mark_bar().encode(
+            y=alt.Y("FullName:N", sort="-x", title="Students"),
+            x=alt.X("ProgressPercent:Q", title="Progress (%)"),
+            color=alt.Color("ProgressPercent:Q", 
+                           scale=alt.Scale(scheme="greenblue"),
+                           legend=alt.Legend(title="Progress %")),
+            tooltip=["FullName:N", 
+                    alt.Tooltip("ProgressPercent:Q", format=".1f", title="Progress %"),
+                    "ClearedConceptCount:Q", 
+                    "WeakConceptCount:Q", 
+                    "TotalConceptCount:Q"]
+        ).properties(
+            title=f"Student Progress Overview{title_suffix}",
+            width=600,
+            height=400
+        )
+        
+        st.altair_chart(student_chart, use_container_width=True)
 
 def teacher_dashboard():
     batches = st.session_state.auth_data.get("BatchList", [])
@@ -926,154 +986,138 @@ def teacher_dashboard():
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json"
         }
-        with st.spinner("EeeBee is fetching weak concepts..."):
+        with st.spinner("EeeBee is fetching concept data..."):
             try:
                 response = requests.post(API_TEACHER_WEAK_CONCEPTS, json=params, headers=headers)
                 response.raise_for_status()
                 weak_concepts = response.json()
                 st.session_state.teacher_weak_concepts = weak_concepts
             except Exception as e:
-                st.error(f"Error fetching weak concepts: {e}")
+                st.error(f"Error fetching concept data: {e}")
                 st.session_state.teacher_weak_concepts = []
 
     if st.session_state.teacher_weak_concepts:
-        df = []
-        for wc in st.session_state.teacher_weak_concepts:
-            df.append({
-                "Concept": wc["ConceptText"],
-                "Attended": wc["AttendedStudentCount"],
-                "Cleared": wc["ClearedStudentCount"]
-            })
-        df = pd.DataFrame(df)
-
-        # Main bar chart
-        df_long = df.melt('Concept', var_name='Category', value_name='Count')
-        chart = alt.Chart(df_long).mark_bar().encode(
-            x='Concept:N',
-            y='Count:Q',
-            color=alt.Color('Category:N', legend=alt.Legend(title="Category")),
-            tooltip=['Concept:N', 'Category:N', 'Count:Q']
-        ).properties(
-            title='Weak Concepts Overview',
-            width=600
-        )
-
-        rule = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_rule(
-            color='red', strokeDash=[4, 4]
-        ).encode(y='y:Q')
-        text = alt.Chart(pd.DataFrame({'y': [total_students]})).mark_text(
-            align='left', dx=5, dy=-5, color='red'
-        ).encode(y='y:Q', text=alt.value(f'Total Students: {total_students}'))
-
-        final_chart = (chart + rule + text).interactive()
-        st.altair_chart(final_chart, use_container_width=True)
-
-        display_additional_graphs(st.session_state.teacher_weak_concepts)
-
-    if selected_batch_id:
-        # Fetch student info when batch is selected
-        user_info = st.session_state.auth_data.get('UserInfo', [{}])[0]
-        org_code = user_info.get('OrgCode', '012')
+        # Create tabs for different dashboard views
+        tab1, tab2 = st.tabs(["📊 Class Overview", "📝 Question Generation"])
         
-        student_info = fetch_student_info(
-            batch_id=selected_batch_id,
-            topic_id=st.session_state.topic_id,
-            org_code=org_code
-        )
+        with tab1:
+            st.subheader("Class Performance Overview")
+            
+            # Display metrics at the top
+            concepts_data = st.session_state.teacher_weak_concepts.get("Concepts", [])
+            students_data = st.session_state.teacher_weak_concepts.get("Students", [])
+            
+            # Calculate key metrics
+            total_concepts = len(concepts_data)
+            
+            # Calculate student progress metrics
+            students_with_weak_concepts = sum(1 for s in students_data if s.get("WeakConceptCount", 0) > 0)
+            students_with_cleared_concepts = sum(1 for s in students_data if s.get("ClearedConceptCount", 0) > 0)
+            
+            # Calculate average progress percentage
+            if students_data:
+                avg_progress = sum(s.get("ClearedConceptCount", 0) / s.get("TotalConceptCount", 1) * 100 
+                                  for s in students_data) / len(students_data)
+            else:
+                avg_progress = 0
+            
+            # Display metrics in columns
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Students", total_students)
+            col2.metric("Total Concepts", total_concepts)
+            col3.metric("Students Needing Help", students_with_weak_concepts)
+            col4.metric("Average Progress", f"{avg_progress:.1f}%")
+            
+            # Display the improved graphs
+            display_additional_graphs(st.session_state.teacher_weak_concepts)
+            
+            # Display student list
+            if students_data:
+                with st.expander("👨‍🎓 Student List", expanded=False):
+                    students_df = pd.DataFrame(students_data)
+                    students_df["Progress"] = (students_df["ClearedConceptCount"] / students_df["TotalConceptCount"] * 100).round(1).astype(str) + "%"
+                    students_df = students_df[["FullName", "ClearedConceptCount", "WeakConceptCount", "TotalConceptCount", "Progress"]]
+                    students_df.columns = ["Student Name", "Concepts Cleared", "Weak Concepts", "Total Concepts", "Progress"]
+                    st.dataframe(students_df, use_container_width=True)
         
-        if student_info:
-            st.session_state.student_info = student_info
-            
-            # Display concept-wise analytics
-            st.subheader("📊 Concept-wise Analysis")
-            concepts_df = pd.DataFrame(student_info["Concepts"])
-            if not concepts_df.empty:
-                fig = px.bar(concepts_df, 
-                    x="ConceptText",
-                    y=["AttendedStudentCount", "ClearedStudentCount"],
-                    title="Concept Performance Overview",
-                    barmode="group"
-                )
-                st.plotly_chart(fig)
-            
-    
+        with tab2:
+            # Bloom's Level
+            st.subheader("📝 Question Generation")
+            bloom_level = st.radio(
+                "Select Bloom's Taxonomy Level for the Questions",
+                [
+                    "L1 (Remember)",
+                    "L2 (Understand)",
+                    "L3 (Apply)",
+                    "L4 (Analyze)",
+                    "L5 (Evaluate)"
+                ],
+                index=2,
+                key="bloom_taxonomy_selector"
+            )
+            bloom_short = bloom_level.split()[0]  # e.g. "L4"
 
-        # Bloom's Level
-        st.subheader("📝 Question Generation")
-        bloom_level = st.radio(
-            "Select Bloom's Taxonomy Level for the Questions",
-            [
-                "L1 (Remember)",
-                "L2 (Understand)",
-                "L3 (Apply)",
-                "L4 (Analyze)",
-                "L5 (Evaluate)"
-            ],
-            index=3,
-            key="bloom_taxonomy_selector"
-        )
-        bloom_short = bloom_level.split()[0]  # e.g. "L4"
+            concept_list = {c["ConceptText"]: c["ConceptID"] for c in st.session_state.teacher_weak_concepts.get("Concepts", [])}
+            if concept_list:
+                chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
 
-        concept_list = {wc["ConceptText"]: wc["ConceptID"] for wc in st.session_state.teacher_weak_concepts}
-        chosen_concept_text = st.radio("Select a Concept to Generate Exam Questions:", list(concept_list.keys()), key="concept_selector_teacher")
+                if chosen_concept_text:
+                    chosen_concept_id = concept_list[chosen_concept_text]
+                    st.session_state.selected_teacher_concept_id = chosen_concept_id
+                    st.session_state.selected_teacher_concept_text = chosen_concept_text
 
-        if chosen_concept_text:
-            chosen_concept_id = concept_list[chosen_concept_text]
-            st.session_state.selected_teacher_concept_id = chosen_concept_id
-            st.session_state.selected_teacher_concept_text = chosen_concept_text
+                    if st.button("Generate Exam Questions", key="generate_exam_btn"):
+                        if not client:
+                            st.error("DeepSeek client is not initialized. Check your API key.")
+                            return
 
-            if st.button("Generate Exam Questions", key="generate_exam_btn"):
-                if not client:
-                    st.error("DeepSeek client is not initialized. Check your API key.")
-                    return
-
-                branch_name = st.session_state.auth_data.get("BranchName", "their class")
-                prompt = (
-                    f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
-                    f"Teacher Mode Instructions:\n"
-                    f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
-                    f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
-                    f"- Offer insights into common student difficulties and ways to address them.\n"
-                    f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
-                    f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
-                    f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
-                    f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
-                    f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
-                    f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
-                    f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
-                )
-
-                with st.spinner("Generating exam questions... Please wait."):
-                    try:
-                        response = client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[{"role": "system", "content": prompt}],
-                            max_tokens=4000,
-                            stream=False
+                        branch_name = st.session_state.auth_data.get("BranchName", "their class")
+                        prompt = (
+                            f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                            f"Teacher Mode Instructions:\n"
+                            f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
+                            f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
+                            f"- Offer insights into common student difficulties and ways to address them.\n"
+                            f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
+                            f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
+                            f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
+                            f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
+                            f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
+                            f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
+                            f"Label each question clearly with **({bloom_short})** and use LaTeX for any math.\n"
                         )
-                        # Use dot-notation to access the content
-                        questions = response.choices[0].message.content.strip()
-                        st.session_state.exam_questions = questions
-                        st.success("Exam questions generated successfully!")
-                        
-                        st.markdown("### 📝 Generated Exam Questions")
-                        st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
-                        
-                        pdf_bytes = generate_exam_questions_pdf(
-                            questions,
-                            chosen_concept_text,
-                            st.session_state.auth_data['UserInfo'][0]['FullName']
-                        )
-                        st.download_button(
-                            label="📥 Download Exam Questions as PDF",
-                            data=pdf_bytes,
-                            file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error generating exam questions: {e}")
-                
-                
+
+                        with st.spinner("Generating exam questions... Please wait."):
+                            try:
+                                response = client.chat.completions.create(
+                                    model="gpt-4o",
+                                    messages=[{"role": "system", "content": prompt}],
+                                    max_tokens=4000,
+                                    stream=False
+                                )
+                                # Use dot-notation to access the content
+                                questions = response.choices[0].message.content.strip()
+                                st.session_state.exam_questions = questions
+                                st.success("Exam questions generated successfully!")
+                                
+                                st.markdown("### 📝 Generated Exam Questions")
+                                st.markdown(questions.replace("\n", "<br>"), unsafe_allow_html=True)
+                                
+                                pdf_bytes = generate_exam_questions_pdf(
+                                    questions,
+                                    chosen_concept_text,
+                                    st.session_state.auth_data['UserInfo'][0]['FullName']
+                                )
+                                st.download_button(
+                                    label="📥 Download Exam Questions as PDF",
+                                    data=pdf_bytes,
+                                    file_name=f"{st.session_state.auth_data['UserInfo'][0]['FullName']}_Exam_Questions_{chosen_concept_text}.pdf",
+                                    mime="application/pdf"
+                                )
+                            except Exception as e:
+                                st.error(f"Error generating exam questions: {e}")
+            else:
+                st.info("No concepts available for question generation.")
 
 # ------------------- 2J) CHAT FUNCTIONS -------------------
 def add_initial_greeting():
@@ -1830,15 +1874,16 @@ def login_screen():
     st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
 
     # Read query parameters from URL
-    query_params = st.experimental_get_query_params()
-    E_params = query_params.get("E", [None])
-    T_params = query_params.get("T", [None])
-    E_value = E_params[0]
-    T_value = T_params[0]
+    query_params = st.query_params
+    E_value = query_params.get("E", None)
+    T_value = query_params.get("T", None)
+
+    api_url = None
+    topic_id = None
 
     # Check for conflicting parameters or missing ones
     if E_value is not None and T_value is not None:
-        st.warning("Provide either ?E=xx for English OR ?T=xx for Non-English, not both.")
+        st.warning("Please scan the QR code from the iEdubull book")
     elif E_value is not None and T_value is None:
         st.session_state.is_english_mode = True
         topic_id = E_value
