@@ -1684,69 +1684,100 @@ def display_chat(user_name):
         with st.chat_message(role, avatar="🧑‍🎓" if role == "user" else "🤖"):
             st.markdown(message)
     
+    # Add preset prompt buttons
+    st.write("Quick prompts:")
+    col1, col2, col3 = st.columns(3)
+    
+    # Different preset buttons based on user type
+    if st.session_state.is_teacher:
+        if col1.button("Show all classes"):
+            handle_preset_prompt("show classes")
+        if col2.button("Generate lesson plan"):
+            handle_preset_prompt("generate lesson plan")
+        if col3.button("Suggest teaching strategies"):
+            handle_preset_prompt("suggest strategies")
+    else:
+        if col1.button("Explain this concept"):
+            handle_preset_prompt("Can you explain the concept of " + 
+                               (st.session_state.auth_data.get('WeakConceptList', [{}])[0].get('ConceptText', 'this topic') 
+                                if st.session_state.auth_data.get('WeakConceptList') else "this topic"))
+        if col2.button("Generate practice questions"):
+            handle_preset_prompt("Can you generate 5 practice questions about " + 
+                               (st.session_state.auth_data.get('WeakConceptList', [{}])[0].get('ConceptText', 'this topic')
+                                if st.session_state.auth_data.get('WeakConceptList') else "this topic"))
+        if col3.button("Help me understand"):
+            handle_preset_prompt("I'm having trouble understanding this. Can you guide me through it step by step?")
+    
     # Get user input
     user_input = st.chat_input("Ask me anything...", key="chat_input")
     
     # Process user input
     if user_input:
-        # Add user message to chat history
-        st.session_state.chat_history.append(("user", user_input))
+        handle_preset_prompt(user_input)
+
+def handle_preset_prompt(prompt_text):
+    """Handle a preset prompt or user input"""
+    # Add user message to chat history
+    st.session_state.chat_history.append(("user", prompt_text))
+    
+    # Display user message immediately
+    with st.chat_message("user", avatar="🧑‍🎓"):
+        st.markdown(prompt_text)
+    
+    # Create a placeholder for the assistant's response
+    with st.chat_message("assistant", avatar="🤖"):
+        message_placeholder = st.empty()
+        message_placeholder.markdown("Thinking...")
         
-        # Display user message immediately
-        with st.chat_message("user", avatar="🧑‍🎓"):
-            st.markdown(user_input)
+        # Check for teacher commands first
+        if st.session_state.is_teacher:
+            response = handle_teacher_commands(prompt_text)
+            if response:
+                # Update the placeholder with the response
+                message_placeholder.markdown(response)
+                # Add to chat history
+                st.session_state.chat_history.append(("assistant", response))
+                st.rerun()
+                return
         
-        # Create a placeholder for the assistant's response
-        with st.chat_message("assistant", avatar="🤖"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("Thinking...")
+        # If no teacher command matched or user is not a teacher, get GPT response
+        try:
+            system_prompt = get_system_prompt()
+            conversation_history_formatted = [{"role": "system", "content": system_prompt}]
             
-            # Check for teacher commands first
-            if st.session_state.is_teacher:
-                response = handle_teacher_commands(user_input)
-                if response:
-                    # Update the placeholder with the response
-                    message_placeholder.markdown(response)
-                    # Add to chat history
-                    st.session_state.chat_history.append(("assistant", response))
-                    return
+            # Format the conversation history for the API
+            for role, content in st.session_state.chat_history:
+                conversation_history_formatted.append({"role": role, "content": content})
             
-            # If no teacher command matched or user is not a teacher, get GPT response
-            try:
-                system_prompt = get_system_prompt()
-                conversation_history_formatted = [{"role": "system", "content": system_prompt}]
-                
-                # Format the conversation history for the API
-                for role, content in st.session_state.chat_history:
-                    conversation_history_formatted.append({"role": role, "content": content})
-                
-                # Create a streaming response
-                full_response = ""
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=conversation_history_formatted,
-                    max_tokens=2000,
-                    stream=True
-                )
-                
-                # Process the streaming response
-                for chunk in response:
-                    if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
-                        content = chunk.choices[0].delta.content
-                        full_response += content
-                        # Update the placeholder with the current response
-                        message_placeholder.markdown(full_response + "▌")
-                
-                # Final update without the cursor
-                message_placeholder.markdown(full_response)
-                
-                # Add the complete response to chat history
-                st.session_state.chat_history.append(("assistant", full_response))
-                
-            except Exception as e:
-                error_message = f"I'm sorry, I encountered an error: {str(e)}"
-                message_placeholder.markdown(error_message)
-                st.session_state.chat_history.append(("assistant", error_message))
+            # Create a streaming response
+            full_response = ""
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=conversation_history_formatted,
+                max_tokens=2000,
+                stream=True
+            )
+            
+            # Process the streaming response
+            for chunk in response:
+                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    # Update the placeholder with the current response
+                    message_placeholder.markdown(full_response + "▌")
+            
+            # Final update without the cursor
+            message_placeholder.markdown(full_response)
+            
+            # Add the complete response to chat history
+            st.session_state.chat_history.append(("assistant", full_response))
+            st.rerun()
+            
+        except Exception as e:
+            error_message = f"I'm sorry, I encountered an error: {str(e)}"
+            message_placeholder.markdown(error_message)
+            st.session_state.chat_history.append(("assistant", error_message))
+            st.rerun()
 
 def process_pending_messages():
     """Process any pending user messages that need responses"""
