@@ -1666,12 +1666,133 @@ Formatting:
 Remember: Your goal is to develop the student's critical thinking and problem-solving skills, not to provide answers. Success is measured by how well you guide them to discover solutions independently.
 """
 
+def display_chat_message(message, is_user=False):
+    """Display a chat message with a copy button for AI messages"""
+    if is_user:
+        st.markdown(f"""
+        <div class="chat-message user-message">
+            <div class="message-content">{message}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Generate a unique ID for this message
+        message_id = f"ai_msg_{hash(message) % 10000000}"
+        
+        st.markdown(f"""
+        <div class="chat-message ai-message">
+            <div class="message-content" id="{message_id}_content">{message}</div>
+            <button class="copy-button" onclick="copyMessage('{message_id}')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span class="tooltip" id="{message_id}_tooltip">Copy</span>
+            </button>
+        </div>
+        """, unsafe_allow_html=True)
+
+def inject_chat_css_and_js():
+    """Inject the CSS and JavaScript needed for the chat UI with copy buttons"""
+    st.markdown("""
+    <style>
+    .chat-message {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+    
+    .user-message {
+        background-color: #f0f2f6;
+        border-left: 5px solid #7c8db5;
+    }
+    
+    .ai-message {
+        background-color: #f8f9fa;
+        border-left: 5px solid #4CAF50;
+    }
+    
+    .message-content {
+        margin-right: 30px; /* Make room for the copy button */
+    }
+    
+    .copy-button {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: transparent;
+        border: none;
+        color: #6c757d;
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 0.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .copy-button:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+        color: #212529;
+    }
+    
+    .tooltip {
+        position: absolute;
+        top: -25px;
+        right: 0;
+        background-color: #212529;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+    
+    .copy-button:hover .tooltip {
+        opacity: 1;
+    }
+    </style>
+    
+    <script>
+    function copyMessage(messageId) {
+        const contentElement = document.getElementById(messageId + '_content');
+        const tooltipElement = document.getElementById(messageId + '_tooltip');
+        
+        if (!contentElement) return;
+        
+        // Create a temporary textarea to copy the text
+        const textarea = document.createElement('textarea');
+        textarea.value = contentElement.innerText;
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        try {
+            document.execCommand('copy');
+            tooltipElement.innerText = 'Copied!';
+            setTimeout(() => {
+                tooltipElement.innerText = 'Copy';
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            tooltipElement.innerText = 'Failed to copy';
+        }
+        
+        document.body.removeChild(textarea);
+    }
+    </script>
+    """, unsafe_allow_html=True)
+
 def display_chat(user_name):
     """Display the chat interface and handle user input"""
     # Display chat history
-    for role, message in st.session_state.chat_history:
-        with st.chat_message(role, avatar="🧑‍🎓" if role == "user" else "🤖"):
-            st.markdown(message)
+    for message in st.session_state.chat_history:
+        if message["role"] == "user":
+            display_chat_message(message["content"], is_user=True)
+        else:
+            display_chat_message(message["content"], is_user=False)
     
     # Get user input
     user_input = st.chat_input("Ask me anything...", key="chat_input")
@@ -2113,15 +2234,25 @@ def main_screen():
             display_tabs_parallel()
 
 def main():
-    if st.session_state.is_authenticated:
-        main_screen()
-        # Process any pending messages after rendering the UI
-        process_pending_messages()
-        st.stop()
+    # Inject the CSS and JavaScript for the chat UI
+    inject_chat_css_and_js()
+    
+    # Display the logo and title
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        st.image("https://www.edubull.com/images/logo.png", width=100)
+    with col2:
+        st.title("EeeBee AI Buddy")
+    
+    # Check if user is authenticated
+    if not st.session_state.is_authenticated:
+        login_screen()
     else:
-        placeholder = st.empty()
-        with placeholder.container():
-            login_screen()
+        # Display the main interface
+        if st.session_state.is_teacher:
+            teacher_interface()
+        else:
+            student_interface()
 
 def fetch_class_analysis(batch_id):
     """Fetch class analysis data from API"""
