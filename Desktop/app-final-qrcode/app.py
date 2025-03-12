@@ -2246,13 +2246,10 @@ def main():
     
     # Check if user is authenticated
     if not st.session_state.is_authenticated:
-        login_screen()
+        login_screen()  # Using the correct function name
     else:
         # Display the main interface
-        if st.session_state.is_teacher:
-            teacher_interface()
-        else:
-            student_interface()
+        main_screen()  # Using the correct function name instead of student_interface/teacher_interface
 
 def fetch_class_analysis(batch_id):
     """Fetch class analysis data from API"""
