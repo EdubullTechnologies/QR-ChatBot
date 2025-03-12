@@ -1121,7 +1121,7 @@ def teacher_dashboard():
                         with st.spinner("Generating exam questions... Please wait."):
                             try:
                                 response = client.chat.completions.create(
-                                    model="gpt-4o",
+                                    model="gpt-4o-2024-08-06",
                                     messages=[{"role": "system", "content": prompt}],
                                     max_tokens=4000,
                                     stream=False
