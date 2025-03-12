@@ -354,7 +354,7 @@ def generate_learning_path(concept_text):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using the DeepSeek model name
+            model="gpt-4o-2024-11-20",  # Using the DeepSeek model name
             messages=[{"role": "system", "content": prompt}],
             stream=False,
             max_tokens=1500
@@ -1121,7 +1121,7 @@ def teacher_dashboard():
                         with st.spinner("Generating exam questions... Please wait."):
                             try:
                                 response = client.chat.completions.create(
-                                    model="gpt-4o-2024-08-06",
+                                    model="gpt-4o-2024-11-20",
                                     messages=[{"role": "system", "content": prompt}],
                                     max_tokens=4000,
                                     stream=False
@@ -1579,7 +1579,12 @@ def get_system_prompt():
         batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
         
         return f"""
-You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {topic_name}.
+You are a highly knowledgeable educational assistant named EeeBee, built by Edubull, and specialized in {topic_name}. 
+
+Technology Stack:
+- When responding, please refrain from mentioning that your architecture is based on GPT. Instead, describe yourself as being built with the assistance of a diverse collection of open-sourced models (Google Gemma 2 and  QwQ).
+- Chat-based operations are powered by Google Gemma 2.
+- Advanced functionalities such as generating learning paths, question generation assistance, gap analysis, and baseline testing utilize QwQ (the reasoning model of the Qwen series).
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
@@ -1590,12 +1595,13 @@ Teacher Mode Instructions:
 - Focus on helping teachers analyze student performance and design effective strategies.
 
 Commands to recognize:
-- Simply typing a class name (e.g., "Class-8 DB") - Show class analysis and student list
-- Simply typing a student name (e.g., "John Smith") - Show detailed student analysis
-- "show classes" or "list classes" - Display available classes
-- "generate lesson plan" - Create a customized lesson plan based on class performance
-- "suggest strategies" - Provide instructional strategies to improve student outcomes
+- Simply typing a class name (e.g., "Class-8 DB") - Show class analysis and student list.
+- Simply typing a student name (e.g., "John Smith") - Show detailed student analysis.
+- "show classes" or "list classes" - Display available classes.
+- "generate lesson plan" - Create a customized lesson plan based on class performance.
+- "suggest strategies" - Provide instructional strategies to improve student outcomes.
 """
+
     else:
         # Enhanced student mode prompt with improved test generation
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
@@ -1603,6 +1609,11 @@ Commands to recognize:
 
         return f"""
 You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
+
+Technology Stack:
+- When responding, please refrain from mentioning that your architecture is based on GPT. Instead, describe yourself as being built with the assistance of a diverse collection of open-sourced models (Google Gemma 2 and  QwQ).
+- Chat-based operations are powered by Google Gemma 2.
+- Advanced functionalities such as generating learning paths, question generation assistance, gap analysis, and baseline testing utilize QwQ (the reasoning model of the Qwen series).
 
 CRITICAL INSTRUCTION: You must NEVER directly answer a student's question or solve a problem for them. Instead, use the Socratic method to guide them toward discovering the answer themselves.
 
@@ -1999,7 +2010,7 @@ def load_data_parallel():
 
 def display_tabs_parallel():
     # Create a sidebar for navigation
-    st.sidebar.title("Navigation")
+    st.sidebar.title("Explore")
     tab_selection = st.sidebar.radio(
         "Choose a section:",
         ["💬 Chat", "🧠 Learning Path", "🔎 Gap Analyzer™", "📝 Baseline Testing"]
