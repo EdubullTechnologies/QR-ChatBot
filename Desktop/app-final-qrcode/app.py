@@ -350,11 +350,12 @@ def generate_learning_path(concept_text):
         f"Sections:\n1. **Introduction**\n2. **Step-by-Step Learning**\n3. **Engagement**\n"
         f"4. **Real-World Applications**\n5. **Practice Problems**\n\n"
         f"All math expressions must be in LaTeX."
+        f"Avoid using LaTeX commands like \\text in your responses."
     )
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-2024-11-20",  # Using the DeepSeek model name
+            model="gpt-4o", 
             messages=[{"role": "system", "content": prompt}],
             stream=False,
             max_tokens=1500
@@ -1016,10 +1017,22 @@ def teacher_dashboard():
                 st.session_state.teacher_weak_concepts = []
 
     if st.session_state.teacher_weak_concepts:
-        # Create tabs for different dashboard views
-        tab1, tab2 = st.tabs(["📊 Class Overview", "📝 Question Generation"])
+        # Initialize the dashboard view in session state if it doesn't exist
+        if "dashboard_view" not in st.session_state:
+            st.session_state.dashboard_view = "Class Overview"
         
-        with tab1:
+        # Create radio buttons for different dashboard views instead of tabs
+        dashboard_view = st.radio(
+            "Dashboard View:",
+            ["📊 Class Overview", "📝 Question Generation"],
+            key="dashboard_view_radio",
+            index=0 if st.session_state.dashboard_view == "Class Overview" else 1
+        )
+        
+        # Update the session state with the current view
+        st.session_state.dashboard_view = "Class Overview" if dashboard_view == "📊 Class Overview" else "Question Generation"
+        
+        if dashboard_view == "📊 Class Overview":
             st.subheader("Class Performance Overview")
             
             # Display metrics at the top
@@ -1066,7 +1079,7 @@ def teacher_dashboard():
                     students_df.columns = ["Student Name", "Concepts Cleared", "Weak Concepts", "Total Concepts", "Progress"]
                     st.dataframe(students_df, use_container_width=True)
         
-        with tab2:
+        elif dashboard_view == "📝 Question Generation":
             # Bloom's Level
             st.subheader("📝 Question Generation")
             bloom_level = st.radio(
@@ -1104,7 +1117,7 @@ def teacher_dashboard():
 
                         branch_name = st.session_state.auth_data.get("BranchName", "their class")
                         prompt = (
-                            f"You are a highly knowledgeable educational assistant named EeeBee, built by iEdubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
+                            f"You are a highly knowledgeable educational assistant named EeeBee, built by Edubull, and specialized in {st.session_state.auth_data.get('TopicName', 'Unknown Topic')}.\n\n"
                             f"Teacher Mode Instructions:\n"
                             f"- The user is a teacher instructing {branch_name} students under the NCERT curriculum.\n"
                             f"- Provide detailed suggestions on how to explain concepts and design assessments for the {branch_name} level.\n"
@@ -1121,7 +1134,7 @@ def teacher_dashboard():
                         with st.spinner("Generating exam questions... Please wait."):
                             try:
                                 response = client.chat.completions.create(
-                                    model="gpt-4o-2024-11-20",
+                                    model="gpt-4o",
                                     messages=[{"role": "system", "content": prompt}],
                                     max_tokens=4000,
                                     stream=False
@@ -1317,13 +1330,17 @@ def handle_teacher_commands(user_input: str):
         # Store the batches in session state with numeric indices
         st.session_state.numbered_batches = {str(i+1): b for i, b in enumerate(batches)}
         
+        # Clear any previous student numbering to avoid conflicts
+        if hasattr(st.session_state, 'numbered_students'):
+            delattr(st.session_state, 'numbered_students')
+        
         # Create numbered list of batches
         batch_list = "\n".join([
             f"{i+1}. {b['BatchName']} ({b.get('StudentCount', 0)} students)"
             for i, b in enumerate(batches)
         ])
         
-        return f"Your classes:\n{batch_list}\n\nJust type the number or name of the class you want to analyze."
+        return f"Your classes:\n\n{batch_list}\n\n📢 Just type the number or name of the class you want to analyze."
     
     # Check if input is a number corresponding to a batch
     if hasattr(st.session_state, 'numbered_batches') and user_input in st.session_state.numbered_batches:
@@ -1344,6 +1361,10 @@ def handle_teacher_commands(user_input: str):
             
             # Store students with numeric indices
             st.session_state.numbered_students = {str(i+1): s for i, s in enumerate(students)}
+            
+            # Clear any previous batch numbering to avoid conflicts
+            if hasattr(st.session_state, 'numbered_batches'):
+                delattr(st.session_state, 'numbered_batches')
             
             # Group students by progress
             all_cleared = []
@@ -1370,7 +1391,7 @@ def handle_teacher_commands(user_input: str):
             if no_progress:
                 response += "⚠️ No concepts cleared:\n" + "\n".join(no_progress) + "\n\n"
                 
-            response += "Just type the number or name of a student to analyze their progress"
+            response += "📢 Just type the number or name of a student to analyze their progress"
             return response
     
     # Check if input is a number corresponding to a student
@@ -1418,41 +1439,68 @@ def handle_batch_selection(selected_batch):
         
         concept_overview = "\n".join(concept_stats)
         
-        # Store students with numeric indices
-        st.session_state.numbered_students = {str(i+1): s for i, s in enumerate(student_info["Students"])}
+        # Reset student numbering
+        all_students = student_info["Students"]
         
         # Group students by progress
-        students = student_info["Students"]
-        all_cleared = []
-        partial_progress = []
-        no_progress = []
+        completed_students = []
+        in_progress_students = []
+        no_progress_students = []
         
-        for i, student in enumerate(students):
-            student_info = f"{i+1}. {student['FullName']}"
-            
+        # First, categorize all students
+        for student in all_students:
             if student['ClearedConceptCount'] == student['TotalConceptCount']:
-                all_cleared.append(student_info)
+                completed_students.append(student)
             elif student['ClearedConceptCount'] > 0:
-                progress_info = f" ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
-                partial_progress.append(student_info + progress_info)
+                in_progress_students.append(student)
             else:
-                no_progress.append(student_info)
+                no_progress_students.append(student)
         
+        # Create a single numbered dictionary with all students
+        student_index = 1
+        st.session_state.numbered_students = {}
+        
+        # Build the student list message
         student_list = "Students in this class:\n\n"
         
-        if all_cleared:
-            student_list += "✅ Completed all concepts:\n" + "\n".join(all_cleared) + "\n\n"
-        if partial_progress:
-            student_list += "🔄 In progress:\n" + "\n".join(partial_progress) + "\n\n"
-        if no_progress:
-            student_list += "⚠️ No concepts cleared:\n" + "\n".join(no_progress) + "\n\n"
-            
-        student_list += "Just type the number or name of a student to analyze their progress"
+        # Add completed students
+        if completed_students:
+            student_list += "✅ Completed all concepts:\n\n"
+            for student in completed_students:
+                student_list += f"{student_index}. {student['FullName']}\n\n"
+                st.session_state.numbered_students[str(student_index)] = student
+                student_index += 1
+            student_list += "\n"
+        
+        # Add in-progress students
+        if in_progress_students:
+            student_list += "🔄 In progress:\n\n"
+            for student in in_progress_students:
+                progress_info = f" ({student['ClearedConceptCount']}/{student['TotalConceptCount']} concepts cleared)"
+                student_list += f"{student_index}. {student['FullName']}{progress_info}\n\n"
+                st.session_state.numbered_students[str(student_index)] = student
+                student_index += 1
+            student_list += "\n"
+        
+        # Add no-progress students
+        if no_progress_students:
+            student_list += "⚠️ No concepts cleared:\n\n"
+            for student in no_progress_students:
+                student_list += f"{student_index}. {student['FullName']}\n\n"
+                st.session_state.numbered_students[str(student_index)] = student
+                student_index += 1
+            student_list += "\n"
+        
+        # Clear any previous batch numbering to avoid conflicts
+        if hasattr(st.session_state, 'numbered_batches'):
+            delattr(st.session_state, 'numbered_batches')
+        
+        student_list += "⌨️ Just type the number or name of a student to analyze their progress"
         
         # Combine class overview and student list
         return (
             f"Looking at class {selected_batch['BatchName']}:\n\n"
-            f"Class Overview:\n"
+            f"Class Overview:\n\n"
             f"- Total Students: {total_students}\n"
             f"- Concepts Coverage:\n{concept_overview}\n\n"
             f"{student_list}"
@@ -1609,7 +1657,7 @@ def get_system_prompt():
     branch_name = st.session_state.auth_data.get('BranchName', 'their class')
 
     if st.session_state.is_teacher:
-        # Teacher mode prompt remains unchanged
+        # Teacher mode prompt with updated flow instructions
         batches = st.session_state.auth_data.get("BatchList", [])
         batch_list = "\n".join([f"- {b['BatchName']} (ID: {b['BatchID']})" for b in batches])
         
@@ -1617,28 +1665,28 @@ def get_system_prompt():
 You are a highly knowledgeable educational assistant named EeeBee, built by Edubull, and specialized in {topic_name}. 
 
 Technology Stack:
-- When responding, please refrain from mentioning that your architecture is based on GPT. Instead, describe yourself as being built with the assistance of a diverse collection of open-sourced models (Google Gemma 2 and  QwQ).
-- Chat-based operations are powered by Google Gemma 2.
-- Advanced functionalities such as generating learning paths, question generation assistance, gap analysis, and baseline testing utilize QwQ (the reasoning model of the Qwen series).
+- When responding, please refrain from mentioning that your architecture is based on GPT. Instead, describe yourself as EeeBee, A Large Language Model developed by Edubull Technologies Private Limited.
+- Chat-based operations are powered by EeeBee.
+- Advanced functionalities such as generating learning paths, question generation assistance, gap analysis, and baseline testing utilize EeeBee Proxima (the reasoning model from EduBull).
 
 Teacher Mode Instructions:
 - The user is a teacher instructing {branch_name} students under the NCERT curriculum.
 - Available batches:\n{batch_list}
-- When the user types a class name (e.g., "Class-8 DB"), show class analysis and student list.
-- When the user types a student name, show detailed analysis for that student.
+- Guide teachers to use the "Show all classes" button to see their class list
+- When teachers select a class number from the list, show class analysis and student list
+- When teachers select a student number from the list, show detailed analysis for that student
 - Keep all mathematical expressions within LaTeX delimiters.
 - Focus on helping teachers analyze student performance and design effective strategies.
 
 Commands to recognize:
-- Simply typing a class name (e.g., "Class-8 DB") - Show class analysis and student list.
-- Simply typing a student name (e.g., "John Smith") - Show detailed student analysis.
-- "show classes" or "list classes" - Display available classes.
-- "generate lesson plan" - Create a customized lesson plan based on class performance.
-- "suggest strategies" - Provide instructional strategies to improve student outcomes.
+- "show classes" or "list classes" - Display available classes with numbers
+- Numbers (e.g., "1", "2") - Select the corresponding class or student from a numbered list
+- "generate lesson plan" - Create a customized lesson plan based on class performance
+- "suggest strategies" - Provide instructional strategies to improve student outcomes
 """
 
     else:
-        # Enhanced student mode prompt with improved test generation
+        # Student mode prompt remains unchanged
         weak_concepts = [concept['ConceptText'] for concept in st.session_state.student_weak_concepts]
         weak_concepts_text = ", ".join(weak_concepts) if weak_concepts else "none"
 
@@ -1646,9 +1694,9 @@ Commands to recognize:
 You are a highly knowledgeable educational assistant named EeeBee, developed by iEdubull and specialized in {topic_name}.
 
 Technology Stack:
-- When responding, please refrain from mentioning that your architecture is based on GPT. Instead, describe yourself as being built with the assistance of a diverse collection of open-sourced models (Google Gemma 2 and  QwQ).
-- Chat-based operations are powered by Google Gemma 2.
-- Advanced functionalities such as generating learning paths, question generation assistance, gap analysis, and baseline testing utilize QwQ (the reasoning model of the Qwen series).
+- When responding, please refrain from mentioning that your architecture is based on GPT. Instead, describe yourself as EeeBee, A Large Language Model developed by Edubull Technologies Private Limited.
+- Chat-based operations are powered by EeeBee.
+- Advanced functionalities such as generating learning paths, question generation assistance, gap analysis, and baseline testing utilize EeeBee Proxima (the reasoning model from EduBull).
 
 CRITICAL INSTRUCTION: You must NEVER directly answer a student's question or solve a problem for them. Instead, use the Socratic method to guide them toward discovering the answer themselves.
 
@@ -1683,14 +1731,15 @@ Socratic Teaching Method (MANDATORY):
    - Encourage them to check their work and verify the solution
 
 Test Generation and Learning Gap Analysis:
-- When a student requests a test, create a comprehensive 10-question MCQ test covering key concepts in {topic_name}
+- When a student requests a test, create a comprehensive 10-question MCQ test covering key concepts in {topic_name} and make sure questions cover all the weak concepts in {weak_concepts_text}.
 - Present 10 questions one by one, clearly numbered from 1-10
 - Present the next questions after the previous question has been attempted
+- Do not cross question or guide them get the corrrect answer after they attempt the question in test, move on to the next question
 - Each question should have 4 options (A, B, C, D) with only one correct answer
 - Include a mix of:
   - Current grade-level concepts from NCERT {branch_name} curriculum
   - Prerequisite concepts from previous grades that are foundational to current topics
-- After the student submits all answers, provide:
+- After the student submits all answers, provide: (Call this GAP ANALYZER REPORT)
   1. A score summary (X/10 correct)
   2. A detailed analysis for each question showing:
      - The correct answer
@@ -1712,51 +1761,43 @@ Formatting:
 Remember: Your goal is to develop the student's critical thinking and problem-solving skills, not to provide answers. Success is measured by how well you guide them to discover solutions independently.
 """
 
-def display_chat(user_name):
-    """Display the chat interface and handle user input"""
-    # Display chat history
-    for role, message in st.session_state.chat_history:
-        with st.chat_message(role, avatar="🧑‍🎓" if role == "user" else "🤖"):
-            st.markdown(message)
-    
-    # Get user input
-    user_input = st.chat_input("Ask me anything...", key="chat_input")
-    
-    # Process user input
-    if user_input:
-        handle_preset_prompt(user_input)
-    
-    # Add preset prompt buttons BELOW the chat input
-    st.write("Quick prompts:")
-    col1, col2, col3 = st.columns(3)
-    
-    # Different preset buttons based on user type
-    if st.session_state.is_teacher:
-        if col1.button("Show all classes"):
-            handle_preset_prompt("show classes")
-        if col2.button("Generate lesson plan"):
-            handle_preset_prompt("generate lesson plan")
-        if col3.button("Suggest teaching strategies"):
-            handle_preset_prompt("suggest strategies")
-    else:
-        if col1.button("Explain this concept"):
-            handle_preset_prompt("Can you explain the concept of " + 
-                               (st.session_state.auth_data.get('WeakConceptList', [{}])[0].get('ConceptText', 'this topic') 
-                                if st.session_state.auth_data.get('WeakConceptList') else "this topic"))
-        if col2.button("Generate practice questions"):
-            handle_preset_prompt("Can you generate 5 practice questions about " + 
-                               (st.session_state.auth_data.get('WeakConceptList', [{}])[0].get('ConceptText', 'this topic')
-                                if st.session_state.auth_data.get('WeakConceptList') else "this topic"))
-        if col3.button("Help me understand"):
-            handle_preset_prompt("I'm having trouble understanding this. Can you guide me through it step by step?")
-
 def handle_preset_prompt(prompt_text):
     """Handle a preset prompt or user input"""
+    # Check for student concept list requests
+    if not st.session_state.is_teacher and prompt_text.lower() in ["list concepts", "show concepts", "available concepts"]:
+        # Generate a list of available concepts
+        concept_list = generate_student_concept_list()
+        st.session_state.chat_history.append(("user", prompt_text))
+        st.session_state.chat_history.append(("assistant", concept_list))
+        st.rerun()
+        return
+    
+    # Check for student learning gaps list
+    if not st.session_state.is_teacher and prompt_text.lower() in ["learning gaps", "show gaps", "my gaps"]:
+        # Generate a list of learning gaps
+        gaps_list = generate_student_gaps_list()
+        st.session_state.chat_history.append(("user", prompt_text))
+        st.session_state.chat_history.append(("assistant", gaps_list))
+        st.rerun()
+        return
+    
+    # Check if input is a number corresponding to a concept
+    if not st.session_state.is_teacher and hasattr(st.session_state, 'numbered_concepts') and prompt_text in st.session_state.numbered_concepts:
+        selected_concept = st.session_state.numbered_concepts[prompt_text]
+        # Replace the prompt with a request about the selected concept
+        prompt_text = f"Can you explain the concept of {selected_concept['ConceptText']}?"
+    
+    # Check if input is a number corresponding to a gap
+    if not st.session_state.is_teacher and hasattr(st.session_state, 'numbered_gaps') and prompt_text in st.session_state.numbered_gaps:
+        selected_gap = st.session_state.numbered_gaps[prompt_text]
+        # Replace the prompt with a request about the selected gap
+        prompt_text = f"Help me understand {selected_gap['ConceptText']}"
+    
     # Add user message to chat history
     st.session_state.chat_history.append(("user", prompt_text))
     
     # Display user message immediately
-    with st.chat_message("user", avatar="🧑‍🎓"):
+    with st.chat_message("user", avatar="🤓"):
         st.markdown(prompt_text)
     
     # Create a placeholder for the assistant's response
@@ -1789,7 +1830,7 @@ def handle_preset_prompt(prompt_text):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=conversation_history_formatted,
-                max_tokens=2000,
+                max_tokens=5000,
                 stream=True
             )
             
@@ -1813,6 +1854,111 @@ def handle_preset_prompt(prompt_text):
             message_placeholder.markdown(error_message)
             st.session_state.chat_history.append(("assistant", error_message))
             st.rerun()
+
+def generate_student_concept_list():
+    """Generate a numbered list of available concepts for students"""
+    # Get concepts from auth data instead of all_concepts
+    concept_list = st.session_state.auth_data.get('ConceptList', [])
+    
+    if not concept_list:
+        return "I don't have any concepts available for your current topic. Please check with your teacher."
+    
+    # Create a numbered dictionary of concepts
+    st.session_state.numbered_concepts = {str(i+1): concept for i, concept in enumerate(concept_list)}
+    
+    # Create the message with numbered list
+    message = "📚 **Available Concepts:**\n\n"
+    
+    for i, concept in enumerate(concept_list):
+        # Check if this concept is in the weak concepts list
+        is_weak = any(wc.get('ConceptID') == concept.get('ConceptID') 
+                      for wc in st.session_state.auth_data.get('WeakConceptList', []))
+        
+        status = "⚠️" if is_weak else "✅"
+        message += f"{i+1}. {status} {concept.get('ConceptText')}\n"
+    
+    message += "\nTo learn about any concept, just type its number!"
+    
+    return message
+
+def generate_student_gaps_list():
+    """Generate a numbered list of learning gaps for students"""
+    # Get weak concepts from auth data
+    weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
+    
+    if not weak_concepts:
+        return "Great news! I don't see any significant learning gaps in your current topic. If you'd like to review any concept, use the 'show concepts' command to see all available concepts."
+    
+    # Create a numbered dictionary of gaps
+    st.session_state.numbered_gaps = {str(i+1): concept for i, concept in enumerate(weak_concepts)}
+    
+    # Create the message with numbered list
+    message = "🎯 **Your Current Learning Gaps:**\n\n"
+    
+    for i, concept in enumerate(weak_concepts):
+        message += f"{i+1}. {concept.get('ConceptText')}\n"
+    
+    message += "\nTo get help with any of these concepts, just type its number!"
+    
+    return message
+
+def display_chat(user_name):
+    """Display the chat interface and handle user input"""
+    # Display chat history
+    for role, message in st.session_state.chat_history:
+        with st.chat_message(role, avatar="🤓" if role == "user" else "🤖"):
+            st.markdown(message)
+    
+    # Get user input
+    user_input = st.chat_input("Ask me anything...", key="chat_input")
+    
+    # Process user input
+    if user_input:
+        handle_preset_prompt(user_input)
+    
+    # Add preset prompt buttons BELOW the chat input
+    st.write("Quick prompts:")
+    col1, col2, col3 = st.columns(3)
+    
+    # Different preset buttons based on user type
+    if st.session_state.is_teacher:
+        if col1.button("Show all classes"):
+            handle_preset_prompt("show classes")
+        if col2.button("Generate lesson plan"):
+            handle_preset_prompt("generate lesson plan")
+        if col3.button("Suggest teaching strategies"):
+            handle_preset_prompt("suggest strategies")
+    else:
+        if col1.button("Show available concepts"):
+            handle_preset_prompt("list concepts")
+        if col2.button("Show my learning gaps"):
+            handle_preset_prompt("my gaps")
+        if col3.button("Help me understand"):
+            handle_preset_prompt("Help me understand")
+
+def add_initial_greeting():
+    """Add an initial greeting message if chat history is empty"""
+    if not st.session_state.chat_history:
+        user_info = st.session_state.auth_data['UserInfo'][0]
+        user_name = user_info['FullName']
+        topic_name = st.session_state.auth_data.get('TopicName', 'this topic')
+        
+        if st.session_state.is_teacher:
+            greeting = (
+                f"👋 Hello {user_name}! I'm EeeBee, your AI teaching assistant for {topic_name}.\n\n"
+                f"I can help you analyze student performance, create lesson plans, and suggest teaching strategies.\n\n"
+                f"To get started, click the **Show all classes** button to see your class list, "
+                f"then select a class number to view class analysis and student list."
+            )
+        else:
+            greeting = (
+                f"👋 Hello {user_name}! I'm EeeBee, your AI learning buddy for {topic_name}.\n\n"
+                f"I can help you understand concepts, practice with questions, and improve your learning.\n\n"
+                f"To get started, try clicking the **Show available concepts** button to see what we can learn about, "
+                f"or **Show my learning gaps** to focus on areas that need improvement."
+            )
+        
+        st.session_state.chat_history.append(("assistant", greeting))
 
 def process_pending_messages():
     """Process any pending user messages that need responses"""
@@ -1979,7 +2125,7 @@ def login_screen():
     except Exception as e:
         st.error(f"Error loading image: {e}")
 
-    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your AI Buddy!</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="font-size: 1.5em;">🦾 Welcome! Please enter your credentials to chat with your EeeBee AI Buddy!</h3>', unsafe_allow_html=True)
 
     # Read query parameters from URL
     query_params = st.query_params
@@ -1991,7 +2137,7 @@ def login_screen():
 
     # Check for conflicting parameters or missing ones
     if E_value is not None and T_value is not None:
-        st.warning("Please scan the QR code from the iEdubull book")
+        st.warning("Please scan the EeeBee QR code from the iEdubull book")
     elif E_value is not None and T_value is None:
         st.session_state.is_english_mode = True
         topic_id = E_value
@@ -1999,7 +2145,7 @@ def login_screen():
         st.session_state.is_english_mode = False
         topic_id = T_value
     else:
-        st.warning("Please provide ?E=... or ?T=... in the URL.")
+        st.warning("Please scan the EeeBee QR code from the iEdubull book")
         return
 
     # Conditionally display the user type selection:
@@ -2017,7 +2163,7 @@ def login_screen():
 
     if st.button("🚀 Login and Start Chatting!", key="login_button") and not st.session_state.get("is_authenticated", False):
         if topic_id is None:
-            st.warning("Please ensure a correct E or T parameter is provided.")
+            st.warning("Please scan the EeeBee QR code from the iEdubull book")
             return
 
         if not org_code or not login_id or not password:
@@ -2157,7 +2303,7 @@ def main_screen():
 
     if st.session_state.is_teacher:
         # Create a sidebar for navigation in teacher mode
-        st.sidebar.title("Navigation")
+        st.sidebar.title("Explore")
         tab_selection = st.sidebar.radio(
             "Choose a section:",
             ["💬 Chat", "📊 Teacher Dashboard"]
