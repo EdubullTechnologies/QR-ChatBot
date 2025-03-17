@@ -1830,7 +1830,7 @@ def handle_preset_prompt(prompt_text):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=conversation_history_formatted,
-                max_tokens=5000,
+                #max_tokens=2000,
                 stream=True
             )
             
