@@ -1124,7 +1124,7 @@ def teacher_dashboard():
                             f"- Offer insights into common student difficulties and ways to address them.\n"
                             f"- Encourage a teaching methodology where students learn progressively, asking guiding questions rather than providing direct answers.\n"
                             f"- Maintain a professional, informative tone, and ensure all advice aligns with the NCERT curriculum.\n"
-                            f"- Keep all mathematical expressions within LaTeX delimiters ($...$ or $$...$$).\n"
+                            f"- Keep all mathematical expressions within LaTeX delimiters ($...$ for inline math and $$...$$ for display math).\n"
                             f"- Emphasize to the teacher the importance of fostering critical thinking.\n"
                             f"- If the teacher requests sample questions, provide them in a progressive manner, ensuring they prompt the student to reason through each step.\n\n"
                             f"Now, generate a set of 20 exam questions for the concept '{chosen_concept_text}' at Bloom's Taxonomy **{bloom_short}**.\n"
@@ -1675,7 +1675,7 @@ Teacher Mode Instructions:
 - Guide teachers to use the "Show all classes" button to see their class list
 - When teachers select a class number from the list, show class analysis and student list
 - When teachers select a student number from the list, show detailed analysis for that student
-- Keep all mathematical expressions within LaTeX delimiters.
+- Keep all mathematical expressions within LaTeX delimiters ($...$ for inline math and $$...$$ for display math).
 - Focus on helping teachers analyze student performance and design effective strategies.
 
 Commands to recognize:
@@ -1704,6 +1704,7 @@ Student Mode Instructions:
 - The student is in {branch_name} and follows the NCERT curriculum.
 - The student's weak concepts are: {weak_concepts_text}
 - Focus exclusively on {topic_name} in your discussions.
+- Keep all mathematical expressions within LaTeX delimiters ($...$ for inline math and $$...$$ for display math).
 
 Socratic Teaching Method (MANDATORY):
 1. When a student asks a direct question or wants a solution:
@@ -1754,7 +1755,7 @@ Test Generation and Learning Gap Analysis:
      - Recommends targeted remedial activities for each identified gap
 
 Formatting:
-- All mathematical expressions must be enclosed in LaTeX delimiters ($...$ or $$...$$)
+- All mathematical expressions must be enclosed in LaTeX delimiters ($...$ for inline math and $$...$$ for display math)
 - Use bullet points and numbered lists for clarity
 - Bold important concepts or key points
 
