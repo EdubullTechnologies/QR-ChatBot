@@ -1840,11 +1840,16 @@ def handle_preset_prompt(prompt_text):
                 if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                     content = chunk.choices[0].delta.content
                     full_response += content
+                    
+                    # Process LaTeX in the response for better rendering
+                    processed_response = process_latex_for_display(full_response)
+                    
                     # Update the placeholder with the current response
-                    message_placeholder.markdown(full_response + "▌")
+                    message_placeholder.markdown(processed_response + "▌")
             
             # Final update without the cursor
-            message_placeholder.markdown(full_response)
+            processed_final_response = process_latex_for_display(full_response)
+            message_placeholder.markdown(processed_final_response)
             
             # Add the complete response to chat history
             st.session_state.chat_history.append(("assistant", full_response))
@@ -1856,58 +1861,35 @@ def handle_preset_prompt(prompt_text):
             st.session_state.chat_history.append(("assistant", error_message))
             st.rerun()
 
-def generate_student_concept_list():
-    """Generate a numbered list of available concepts for students"""
-    # Get concepts from auth data instead of all_concepts
-    concept_list = st.session_state.auth_data.get('ConceptList', [])
+def process_latex_for_display(text):
+    """
+    Process LaTeX expressions in text to ensure proper rendering in Streamlit.
+    This function ensures consistent formatting of LaTeX expressions.
+    """
+    # Fix common LaTeX formatting issues
     
-    if not concept_list:
-        return "I don't have any concepts available for your current topic. Please check with your teacher."
+    # Replace expressions like ( \frac{a}{b} ) with $\frac{a}{b}$
+    text = re.sub(r'\(\s*\\frac\{([^}]+)\}\{([^}]+)\}\s*\)', r'$\\frac{\1}{\2}$', text)
     
-    # Create a numbered dictionary of concepts
-    st.session_state.numbered_concepts = {str(i+1): concept for i, concept in enumerate(concept_list)}
+    # Replace expressions like ( x ) with $x$
+    text = re.sub(r'\(\s*([^)]+)\s*\)', lambda m: f'${m.group(1)}$' if '\\' in m.group(1) or '/' in m.group(1) or '_' in m.group(1) or '^' in m.group(1) or 'frac' in m.group(1) else m.group(0), text)
     
-    # Create the message with numbered list
-    message = "📚 **Available Concepts:**\n\n"
+    # Fix spacing in fractions that are already in $ delimiters
+    text = re.sub(r'\$\s*\\frac\{([^}]+)\}\{([^}]+)\}\s*\$', r'$\\frac{\1}{\2}$', text)
     
-    for i, concept in enumerate(concept_list):
-        # Check if this concept is in the weak concepts list
-        is_weak = any(wc.get('ConceptID') == concept.get('ConceptID') 
-                      for wc in st.session_state.auth_data.get('WeakConceptList', []))
-        
-        status = "⚠️" if is_weak else "✅"
-        message += f"{i+1}. {status} {concept.get('ConceptText')}\n"
+    # Fix expressions with multiple fractions or operations
+    text = re.sub(r'\$\s*([^$]+)\s*\$', lambda m: '$' + m.group(1).strip() + '$', text)
     
-    message += "\nTo learn about any concept, just type its number!"
-    
-    return message
-
-def generate_student_gaps_list():
-    """Generate a numbered list of learning gaps for students"""
-    # Get weak concepts from auth data
-    weak_concepts = st.session_state.auth_data.get('WeakConceptList', [])
-    
-    if not weak_concepts:
-        return "Great news! I don't see any significant learning gaps in your current topic. If you'd like to review any concept, use the 'show concepts' command to see all available concepts."
-    
-    # Create a numbered dictionary of gaps
-    st.session_state.numbered_gaps = {str(i+1): concept for i, concept in enumerate(weak_concepts)}
-    
-    # Create the message with numbered list
-    message = "🎯 **Your Current Learning Gaps:**\n\n"
-    
-    for i, concept in enumerate(weak_concepts):
-        message += f"{i+1}. {concept.get('ConceptText')}\n"
-    
-    message += "\nTo get help with any of these concepts, just type its number!"
-    
-    return message
+    return text
 
 def display_chat(user_name):
     """Display the chat interface and handle user input"""
     # Display chat history
     for role, message in st.session_state.chat_history:
         with st.chat_message(role, avatar="🤓" if role == "user" else "🤖"):
+            # Process LaTeX in messages for better rendering
+            if role == "assistant":
+                message = process_latex_for_display(message)
             st.markdown(message)
     
     # Get user input
