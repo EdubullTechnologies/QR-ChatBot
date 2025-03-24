@@ -1675,7 +1675,7 @@ Teacher Mode Instructions:
 - Guide teachers to use the "Show all classes" button to see their class list
 - When teachers select a class number from the list, show class analysis and student list
 - When teachers select a student number from the list, show detailed analysis for that student
-- Keep all mathematical expressions within LaTeX delimiters ($...$ for inline math and $$...$$ for display math).
+- Include mathematical expressions in a format that can be easily processed (use standard notation)
 - Focus on helping teachers analyze student performance and design effective strategies.
 
 Commands to recognize:
@@ -1704,7 +1704,7 @@ Student Mode Instructions:
 - The student is in {branch_name} and follows the NCERT curriculum.
 - The student's weak concepts are: {weak_concepts_text}
 - Focus exclusively on {topic_name} in your discussions.
-- Keep all mathematical expressions within LaTeX delimiters ($...$ for inline math and $$...$$ for display math).
+- Include mathematical expressions in a format that can be easily processed (use standard notation)
 
 Socratic Teaching Method (MANDATORY):
 1. When a student asks a direct question or wants a solution:
@@ -1755,7 +1755,6 @@ Test Generation and Learning Gap Analysis:
      - Recommends targeted remedial activities for each identified gap
 
 Formatting:
-- All mathematical expressions must be enclosed in LaTeX delimiters ($...$ for inline math and $$...$$ for display math)
 - Use bullet points and numbered lists for clarity
 - Bold important concepts or key points
 
