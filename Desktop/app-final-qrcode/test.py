@@ -100,7 +100,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Function to generate response from Gemini with streaming
-def generate_gemini_response(prompt, document_content=""):
+def generate_gemini_response(prompt, document_content="", conversation_history=None):
     try:
         # Get API key from Streamlit secrets
         api_key = st.secrets["gemini_api_key"]
@@ -108,11 +108,23 @@ def generate_gemini_response(prompt, document_content=""):
         # Initialize the client with the API key
         client = genai.Client(api_key=api_key)
         
-        # Prepare the prompt with document content if available
+        # Prepare the full prompt with conversation history and document content
+        full_prompt = ""
+        
+        # Add conversation history if available
+        if conversation_history and len(conversation_history) > 0:
+            full_prompt += "Previous conversation:\n"
+            for msg in conversation_history:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                full_prompt += f"{role}: {msg['content']}\n"
+            full_prompt += "\n"
+        
+        # Add document content if available
         if document_content:
-            full_prompt = f"Document content:\n{document_content}\n\nUser query: {prompt}\n\nPlease respond based on the document content."
-        else:
-            full_prompt = prompt
+            full_prompt += f"Document content:\n{document_content}\n\n"
+        
+        # Add the current prompt
+        full_prompt += f"User: {prompt}\n\nAssistant:"
         
         # Use streaming response
         response_stream = client.models.generate_content_stream(
@@ -138,8 +150,15 @@ if prompt := st.chat_input("Ask me anything..."):
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         
-        # Generate streaming response
-        response_stream = generate_gemini_response(prompt, st.session_state.document_content)
+        # Get the last few messages for context (e.g., last 10 messages)
+        conversation_history = st.session_state.messages[-10:] if len(st.session_state.messages) > 1 else []
+        
+        # Generate streaming response with conversation history
+        response_stream = generate_gemini_response(
+            prompt, 
+            st.session_state.document_content,
+            conversation_history
+        )
         
         # Check if response is an error message (string)
         if isinstance(response_stream, str):
@@ -161,4 +180,4 @@ if prompt := st.chat_input("Ask me anything..."):
 
 # Footer
 st.divider()
-st.caption("EeeBee Pro - Powered by Google Gemini")
+st.caption("EeeBee Pro - Powered by Edubull Technologies")
