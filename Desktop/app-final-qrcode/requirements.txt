@@ -79,3 +79,5 @@ sounddevice
 soundfile
 scipy
 elevenlabs
+pymupdf
+python-docx
