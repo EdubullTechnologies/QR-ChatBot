@@ -106,7 +106,7 @@ def generate_gemini_response(prompt, document_content=""):
         api_key = st.secrets["gemini_api_key"]
         
         # Initialize the client with the API key
-        client = genai.GenerativeModel(model_name="gemini-2.0-flash", api_key=api_key)
+        client = genai.Client(api_key=api_key)
         
         # Prepare the prompt with document content if available
         if document_content:
@@ -114,7 +114,11 @@ def generate_gemini_response(prompt, document_content=""):
         else:
             full_prompt = prompt
         
-        response = client.generate_content(full_prompt)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", 
+            contents=full_prompt
+        )
+        
         return response.text
     except Exception as e:
         return f"Error generating response: {str(e)}"
