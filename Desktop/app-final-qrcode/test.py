@@ -99,7 +99,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Function to generate response from Gemini
+# Function to generate response from Gemini with streaming
 def generate_gemini_response(prompt, document_content=""):
     try:
         # Get API key from Streamlit secrets
@@ -114,12 +114,14 @@ def generate_gemini_response(prompt, document_content=""):
         else:
             full_prompt = prompt
         
-        response = client.models.generate_content(
+        # Use streaming response
+        response_stream = client.models.generate_content_stream(
             model="gemini-2.0-flash", 
             contents=full_prompt
         )
         
-        return response.text
+        # Return the stream for processing
+        return response_stream
     except Exception as e:
         return f"Error generating response: {str(e)}"
 
@@ -135,16 +137,27 @@ if prompt := st.chat_input("Ask me anything..."):
     # Display assistant response
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        message_placeholder.markdown("Thinking...")
         
-        # Generate response
-        response = generate_gemini_response(prompt, st.session_state.document_content)
+        # Generate streaming response
+        response_stream = generate_gemini_response(prompt, st.session_state.document_content)
         
-        # Update placeholder with response
-        message_placeholder.markdown(response)
+        # Check if response is an error message (string)
+        if isinstance(response_stream, str):
+            message_placeholder.markdown(response_stream)
+            full_response = response_stream
+        else:
+            # Process the streaming response
+            full_response = ""
+            for chunk in response_stream:
+                if hasattr(chunk, 'text'):
+                    full_response += chunk.text
+                    message_placeholder.markdown(full_response + "▌")
+            
+            # Update with final response
+            message_placeholder.markdown(full_response)
     
     # Add assistant response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 # Footer
 st.divider()
