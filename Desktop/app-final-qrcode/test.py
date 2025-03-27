@@ -105,7 +105,8 @@ def generate_gemini_response(prompt, document_content=""):
         # Get API key from Streamlit secrets
         api_key = st.secrets["gemini_api_key"]
         
-        genai.configure(api_key=api_key)
+        # Initialize the client with the API key
+        client = genai.GenerativeModel(model_name="gemini-2.0-flash", api_key=api_key)
         
         # Prepare the prompt with document content if available
         if document_content:
@@ -113,8 +114,7 @@ def generate_gemini_response(prompt, document_content=""):
         else:
             full_prompt = prompt
         
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(full_prompt)
+        response = client.generate_content(full_prompt)
         return response.text
     except Exception as e:
         return f"Error generating response: {str(e)}"
@@ -144,4 +144,4 @@ if prompt := st.chat_input("Ask me anything..."):
 
 # Footer
 st.divider()
-st.caption("EeeBee Pro - Powered by EduBull")
+st.caption("EeeBee Pro - Powered by Google Gemini")
