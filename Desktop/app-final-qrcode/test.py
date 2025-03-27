@@ -1,126 +1,147 @@
 import streamlit as st
-import time
-from openai import OpenAI
+import os
+from google import genai
+import tempfile
+import fitz  # PyMuPDF for PDF handling
+import docx  # python-docx for DOCX handling
+import pandas as pd
+from io import StringIO
 
-########################################
-# Gemini-Like Client Setup
-########################################
-
-# Create a Gemini-like client by overriding the base_url
-client = OpenAI(
-    api_key=st.secrets["GEMINI_API_KEY"],
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+# Set page configuration
+st.set_page_config(
+    page_title="EeeBee Pro",
+    page_icon="🤖",
+    layout="wide"
 )
 
-########################################
-# Session State & Helper Functions
-########################################
-
-# Conversation messages
+# Initialize session state variables if they don't exist
 if "messages" not in st.session_state:
-    st.session_state["messages"] = []
+    st.session_state.messages = []
 
-# The name of the model you want to use (change if needed)
-if "gemini_model" not in st.session_state:
-    st.session_state["gemini_model"] = "gemini-2.0-flash"
+if "document_content" not in st.session_state:
+    st.session_state.document_content = ""
 
-# Control whether the file uploader is visible
-if "uploader_visible" not in st.session_state:
-    st.session_state["uploader_visible"] = False
+# App title and description
+st.title("🤖 EeeBee Pro")
+st.markdown("Your AI assistant powered by EeeBee Pro")
 
-# We'll store file content in session state, once uploaded
-if "file_content" not in st.session_state:
-    st.session_state["file_content"] = None
-
-def toggle_upload_visibility(visible: bool):
-    st.session_state["uploader_visible"] = visible
-
-
-########################################
-# Page Layout
-########################################
-
-st.title("Gemini-Like Chat App with File Upload & Processing")
-
-# Ask if user wants to upload a file
-with st.chat_message("system"):
-    cols = st.columns((3,1,1))
-    cols[0].write("Would you like to upload a file?")
-    cols[1].button("Yes", use_container_width=True,
-                   on_click=toggle_upload_visibility, args=[True])
-    cols[2].button("No", use_container_width=True,
-                   on_click=toggle_upload_visibility, args=[False])
-
-# If user selected "Yes", show the uploader
-if st.session_state["uploader_visible"]:
-    with st.chat_message("system"):
-        file = st.file_uploader("Upload your data here (text file for demo)")
-        if file is not None:
-            with st.spinner("Reading/processing your file..."):
-                # Read the file into session state (assuming it's text)
-                file_content = file.read().decode("utf-8", errors="ignore")
-                st.session_state["file_content"] = file_content
-                time.sleep(2)  # Simulate some processing time
-            st.success("File uploaded and stored successfully!")
-
-########################################
-# Show Past Chat Messages
-########################################
-
-for msg in st.session_state["messages"]:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-########################################
-# Chat Input & Gemini Processing
-########################################
-
-user_input = st.chat_input("Ask something, or request a summary of your uploaded file...")
-
-if user_input:
-    # 1) User's message goes to conversation history
-    st.session_state["messages"].append({"role": "user", "content": user_input})
+# Sidebar for document upload
+with st.sidebar:
+    st.header("Settings")
     
-    # Display the user's message right away
+    st.header("Upload Document")
+    uploaded_file = st.file_uploader("Choose a file", 
+                                    type=["txt", "pdf", "docx", "csv"])
+    
+    if uploaded_file is not None:
+        # Process different file types
+        try:
+            if uploaded_file.type == "text/plain":
+                # Handle TXT files
+                content = uploaded_file.read().decode("utf-8")
+                st.session_state.document_content = content
+                
+            elif uploaded_file.type == "application/pdf":
+                # Handle PDF files
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_path = tmp_file.name
+                
+                text_content = ""
+                with fitz.open(tmp_path) as doc:
+                    for page in doc:
+                        text_content += page.get_text()
+                
+                os.unlink(tmp_path)  # Delete the temporary file
+                st.session_state.document_content = text_content
+                
+            elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                # Handle DOCX files
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_path = tmp_file.name
+                
+                doc = docx.Document(tmp_path)
+                text_content = "\n".join([para.text for para in doc.paragraphs])
+                
+                os.unlink(tmp_path)  # Delete the temporary file
+                st.session_state.document_content = text_content
+                
+            elif uploaded_file.type == "text/csv":
+                # Handle CSV files
+                df = pd.read_csv(uploaded_file)
+                buffer = StringIO()
+                df.info(buf=buffer)
+                text_content = f"CSV Summary:\n{buffer.getvalue()}\n\nFirst 5 rows:\n{df.head().to_string()}"
+                st.session_state.document_content = text_content
+            
+            st.success(f"File '{uploaded_file.name}' processed successfully!")
+            
+            # Show document content preview
+            with st.expander("Document Content Preview"):
+                st.text(st.session_state.document_content[:1000] + 
+                      ("..." if len(st.session_state.document_content) > 1000 else ""))
+                
+        except Exception as e:
+            st.error(f"Error processing file: {str(e)}")
+    
+    # Button to clear document content
+    if st.session_state.document_content:
+        if st.button("Clear Document"):
+            st.session_state.document_content = ""
+            st.success("Document cleared!")
+
+# Main chat interface
+st.divider()
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Function to generate response from Gemini
+def generate_gemini_response(prompt, document_content=""):
+    try:
+        # Get API key from Streamlit secrets
+        api_key = st.secrets["gemini_api_key"]
+        
+        genai.configure(api_key=api_key)
+        
+        # Prepare the prompt with document content if available
+        if document_content:
+            full_prompt = f"Document content:\n{document_content}\n\nUser query: {prompt}\n\nPlease respond based on the document content."
+        else:
+            full_prompt = prompt
+        
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(full_prompt)
+        return response.text
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
+
+# Chat input
+if prompt := st.chat_input("Ask me anything..."):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Display user message
     with st.chat_message("user"):
-        st.markdown(user_input)
-
-    # 2) Build the message list we'll send to the Gemini-like model
-    messages_for_gemini = []
-
-    # (Optional) Provide the file's text via a system message
-    if st.session_state["file_content"]:
-        system_msg = (
-            "The user has uploaded a file with the following text:\n\n"
-            f"{st.session_state['file_content']}\n\n"
-            "You can use this file content to answer the user's questions."
-        )
-        messages_for_gemini.append({"role": "system", "content": system_msg})
-
-    # Add all conversation messages (including user’s latest)
-    messages_for_gemini.extend(
-        {"role": m["role"], "content": m["content"]}
-        for m in st.session_state["messages"]
-    )
-
-    # 3) Streaming response from Gemini-like endpoint
-    response_buffer = ""
+        st.markdown(prompt)
+    
+    # Display assistant response
     with st.chat_message("assistant"):
-        # Attempt a streaming call; your endpoint must support it
-        response_stream = client.chat.completions.create(
-            model=st.session_state["gemini_model"],
-            messages=messages_for_gemini,
-            stream=True,
-        )
-        response_container = st.empty()
+        message_placeholder = st.empty()
+        message_placeholder.markdown("Thinking...")
+        
+        # Generate response
+        response = generate_gemini_response(prompt, st.session_state.document_content)
+        
+        # Update placeholder with response
+        message_placeholder.markdown(response)
+    
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
-        for chunk in response_stream:
-            # Standard OpenAI-like streaming format
-            chunk_message = chunk["choices"][0].get("delta", {}).get("content", "")
-            response_buffer += chunk_message
-            response_container.markdown(response_buffer)
-
-    # 4) Store the assistant's reply
-    st.session_state["messages"].append(
-        {"role": "assistant", "content": response_buffer}
-    )
+# Footer
+st.divider()
+st.caption("EeeBee Pro - Powered by EduBull")
