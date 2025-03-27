@@ -1,36 +1,28 @@
 import streamlit as st
+import openai
 import time
-from openai import OpenAI
 
-########################################
-# Gemini-Like Client Setup
-########################################
-
-# Create a Gemini-like client by overriding the base_url
-client = OpenAI(
-    api_key=st.secrets["GEMINI_API_KEY"],
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-)
+# Set your OpenAI API key
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 ########################################
 # Session State & Helper Functions
 ########################################
 
-# Conversation messages
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
-# The name of the model you want to use (change if needed)
-if "gemini_model" not in st.session_state:
-    st.session_state["gemini_model"] = "gemini-2.0-flash"
+if "openai_model" not in st.session_state:
+    # The name of the model you want to use. 
+    st.session_state["openai_model"] = "gpt-4o"
 
-# Control whether the file uploader is visible
 if "uploader_visible" not in st.session_state:
     st.session_state["uploader_visible"] = False
 
 # We'll store file content in session state, once uploaded
 if "file_content" not in st.session_state:
     st.session_state["file_content"] = None
+
 
 def toggle_upload_visibility(visible: bool):
     st.session_state["uploader_visible"] = visible
@@ -40,9 +32,9 @@ def toggle_upload_visibility(visible: bool):
 # Page Layout
 ########################################
 
-st.title("Gemini-Like Chat App with File Upload & Processing")
+st.title("ChatGPT-like Clone with File Upload & Processing")
 
-# Ask if user wants to upload a file
+# “System” block asking whether user wants to upload a file
 with st.chat_message("system"):
     cols = st.columns((3,1,1))
     cols[0].write("Would you like to upload a file?")
@@ -60,7 +52,7 @@ if st.session_state["uploader_visible"]:
                 # Read the file into session state (assuming it's text)
                 file_content = file.read().decode("utf-8", errors="ignore")
                 st.session_state["file_content"] = file_content
-                time.sleep(2)  # Simulate some processing time
+                time.sleep(2)
             st.success("File uploaded and stored successfully!")
 
 ########################################
@@ -71,56 +63,54 @@ for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+
 ########################################
-# Chat Input & Gemini Processing
+# Chat Input & AI Processing
 ########################################
 
 user_input = st.chat_input("Ask something, or request a summary of your uploaded file...")
 
 if user_input:
-    # 1) User's message goes to conversation history
+    # Append the user's message
     st.session_state["messages"].append({"role": "user", "content": user_input})
-    
-    # Display the user's message right away
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # 2) Build the message list we'll send to the Gemini-like model
-    messages_for_gemini = []
+    # Build the messages array we'll send to OpenAI
+    # Optionally, if you want the assistant to have access to the file content,
+    # you can inject a "system" message telling the AI what the file is about:
+    messages_for_openai = []
 
-    # (Optional) Provide the file's text via a system message
+    # 1) If we have file content, pass it into a system message so GPT can "see" it.
     if st.session_state["file_content"]:
         system_msg = (
             "The user has uploaded a file with the following text:\n\n"
             f"{st.session_state['file_content']}\n\n"
             "You can use this file content to answer the user's questions."
         )
-        messages_for_gemini.append({"role": "system", "content": system_msg})
+        messages_for_openai.append({"role": "system", "content": system_msg})
 
-    # Add all conversation messages (including user’s latest)
-    messages_for_gemini.extend(
+    # 2) Add all previous messages in the conversation
+    messages_for_openai.extend(
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state["messages"]
     )
 
-    # 3) Streaming response from Gemini-like endpoint
+    # Make the streaming call
     response_buffer = ""
     with st.chat_message("assistant"):
-        # Attempt a streaming call; your endpoint must support it
-        response_stream = client.chat.completions.create(
-            model=st.session_state["gemini_model"],
-            messages=messages_for_gemini,
+        stream = openai.ChatCompletion.create(
+            model=st.session_state["openai_model"],
+            messages=messages_for_openai,
             stream=True,
         )
         response_container = st.empty()
-
-        for chunk in response_stream:
-            # Standard OpenAI-like streaming format
+        for chunk in stream:
             chunk_message = chunk["choices"][0].get("delta", {}).get("content", "")
             response_buffer += chunk_message
             response_container.markdown(response_buffer)
 
-    # 4) Store the assistant's reply
+    # Save the assistant response
     st.session_state["messages"].append(
         {"role": "assistant", "content": response_buffer}
     )
