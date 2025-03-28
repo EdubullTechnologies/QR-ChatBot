@@ -373,7 +373,7 @@ def generate_learning_path(concept_text):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o", 
+            model="gemma3:12b", 
             messages=[{"role": "system", "content": prompt}],
             stream=False,
             max_tokens=1500
