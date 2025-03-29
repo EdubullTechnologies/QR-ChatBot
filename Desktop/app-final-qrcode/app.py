@@ -84,7 +84,7 @@ else:
 # Configure OpenAI client to use your custom API
 def setup_llm_client():
     # Get API settings from Streamlit secrets
-    api_base = st.secrets["API_BASE_URL"]
+    api_base = st.secrets.get["API_BASE_URL"]
     api_key = st.secrets.get("OPENAI_API_KEY")  # Your API doesn't use this
     
     # Configure OpenAI client with your custom API endpoint
