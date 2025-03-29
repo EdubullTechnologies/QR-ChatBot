@@ -29,8 +29,6 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import plotly.express as px
-import openai
-from openai import OpenAI
 
 # Set page config first, before any other Streamlit commands
 st.set_page_config(
@@ -80,22 +78,6 @@ if OPENAI_API_KEY:
     client = OpenAI(api_key=OPENAI_API_KEY)
 else:
     client = None
-
-# Configure OpenAI client to use your custom API
-def setup_llm_client():
-    # Get API settings from Streamlit secrets
-    api_base = st.secrets.get("API_BASE_URL", "https://api.example.com/v1")  # Generic fallback that doesn't expose your real IP
-    api_key = st.secrets.get("OPENAI_API_KEY", "not-needed")  # Your API doesn't use this
-    
-    # Configure OpenAI client with your custom API endpoint
-    client = OpenAI(
-        api_key=api_key,
-        base_url=api_base
-    )
-    return client
-
-# Initialize the LLM client
-client = setup_llm_client()
 
 # API Endpoints
 API_AUTH_URL_ENGLISH = "https://webapi.edubull.com/api/EnglishLab/Auth_with_topic_for_chatbot"
@@ -1130,7 +1112,7 @@ def teacher_dashboard():
 
                     if st.button("Generate Exam Questions", key="generate_exam_btn"):
                         if not client:
-                            st.error("EeeBee API client is not initialized. Check your configuration.")
+                            st.error("DeepSeek client is not initialized. Check your API key.")
                             return
 
                         branch_name = st.session_state.auth_data.get("BranchName", "their class")
@@ -1152,7 +1134,7 @@ def teacher_dashboard():
                         with st.spinner("Generating exam questions... Please wait."):
                             try:
                                 response = client.chat.completions.create(
-                                    model="gemma3:12b",  # Using your default model
+                                    model="gpt-4o",
                                     messages=[{"role": "system", "content": prompt}],
                                     max_tokens=4000,
                                     stream=False
@@ -1846,9 +1828,9 @@ def handle_preset_prompt(prompt_text):
             # Create a streaming response
             full_response = ""
             response = client.chat.completions.create(
-                model="gemma3:12b",  # Using your default model
+                model="gpt-4o",
                 messages=conversation_history_formatted,
-                max_tokens=2000,
+                #max_tokens=2000,
                 stream=True
             )
             
@@ -1997,7 +1979,7 @@ def process_pending_messages():
 
 def get_gpt_response(user_input):
     if not client:
-        st.error("EeeBee API client is not initialized.")
+        st.error("DeepSeek client is not initialized. Check your API key.")
         return
     
     system_prompt = get_system_prompt()
@@ -2013,9 +1995,9 @@ def get_gpt_response(user_input):
             message_placeholder = st.empty()
             full_response = ""
             
-            # Create a streaming response using your custom API
+            # Create a streaming response
             response = client.chat.completions.create(
-                model="gemma3:12b",  # Use your default model
+                model="gpt-4o",
                 messages=conversation_history_formatted,
                 max_tokens=2000,
                 stream=True
