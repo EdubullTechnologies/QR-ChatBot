@@ -84,8 +84,8 @@ else:
 # Configure OpenAI client to use your custom API
 def setup_llm_client():
     # Get API settings from Streamlit secrets
-    api_base = st.secrets.get["API_BASE_URL"]
-    api_key = st.secrets.get("OPENAI_API_KEY")  # Your API doesn't use this
+    api_base = st.secrets.get("API_BASE_URL", "https://api.example.com/v1")  # Generic fallback that doesn't expose your real IP
+    api_key = st.secrets.get("OPENAI_API_KEY", "not-needed")  # Your API doesn't use this
     
     # Configure OpenAI client with your custom API endpoint
     client = OpenAI(
@@ -373,7 +373,7 @@ def generate_learning_path(concept_text):
 
     try:
         response = client.chat.completions.create(
-            model="gemma3:12b", 
+            model="gpt-4o", 
             messages=[{"role": "system", "content": prompt}],
             stream=False,
             max_tokens=1500
